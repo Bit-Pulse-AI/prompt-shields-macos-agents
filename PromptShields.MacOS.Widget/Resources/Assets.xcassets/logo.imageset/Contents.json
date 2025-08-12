@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "6764235dbe2d2fb0d3f1ee8e_Logo-website.svg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "template-rendering-intent" : "template"
+  }
+}

@@ -1,1 +1,1 @@
-# prompt-shields-macos-widget
+# prompt-shields-macos

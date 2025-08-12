@@ -1,0 +1,219 @@
+import SwiftUI
+import os
+
+struct SettingsView: View {
+    @Environment(\.userDomainService) private var userDomainService
+    @Environment(\.userPreferencesDomainService) private var userPreferencesDomainService
+    @EnvironmentObject private var dashboardState: DashboardStateModel
+    @State private var isLoading = true
+    @State private var preferences: UserPreferences?
+    
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier!,
+        category: String(describing: SettingsView.self)
+    )
+    
+    var body: some View {
+        VStack(spacing: .zero) {
+            if !isLoading, let preferences = preferences {
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // General Settings
+                        generalSettingsSection(preferences)
+                        
+                        // Suggestion Types
+                        suggestionTypesSection(preferences)
+                        
+                        // Application Blocking
+                        applicationBlockingSection(preferences)
+                        
+                        // UI Settings
+                        uiSettingsSection(preferences)
+                    }
+                    .padding()
+                }
+            } else {
+                VStack(spacing: .zero) {
+                    ProgressView()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task {
+            await loadPreferences()
+        }
+    }
+    
+    private func generalSettingsSection(_ preferences: UserPreferences) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("General")
+                .font(.headline)
+            
+            VStack(spacing: 8) {
+                Toggle("Enable Assistant", isOn: Binding(
+                    get: { preferences.model.isEnabled },
+                    set: { newValue in
+                        var newPreferences = preferences
+                        newPreferences.model.isEnabled = newValue
+                        Task {
+                            do {
+                                try await updatePreferences(newPreferences)
+                            } catch {
+                                logger.error("Error saving prefs : \(error)")
+                            }
+                        }
+                    }
+                ))
+                
+                Toggle("Auto-apply suggestions", isOn: Binding(
+                    get: { preferences.model.autoApplySuggestions },
+                    set: { newValue in
+                        var newPreferences = preferences
+                        newPreferences.model.autoApplySuggestions = newValue
+                        Task {
+                            try await updatePreferences(newPreferences)
+                        }
+                    }
+                ))
+            }
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(12)
+    }
+    
+    private func suggestionTypesSection(_ preferences: UserPreferences) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Suggestion Types")
+                .font(.headline)
+            
+            VStack(spacing: 8) {
+                ForEach(SuggestionType.allCases, id: \.self) { type in
+                    Toggle(type.displayName, isOn: Binding(
+                        get: { preferences.model.enabledSuggestionTypes.contains(type.rawValue) },
+                        set: { newValue in
+                            var newTypes = preferences.model.enabledSuggestionTypes
+                            if newValue {
+                                newTypes.append(type.rawValue)
+                            } else {
+                                newTypes.removeAll(where: {
+                                    $0 == type.rawValue
+                                })
+                            }
+                            var newPreferences = preferences
+                            newPreferences.model.enabledSuggestionTypes = newTypes
+                            Task { @Sendable in
+                                try await updatePreferences(newPreferences)
+                            }
+                        }
+                    ))
+                }
+            }
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(12)
+    }
+    
+    private func applicationBlockingSection(_ preferences: UserPreferences) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Blocked Applications")
+                .font(.headline)
+
+            Text("Applications where suggestions are disabled")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            if preferences.model.blockedApplications.isEmpty {
+                Text("No applications blocked")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(preferences.model.blockedApplications, id: \.self) { app in
+                        HStack {
+                            Text(app)
+                            Spacer()
+                            Button("Remove") {
+                                var newBlocked = preferences.model.blockedApplications
+                                newBlocked.removeAll { blockedApp in
+                                    blockedApp == app
+                                }
+                                var newPreferences = preferences
+                                newPreferences.model.blockedApplications = newBlocked
+                                Task { @Sendable in
+                                    try await updatePreferences(newPreferences)
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(4)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(12)
+    }
+    
+    private func uiSettingsSection(_ preferences: UserPreferences) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Interface")
+                .font(.headline)
+            
+            VStack(spacing: 8) {
+                Toggle("Show floating panel", isOn: Binding(
+                    get: { preferences.model.showFloatingPanel },
+                    set: { newValue in
+                        var newPreferences = preferences
+                        newPreferences.model.showFloatingPanel = newValue
+                        Task {
+                            try await updatePreferences(newPreferences)
+                        }
+                    }
+                ))
+                
+                Picker("Panel position", selection: Binding(
+                    get: { preferences.model.panelPosition },
+                    set: { newValue in
+                        var newPreferences = preferences
+                        newPreferences.model.panelPosition = newValue
+                        Task {
+                            try await updatePreferences(newPreferences)
+                        }
+                    }
+                )) {
+                    ForEach(PanelPosition.allCases, id: \.self) { position in
+                        Text(position.displayName).tag(position)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(12)
+    }
+    
+    private func loadPreferences() async {
+        isLoading = true
+        do {
+            let preferences = try await userPreferencesDomainService.currentUserPreferences
+            self.preferences = preferences
+            isLoading = false
+        } catch {
+            logger.error("Error fetching user details \(error)")
+        }
+    }
+    
+    @MainActor
+    private func updatePreferences(_ newPreferences: UserPreferences) async throws {
+        try await userPreferencesDomainService.savePreferences(preferences: newPreferences)
+        self.preferences = newPreferences
+    }
+}

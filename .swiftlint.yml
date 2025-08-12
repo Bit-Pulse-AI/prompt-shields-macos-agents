@@ -1,0 +1,140 @@
+# swiftlint.yml
+
+opt_in_rules:
+
+indentation:
+  warning: 4
+  error: 8
+  indent_width: 4
+
+opt_in_rules:
+  - indentation
+  - multiline_arguments
+  - anyobject_protocol
+  - attributes
+  - closure_spacing
+  - collection_alignment
+  - contains_over_first_not_nil
+  - discouraged_optional_boolean
+  - empty_string
+  - explicit_self
+  - explicit_type_interface
+  - fallthrough
+  - file_header
+  - first_where
+  - forbidden_super_call
+  - implicitly_unwrapped_optional
+  - joined_default_parameter
+  - literal_expression_end_indentation
+  - lower_acl_than_parent
+  - missing_docs
+  - multiline_arguments_brackets
+  - multiline_function_chains
+  - multiline_parameters_alignment
+  - operator_usage_whitespace
+  - overridden_super_call
+  - pattern_matching_keywords
+  - prohibited_super_call
+  - shorthand_operator
+  - untyped_error_in_catch
+  - vertical_whitespace_closing_braces
+  - vertical_whitespace_opening_braces
+  - long_method_wrapping
+
+disabled_rules:
+  - trailing_whitespace
+  - line_length # Adjust this for enterprise needs.
+  - force_cast
+  - force_try
+
+line_length:
+  warning: 120
+  error: 150
+
+cyclomatic_complexity:
+  warning: 10
+  error: 15
+
+type_body_length:
+  warning: 250
+  error: 300
+
+function_body_length:
+  warning: 40
+  error: 50
+
+file_length:
+  warning: 400
+  error: 500
+
+# Whitelist specific folders to lint.
+included:
+  - .
+
+# Exclude files or folders like auto-generated files or dependencies.
+excluded:
+  - Pods
+  - Carthage
+  - Generated
+  - .build
+  - Source/ThirdParty
+
+# Enforce naming conventions.
+identifier_name:
+  min_length: 3
+  max_length: 40
+  excluded:
+    - id
+    - URL
+    - JSON
+
+type_name:
+  min_length: 3
+  max_length: 40
+
+file_name:
+  min_length: 3
+  max_length: 40
+
+trailing_newline:
+  warning: true
+
+# Customize comment spacing and style.
+comment_spacing:
+  warning: true
+
+# Code documentation for public methods and classes.
+missing_docs:
+  warning: true
+
+# Customize long method wrapping and alignment behavior.
+multiline_arguments_brackets:
+  warning: true
+
+multiline_function_chains:
+  warning: true
+
+multiline_parameters_alignment:
+  align_after_first_parameter: true
+  align_closure_colons: true
+  warning: true
+
+long_method_wrapping:
+  max_line_length: 100 # Enforce wrapping if line exceeds this length.
+  wrap_after_first_argument: true
+  align_arguments_with_colon: true
+  severity: warning
+
+# Custom rules for enterprise projects.
+custom_rules:
+  no_todos:
+    name: "No TODOs"
+    regex: "(// TODO|// FIXME)"
+    message: "Please resolve TODOs and FIXMEs before committing."
+    severity: error
+
+  magic_numbers:
+    name: "Avoid Magic Numbers"
+    regex: "\\b[0-9]+\\b"
+    message: "Avoid magic numbers; define constants or enums instead."
+    severity: warning
