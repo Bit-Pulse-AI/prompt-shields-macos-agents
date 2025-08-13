@@ -123,7 +123,7 @@ actor AccessibilityMonitorService: ObservableObject {
     }
 
     private func onAXAccessGranted() {
-        if let focusedElement = focusedElement() {
+        if let focusedElement = try? getRobustFocusedElement() {
             analyzeTextIfPossible(element: focusedElement)
         } else {
             displayRestartIfNeeded()
@@ -155,9 +155,9 @@ actor AccessibilityMonitorService: ObservableObject {
                 // Get current mouse position for click-based child detection
                 let mouseLocation = NSEvent.mouseLocation
                 
-                if let textField = await self?.textFieldDetector.detectTextField(in: focusedElement, clickPosition: mouseLocation) {
-                    await self?.updateOverlayPosition(frame: textField.frame)
-                    let text = try await self?.textExtractor.extractText(from: textField)
+                if let textField = await self?.textFieldDetector.getAXElementClippedFrameOrSelection(focusedElement) {
+                    await self?.updateOverlayPosition(frame: textField)
+//                    let text = try await self?.textExtractor.extractText(from: textField)
 //                    print("Text \(text)")
 //                    logger.error("Extracted text \(text)")
                 }
@@ -167,10 +167,11 @@ actor AccessibilityMonitorService: ObservableObject {
         }
     }
     
+    private let padding: CGFloat = 8
     @MainActor
     func updateOverlayPosition(frame: CGRect) async {
         if frame.origin.x != .infinity && frame.origin.y != .infinity && frame.size.width != 0 && frame.size.height != 0 {
-            await self.overlayStateModel.wrappedValue.floatingWindowRect = frame
+            await self.overlayStateModel.wrappedValue.floatingWindowRect = CGRect(x: frame.origin.x - padding, y: frame.origin.y - padding, width: frame.size.width + padding * 2, height: frame.size.height + padding * 2)
         }
     }
 
@@ -180,7 +181,7 @@ actor AccessibilityMonitorService: ObservableObject {
 
         for attempt in 1...maxRetries {
             do {
-                return try await getFocusedElement()
+                return try await getRobustFocusedElement()
             } catch {
                 if attempt == maxRetries {
                     throw error
@@ -207,58 +208,61 @@ actor AccessibilityMonitorService: ObservableObject {
         let app = NSWorkspace.shared.runningApplications.first { $0.processIdentifier == pid }
         return app != nil
     }
-
-    @MainActor
-    private func getFocusedElement() async throws -> AXUIElement {
-        // First check if we have accessibility permissions
-        guard AXIsProcessTrusted() else {
-            throw AccessibilityError.noAccessibilityPermissions
-        }
-
-        let systemWide = AXUIElementCreateSystemWide()
-        var focusedElement: CFTypeRef?
-
-        let result = AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focusedElement)
-        switch result {
-        case .success:
-            guard let element = focusedElement else {
-                throw AccessibilityError.failedToGetFocusedElement
-            }
-            return element as! AXUIElement
-
-        case .apiDisabled:
-            throw AccessibilityError.accessibilityAPIDisabled
-
-        case .cannotComplete:
-            throw AccessibilityError.noAccessibilityPermissions
-
-        case .invalidUIElement:
-            throw AccessibilityError.invalidUIElement
-
-        default:
-            throw AccessibilityError.unknownError(result)
-        }
-    }
     
-    private func focusedElement() -> CFTypeRef? {
-        guard AXIsProcessTrusted() else {
-            return nil
+    func getRobustFocusedElement() throws -> AXUIElement {
+        // Step 1 — Try direct kAXFocusedUIElementAttribute
+        guard let frontApp = NSWorkspace.shared.frontmostApplication else {
+            throw AccessibilityError.failedToGetFrame
         }
-
-        let systemWide = AXUIElementCreateSystemWide()
-        var focusedElement: CFTypeRef?
+        let appElement = AXUIElementCreateApplication(frontApp.processIdentifier)
         
-        let result = AXUIElementCopyAttributeValue(
-            systemWide,
-            kAXFocusedUIElementAttribute as CFString,
-            &focusedElement
-        )
+        var focusedRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
+           let focusedElement = focusedRef {
+            return focusedElement as! AXUIElement
+        }
+        
+        // Step 2 — Get focused window
+        var windowRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
+            throw AccessibilityError.failedToGetFrame
+        }
+        guard let windowElement = windowRef else {
+            throw AccessibilityError.failedToGetFrame
+        }
+        
+        // Step 3 — Search recursively for AXFocused = true
+        if let found = findFocusedInTree(windowElement as! AXUIElement) {
+            return found
+        }
+        
+        throw AccessibilityError.failedToGetFrame
+    }
 
-        if result == .success {
-            return focusedElement
-        } else {
+    // Recursively search children for AXFocused = true
+    private func findFocusedInTree(_ element: AXUIElement) -> AXUIElement? {
+        var focusedValue: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXFocusedAttribute as CFString, &focusedValue) == .success,
+           let boolVal = focusedValue as? Bool, boolVal == true {
+            return element
+        }
+        
+        // Get children
+        var childrenRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) != .success {
             return nil
         }
+        guard let children = childrenRef as? [AXUIElement] else {
+            return nil
+        }
+        
+        for child in children {
+            if let found = findFocusedInTree(child) {
+                return found
+            }
+        }
+        
+        return nil
     }
     
     @MainActor
