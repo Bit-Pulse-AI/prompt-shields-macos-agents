@@ -8,14 +8,13 @@ actor TextFieldDetector {
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: TextFieldDetector.self)
     )
-
-    func getAXElementClippedFrameOrSelection(_ element: AXUIElement) -> CGRect? {
-        print("element \(element)")
+    
+    private func getElementRect(_ element: AXUIElement) throws -> CGRect {
         guard let mainScreen = NSScreen.screens.first(where: { $0.frame.origin == .zero }) else {
-            return nil
+            throw AccessibilityError.failedToGetFrame
         }
         let screenHeight = mainScreen.frame.height
-        
+        var rectangle: CGRect? = .zero
         func flipRect(_ rect: CGRect) -> CGRect {
             CGRect(
                 x: rect.origin.x,
@@ -27,7 +26,7 @@ actor TextFieldDetector {
         
         // Get window clip
         guard let windowClip = getWindowClipRect(for: element, screenHeight: screenHeight) else {
-            return nil
+            throw AccessibilityError.failedToGetFrame
         }
         
         // 1 — Try selection first
@@ -47,7 +46,7 @@ actor TextFieldDetector {
                     let flippedSel = flipRect(selBounds)
                     let clipped = flippedSel.intersection(windowClip)
                     if !clipped.isEmpty {
-                        return clipped
+                        rectangle = clipped
                     }
                 }
             }
@@ -73,7 +72,7 @@ actor TextFieldDetector {
                         let flippedTextRect = flipRect(textBounds)
                         let clipped = flippedTextRect.intersection(windowClip)
                         if !clipped.isEmpty {
-                            return clipped
+                            rectangle = clipped
                         }
                     }
                 }
@@ -82,10 +81,22 @@ actor TextFieldDetector {
         
         // 3 — Fallback: clipped element frame
         if let elemFrame = getElementFrameClippedToWindow(element, screenHeight: screenHeight) {
-            return elemFrame
+            rectangle = elemFrame
         }
         
-        return nil
+        guard let rectangle else {
+            throw AccessibilityError.failedToGetFrame
+        }
+        return rectangle
+    }
+
+    func getAXElementOrSelectionInfo(_ element: AXUIElement) throws -> ElementInfo {
+//            let text = try await self?.textExtractor.extractText(from: textField)
+        
+        .init(text: "",
+              applicationName: "",
+              applicationBundleId: "",
+              frame: try getElementRect(element))
     }
 
     // MARK: - Helpers

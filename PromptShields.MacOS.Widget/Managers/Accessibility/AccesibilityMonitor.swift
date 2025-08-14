@@ -5,7 +5,7 @@ import ApplicationServices
 import AppKit
 
 actor AccessibilityMonitorService: ObservableObject {
-    private var overlayStateModel: StateObject<OverlayStateModel>
+    private var overlayStateModel: OverlayStateModel
     
     private let pollInterval: TimeInterval = 0.5
     private var timer: DispatchSourceTimer?
@@ -22,7 +22,7 @@ actor AccessibilityMonitorService: ObservableObject {
         category: String(describing: AccessibilityMonitorService.self)
     )
     
-    init(overlayStateModel: StateObject<OverlayStateModel>) {
+    init(overlayStateModel: OverlayStateModel) {
         self.overlayStateModel = overlayStateModel
         Task { [weak self] in
             await self?.startTimer()
@@ -56,10 +56,18 @@ actor AccessibilityMonitorService: ObservableObject {
         } else if lastIsProcessTrusted == nil && !isProcessTrusted {
             logger.log("app does not have AX")
             showPromptIfNeeded()
+            // Hide overlay when accessibility is not available
+            Task { @MainActor [weak self] in
+                await self?.overlayStateModel.isOverlayVisible = false
+            }
         } else if lastIsProcessTrusted != isProcessTrusted && isProcessTrusted {
             logger.log("user enabled AX")
         } else if lastIsProcessTrusted != isProcessTrusted && !isProcessTrusted {
             logger.log("user disabled AX")
+            // Hide overlay when accessibility is disabled
+            Task { @MainActor [weak self] in
+                await self?.overlayStateModel.isOverlayVisible = false
+            }
 //            reset = true
         } else if lastIsProcessTrusted == isProcessTrusted && isProcessTrusted {
             logger.log("ticking on a trusted process")
@@ -67,6 +75,10 @@ actor AccessibilityMonitorService: ObservableObject {
             onAXAccessGranted()
         } else if lastIsProcessTrusted == isProcessTrusted && !isProcessTrusted {
             logger.log("ticking on a not trusted process")
+            // Hide overlay when accessibility is not available
+            Task { @MainActor [weak self] in
+                await self?.overlayStateModel.isOverlayVisible = false
+            }
         }
         lastIsProcessTrusted = isProcessTrusted
 //        if reset {
@@ -127,6 +139,10 @@ actor AccessibilityMonitorService: ObservableObject {
             analyzeTextIfPossible(element: focusedElement)
         } else {
             displayRestartIfNeeded()
+            // Hide overlay when no focused element is found
+            Task { @MainActor [weak self] in
+                await self?.overlayStateModel.isOverlayVisible = false
+            }
         }
     }
     
@@ -147,31 +163,45 @@ actor AccessibilityMonitorService: ObservableObject {
             // Validate the element is still accessible
             guard isValidElement else {
                 self.logger.warning("Focused element is no longer valid")
+                // Hide overlay when element is not valid
+                Task { @MainActor [weak self] in
+                    await self?.overlayStateModel.isOverlayVisible = false
+                }
                 try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
                 return
             }
             
             Task { @MainActor @Sendable [weak self] in
                 // Get current mouse position for click-based child detection
-                let mouseLocation = NSEvent.mouseLocation
+//                let mouseLocation = NSEvent.mouseLocation
                 
-                if let textField = await self?.textFieldDetector.getAXElementClippedFrameOrSelection(focusedElement) {
-                    await self?.updateOverlayPosition(frame: textField)
-//                    let text = try await self?.textExtractor.extractText(from: textField)
-//                    print("Text \(text)")
-//                    logger.error("Extracted text \(text)")
+                if let elementInfo = try await self?.textFieldDetector.getAXElementOrSelectionInfo(focusedElement) {
+                    await self?.updateElementInfo(elementInfo: elementInfo)
+                } else {
+                    // Hide overlay when no text field is detected
+                    await self?.overlayStateModel.isOverlayVisible = false
+                    print("AccessibilityMonitor: Setting overlay hidden (no text field)")
                 }
             }
         } catch {
             logger.error("Error received analyzing textfield \(error)")
+            // Hide overlay on error
+            await self.overlayStateModel.isOverlayVisible = false
         }
     }
     
-    private let padding: CGFloat = 8
+    private let padding: CGFloat = 4
     @MainActor
-    func updateOverlayPosition(frame: CGRect) async {
+    func updateElementInfo(elementInfo: ElementInfo) async {
+        let frame = elementInfo.frame
         if frame.origin.x != .infinity && frame.origin.y != .infinity && frame.size.width != 0 && frame.size.height != 0 {
-            await self.overlayStateModel.wrappedValue.floatingWindowRect = CGRect(x: frame.origin.x - padding, y: frame.origin.y - padding, width: frame.size.width + padding * 2, height: frame.size.height + padding * 2)
+            await self.overlayStateModel.floatingWindowRect = CGRect(x: frame.origin.x - padding, y: frame.origin.y - padding, width: frame.size.width + padding * 2, height: frame.size.height + padding * 2)
+            await self.overlayStateModel.isOverlayVisible = true
+            print("AccessibilityMonitor: Setting overlay visible")
+        } else {
+            // Hide overlay when no valid frame is detected
+            await self.overlayStateModel.isOverlayVisible = false
+            print("AccessibilityMonitor: Setting overlay hidden (invalid frame)")
         }
     }
 

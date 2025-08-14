@@ -2,8 +2,10 @@ import SwiftUI
 import Combine
 import SwiftData
 
+@MainActor
 final class OverlayStateModel: ObservableObject {
     @Published var floatingWindowRect = CGRect.zero
+    @Published var isOverlayVisible = false
 }
 
 // swiftlint:disable:next type_name
@@ -27,10 +29,14 @@ struct MainApp: App {
         // Floating tool window with a unique ID
         Window("Overlay Render", id: "overlay-render") {
             ZStack(alignment: .leading) {
-                FloatingToolView(desiredFrameInScreenCoords: $overlayStateModel.floatingWindowRect)
-                    .frame(width: overlayStateModel.floatingWindowRect.width, height: overlayStateModel.floatingWindowRect.height)
-                    .background(Color.clear)
-            }.frame(alignment: .top)
+                if overlayStateModel.isOverlayVisible {
+                    FloatingToolView(desiredFrameInScreenCoords: $overlayStateModel.floatingWindowRect, isVisible: $overlayStateModel.isOverlayVisible)
+                        .frame(width: overlayStateModel.floatingWindowRect.width, height: overlayStateModel.floatingWindowRect.height)
+                        .background(Color.clear)
+                }
+            }
+            .frame(alignment: .top)
+//            .animation(.easeInOut(duration: 0.3), value: overlayStateModel.floatingWindowRect)
         }
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
@@ -66,6 +72,7 @@ struct MainApp: App {
 struct FloatingToolView: View {
     /// The rect we want the window to occupy, in screen coordinates (origin = bottom-left)
     @Binding var desiredFrameInScreenCoords: CGRect
+    @Binding var isVisible: Bool
 
     @State private var configured = false
 
@@ -74,7 +81,7 @@ struct FloatingToolView: View {
             VStack {
             }
             .frame(width: desiredFrameInScreenCoords.width, height: desiredFrameInScreenCoords.height)
-            .background(Color.clear.opacity(0.1))
+            .background(Color.black.opacity(0.1))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(.white, lineWidth: 1)
@@ -95,6 +102,9 @@ struct FloatingToolView: View {
             if let window = NSApp.windows.first(where: { $0.title == "Action" }) {
                 configureActionWindow(window, targetRect: newRect)
             }
+        }
+        .onChange(of: isVisible) { _, newValue in
+            print("FloatingToolView visibility changed to: \(newValue)")
         }
     }
     @MainActor
@@ -130,6 +140,9 @@ struct FloatingToolView: View {
         window.isMovableByWindowBackground = true
         let targetTransform = CGRect(x: targetRect.origin.x, y: targetRect.origin.y, width: targetRect.size.width, height: targetRect.size.height)
         window.setFrame(targetTransform, display: true, animate: false)
+        
+        // Ensure window is always visible but content opacity is controlled by SwiftUI
+        window.alphaValue = 1.0
     }
 }
 

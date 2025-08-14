@@ -2,12 +2,7 @@ import AppKit
 
 actor TextExtractor {
     @MainActor
-    func extractText(from textField: TextFieldInfo) async throws -> String {
-        return getAllText(from: textField.element) ?? ""
-    }
-    
-    @MainActor
-    private func getAllText(from element: AXUIElement) -> String? {
+    func getAllText(from element: AXUIElement) -> String {
         var collectedText: [String] = []
             
             // Attributes to check for "text-like" values
@@ -40,7 +35,7 @@ actor TextExtractor {
                let childArray = children as? [AXUIElement] {
                 for child in childArray {
                     let childText = getAllText(from: child)
-                    if let childText = childText, !childText.isEmpty {
+                    if !childText.isEmpty {
                         collectedText.append(childText)
                     }
                 }

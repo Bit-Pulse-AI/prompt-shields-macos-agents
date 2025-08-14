@@ -33,7 +33,7 @@ struct DashboardView: View {
     
     init(overlayStateModel: StateObject<OverlayStateModel>) {
         self.overlayStateModel = overlayStateModel
-        self._accessibilityMonitorService = StateObject(wrappedValue: AccessibilityMonitorService(overlayStateModel: overlayStateModel))
+        self._accessibilityMonitorService = StateObject(wrappedValue: AccessibilityMonitorService(overlayStateModel: overlayStateModel.wrappedValue))
     }
 
     var body: some View {
