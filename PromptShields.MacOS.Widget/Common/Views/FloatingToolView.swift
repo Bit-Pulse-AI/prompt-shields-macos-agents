@@ -1,27 +1,5 @@
 import SwiftUI
 
-// Window delegate to handle input events for borderless windows
-class ActionWindowDelegate: NSObject, NSWindowDelegate {
-    static let shared = ActionWindowDelegate()
-    
-    private override init() {
-        super.init()
-    }
-    
-    func windowDidBecomeKey(_ notification: Notification) {
-        // Window became key - can now receive input
-    }
-    
-    func windowDidResignKey(_ notification: Notification) {
-        // Window lost key status
-    }
-    
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        // Prevent window from closing
-        return false
-    }
-}
-
 struct FloatingToolView: View {
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
     private var frame: CGRect? {
@@ -45,22 +23,31 @@ struct FloatingToolView: View {
         .onChange(of: frame) { _, _ in
             updateWindows()
         }
-        .onChange(of: overlayStateModel.isLoadingFromLLM) { _, _ in
+        .onChange(of: overlayStateModel.actionToolState) { _, _ in
             updateWindows()
         }
     }
     
     private func updateWindows() {
         if overlayStateModel.elementInfo?.frame == nil {
-            overlayStateModel.isLoadingFromLLM = false
+            overlayStateModel.actionToolState = .idle
         }
         let targetFrame = overlayStateModel.elementInfo?.frame
-        let isLoadingFromLLM = overlayStateModel.isLoadingFromLLM
+        let actionToolState = overlayStateModel.actionToolState
         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == MainApp.overlayRender }) {
             configureOverlayWindow(window, targetRect: targetFrame)
         }
         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == MainApp.actionRender }) {
-            let actionSize = isLoadingFromLLM ? CGSize(width: 200, height: 200) : CGSize(width: 50, height: 50)
+            var actionSize: CGSize
+            
+            switch actionToolState {
+            case .idle:
+                actionSize = CGSize(width: 50, height: 50)
+            case .loading:
+                actionSize = CGSize(width: 50, height: 50)
+            case .options:
+                actionSize = CGSize(width: 200, height: 200)
+            }
             configureActionWindow(window, targetRect: targetFrame, actionSize: actionSize)
         }
     }
@@ -74,14 +61,8 @@ struct FloatingToolView: View {
         
         // Use .titled with .borderless to allow input while keeping borderless appearance
         window.styleMask.remove(.titled)
-//        window.styleMask = [, .borderless, .nonactivatingPanel]
-        // Alternative: Use .nonactivatingPanel for floating input window
-//         window.styleMask = []
-        window.collectionBehavior = [.canJoinAllSpaces]
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = false
-        
-        // Set window delegate to handle input events
-        window.delegate = ActionWindowDelegate.shared
         
         if let targetRect = targetRect {
             let targetTransform = CGRect(x: targetRect.origin.x, y: targetRect.origin.y + targetRect.size.height, width: actionSize.width, height: actionSize.height)

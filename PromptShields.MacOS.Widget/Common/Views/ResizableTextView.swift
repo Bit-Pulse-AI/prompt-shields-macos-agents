@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ResizableTextView: NSViewRepresentable {
     @Binding var text: String
-    @Binding var dynamicHeight: CGFloat
     let placeholderTextColor: NSColor
     let placeholderText: String
     
@@ -28,7 +27,6 @@ struct ResizableTextView: NSViewRepresentable {
         if nsView.string != text {
             nsView.string = text
         }
-        dynamicHeight = calculateHeight(for: nsView)
     }
 
     func makeCoordinator() -> Coordinator {

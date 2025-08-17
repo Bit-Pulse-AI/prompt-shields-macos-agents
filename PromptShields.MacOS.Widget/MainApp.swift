@@ -2,9 +2,14 @@ import SwiftUI
 import Combine
 import SwiftData
 
+enum ActionToolState {
+    case idle
+    case loading
+    case options
+}
 final class OverlayStateModel: ObservableObject {
     @Published var elementInfo: ElementInfo?
-    @Published var isLoadingFromLLM: Bool = false
+    @Published var actionToolState: ActionToolState = .idle
     @Published var promptText: String = ""
     @Published var textFieldHeight: CGFloat = 40
 }
@@ -23,9 +28,10 @@ struct MainApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     static let overlayRender = "overlay-render"
     static let actionRender = "action-render"
+    static let mainWindow = "main-window"
     
     var body: some Scene {
-        WindowGroup("Main", id: "main-window") {
+        WindowGroup("Main", id: MainApp.mainWindow) {
             MainView(overlayStateObject: _overlayStateModel)
                 .onAppear {
                     configureAppAppearance()
@@ -39,36 +45,7 @@ struct MainApp: App {
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
         Window("Action", id: MainApp.actionRender) {
-            ZStack(alignment: .leading) {
-                if overlayStateModel.isLoadingFromLLM {
-                    VStack {
-                        HStack {
-                            Button {
-                            } label: {
-                                Text("Enhance privacy and security")
-                            }
-                            Button {
-                            } label: {
-                                Text("Enhance prompt")
-                            }
-                        }
-                        ExpandingTextEditor(text: $overlayStateModel.promptText, height: $overlayStateModel.textFieldHeight)
-                    }
-                    .padding()
-                    .background(.white)
-                    .cornerRadius(8)
-                } else {
-                    Button {
-                        overlayStateModel.isLoadingFromLLM = true
-                    } label: {
-                        Image(ImageResource(name: "logo_mid", bundle: .main))
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    }
-                    .buttonStyle(ButtonStyleWhite())
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
+            ActionView()
         }
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
