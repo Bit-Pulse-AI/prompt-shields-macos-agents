@@ -5,88 +5,75 @@ import ApplicationServices
 import AppKit
 
 actor AccessibilityMonitorService: ObservableObject {
-    private var overlayStateModel: OverlayStateModel
-    
-    private let pollInterval: TimeInterval = 0.5
-    private var timer: DispatchSourceTimer?
+    private let elementInfo: Binding<ElementInfo?>
+    private let pollInterval: TimeInterval = 0.2
+    private let timer: PausableTimer
+    private let textFieldDetector = TextFieldDetector()
+    private let textInjector = TextInjector()
+    private var previousRect: CGRect?
     private var lastIsProcessTrusted: Bool?
     private var shouldDisplayPermissionPrompt = true
     private var shouldDisplayRestartPrompt = true
-    
-    private let textFieldDetector = TextFieldDetector()
-    private let textExtractor = TextExtractor()
-    private let textInjector = TextInjector()
     
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: AccessibilityMonitorService.self)
     )
     
-    init(overlayStateModel: OverlayStateModel) {
-        self.overlayStateModel = overlayStateModel
-        Task { [weak self] in
-            await self?.startTimer()
+    init(elementInfo: Binding<ElementInfo?>) {
+        self.elementInfo = elementInfo
+        self.timer = PausableTimer(interval: .seconds(pollInterval))
+        Task {
+            await self.startTimer()
         }
     }
 
     private func startTimer() {
-        guard timer == nil else { return }
-
-        let source = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
-        source.schedule(deadline: .now(), repeating: pollInterval, leeway: .milliseconds(200))
-        source.setEventHandler { [weak self] in
-            Task { [weak self] in
+        Task {
+            await timer.start { @MainActor [weak self] in
                 await self?.timerTick()
             }
         }
-
-        self.timer = source
-        source.resume()
     }
     
     private func stopTimer() {
-        timer?.cancel()
-        timer = nil
+        Task {
+            await timer.stop()
+        }
     }
     
     private func timerTick() {
-//        var reset = false
         if lastIsProcessTrusted == nil && isProcessTrusted {
             logger.log("app has AX")
         } else if lastIsProcessTrusted == nil && !isProcessTrusted {
             logger.log("app does not have AX")
             showPromptIfNeeded()
             // Hide overlay when accessibility is not available
-            Task { @MainActor [weak self] in
-                await self?.overlayStateModel.isOverlayVisible = false
+            Task { [weak self] in
+                await self?.updateElementInfo()
             }
         } else if lastIsProcessTrusted != isProcessTrusted && isProcessTrusted {
             logger.log("user enabled AX")
         } else if lastIsProcessTrusted != isProcessTrusted && !isProcessTrusted {
             logger.log("user disabled AX")
             // Hide overlay when accessibility is disabled
-            Task { @MainActor [weak self] in
-                await self?.overlayStateModel.isOverlayVisible = false
+            Task { [weak self] in
+                await self?.updateElementInfo()
             }
-//            reset = true
         } else if lastIsProcessTrusted == isProcessTrusted && isProcessTrusted {
-            logger.log("ticking on a trusted process")
+//            logger.log("ticking on a trusted process")
             shouldDisplayRestartPrompt = false
-            onAXAccessGranted()
+            Task { [weak self] in
+                await self?.onAXAccessGranted()
+            }
         } else if lastIsProcessTrusted == isProcessTrusted && !isProcessTrusted {
             logger.log("ticking on a not trusted process")
             // Hide overlay when accessibility is not available
-            Task { @MainActor [weak self] in
-                await self?.overlayStateModel.isOverlayVisible = false
+            Task { [weak self] in
+                await self?.updateElementInfo()
             }
         }
         lastIsProcessTrusted = isProcessTrusted
-//        if reset {
-//            shouldDisplayRestartPrompt = true
-//            lastIsProcessTrusted = nil
-//            shouldDisplayPermissionPrompt = true
-//            reset = false
-//        }
     }
     
     func showPromptIfNeeded() {
@@ -110,7 +97,6 @@ actor AccessibilityMonitorService: ObservableObject {
     
     @MainActor
     private func displayRestart() {
-        // Example: show a polite alert to the user
         let alert = NSAlert()
         alert.messageText = "Restart Required"
         alert.informativeText = """
@@ -134,113 +120,93 @@ actor AccessibilityMonitorService: ObservableObject {
         }
     }
 
-    private func onAXAccessGranted() {
+    private func onAXAccessGranted() async {
         if let focusedElement = try? getRobustFocusedElement() {
-            analyzeTextIfPossible(element: focusedElement)
+            await analyzeTextIfPossible(element: focusedElement)
         } else {
             displayRestartIfNeeded()
-            // Hide overlay when no focused element is found
-            Task { @MainActor [weak self] in
-                await self?.overlayStateModel.isOverlayVisible = false
-            }
+            await updateElementInfo()
         }
     }
     
-    private func analyzeTextIfPossible(element: CFTypeRef) {
-        Task { [weak self] in
-            await self?.monitorActiveTextField()
-        }
-    }
-
-    @MainActor
-    private func monitorActiveTextField() async {
+    private func analyzeTextIfPossible(element: CFTypeRef) async {
         do {
-            // Check if task is cancelled
+            print("Focused element \(element)")
             try Task.checkCancellation()
             let focusedElement = try await self.getFocusedElementWithRetry()
-            
             let isValidElement = await self.isValidElement(focusedElement)
-            // Validate the element is still accessible
+            
             guard isValidElement else {
                 self.logger.warning("Focused element is no longer valid")
-                // Hide overlay when element is not valid
-                Task { @MainActor [weak self] in
-                    await self?.overlayStateModel.isOverlayVisible = false
-                }
-                try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+                await updateElementInfo()
                 return
             }
             
-            Task { @MainActor @Sendable [weak self] in
-                // Get current mouse position for click-based child detection
-//                let mouseLocation = NSEvent.mouseLocation
-                
-                if let elementInfo = try await self?.textFieldDetector.getAXElementOrSelectionInfo(focusedElement) {
-                    await self?.updateElementInfo(elementInfo: elementInfo)
-                } else {
-                    // Hide overlay when no text field is detected
-                    await self?.overlayStateModel.isOverlayVisible = false
-                    print("AccessibilityMonitor: Setting overlay hidden (no text field)")
-                }
-            }
+            let elementInfo = try self.textFieldDetector.getAXElementOrSelectionInfo(focusedElement)
+            print("elementInfo \(elementInfo.frame)")
+            await self.updateElementInfo(elementInfo: elementInfo)
         } catch {
             logger.error("Error received analyzing textfield \(error)")
-            // Hide overlay on error
-            await self.overlayStateModel.isOverlayVisible = false
+            await updateElementInfo()
         }
     }
     
-    private let padding: CGFloat = 4
-    @MainActor
-    func updateElementInfo(elementInfo: ElementInfo) async {
-        let frame = elementInfo.frame
-        if frame.origin.x != .infinity && frame.origin.y != .infinity && frame.size.width != 0 && frame.size.height != 0 {
-            await self.overlayStateModel.floatingWindowRect = CGRect(x: frame.origin.x - padding, y: frame.origin.y - padding, width: frame.size.width + padding * 2, height: frame.size.height + padding * 2)
-            await self.overlayStateModel.isOverlayVisible = true
-            print("AccessibilityMonitor: Setting overlay visible")
-        } else {
-            // Hide overlay when no valid frame is detected
-            await self.overlayStateModel.isOverlayVisible = false
-            print("AccessibilityMonitor: Setting overlay hidden (invalid frame)")
+    var shouldUpdateFrame = true
+    
+    func updateElementInfo(elementInfo: ElementInfo? = nil) async {
+        let isSelf = elementInfo?.applicationBundleId == Bundle.main.bundleIdentifier
+        guard let frame = elementInfo?.frame, frame.isValid else {
+            if elementInfo?.applicationBundleId != nil && !isSelf {
+                self.elementInfo.wrappedValue = nil
+            }
+            return
+        }
+        if !shouldUpdateFrame {
+            shouldUpdateFrame = previousRect != elementInfo?.frame
+        }
+        if shouldUpdateFrame && previousRect == elementInfo?.frame {
+            if elementInfo?.applicationBundleId != nil && !isSelf {
+                self.elementInfo.wrappedValue = elementInfo?.withFrame(frame: frame)
+                shouldUpdateFrame = false
+            }
+        } else if previousRect != elementInfo?.frame {
+            if elementInfo?.applicationBundleId != nil && !isSelf {
+                self.elementInfo.wrappedValue = nil
+            }
+        }
+        if elementInfo?.applicationBundleId != nil && !isSelf {
+            previousRect = elementInfo?.frame
         }
     }
 
-    @MainActor
     private func getFocusedElementWithRetry() async throws -> AXUIElement {
         let maxRetries = 3
 
         for attempt in 1...maxRetries {
             do {
-                return try await getRobustFocusedElement()
+                return try getRobustFocusedElement()
             } catch {
                 if attempt == maxRetries {
                     throw error
                 }
-
-                // Wait before retry
-                try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                try await Task.sleep(nanoseconds: 100_000_000)
             }
         }
 
         throw AccessibilityError.failedToGetFocusedElement
     }
 
-    @MainActor
     private func isValidElement(_ element: AXUIElement) async -> Bool {
         var pid: pid_t = 0
         let result = AXUIElementGetPid(element, &pid)
-
         guard result == .success else {
             return false
         }
-
-        // Check if the process is still running
         let app = NSWorkspace.shared.runningApplications.first { $0.processIdentifier == pid }
         return app != nil
     }
     
     func getRobustFocusedElement() throws -> AXUIElement {
-        // Step 1 — Try direct kAXFocusedUIElementAttribute
         guard let frontApp = NSWorkspace.shared.frontmostApplication else {
             throw AccessibilityError.failedToGetFrame
         }
@@ -252,7 +218,6 @@ actor AccessibilityMonitorService: ObservableObject {
             return focusedElement as! AXUIElement
         }
         
-        // Step 2 — Get focused window
         var windowRef: CFTypeRef?
         if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
             throw AccessibilityError.failedToGetFrame
@@ -261,7 +226,6 @@ actor AccessibilityMonitorService: ObservableObject {
             throw AccessibilityError.failedToGetFrame
         }
         
-        // Step 3 — Search recursively for AXFocused = true
         if let found = findFocusedInTree(windowElement as! AXUIElement) {
             return found
         }
@@ -269,15 +233,12 @@ actor AccessibilityMonitorService: ObservableObject {
         throw AccessibilityError.failedToGetFrame
     }
 
-    // Recursively search children for AXFocused = true
     private func findFocusedInTree(_ element: AXUIElement) -> AXUIElement? {
         var focusedValue: CFTypeRef?
         if AXUIElementCopyAttributeValue(element, kAXFocusedAttribute as CFString, &focusedValue) == .success,
            let boolVal = focusedValue as? Bool, boolVal == true {
             return element
         }
-        
-        // Get children
         var childrenRef: CFTypeRef?
         if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) != .success {
             return nil
@@ -300,17 +261,30 @@ actor AccessibilityMonitorService: ObservableObject {
         guard let bundlePath = Bundle.main.bundlePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
             return
         }
-
-        // Use `open` to launch the same bundle after a short delay
         let script = """
         sleep 0.5
         open "\(bundlePath)"
         """
-
-        // Spawn a shell process to run the restart command
         _ = Process.launchedProcess(launchPath: "/bin/sh", arguments: ["-c", script])
 
         // Terminate current app
         NSApp.terminate(nil)
+    }
+}
+
+extension ElementInfo {
+    func withFrame(frame: CGRect) -> ElementInfo {
+        var copy = self
+        copy.frame = frame
+        return copy
+    }
+}
+
+extension CGRect {
+    var isValid: Bool {
+        origin.x != .infinity &&
+        origin.y != .infinity &&
+        size.width != 0 &&
+        size.height != 0
     }
 }

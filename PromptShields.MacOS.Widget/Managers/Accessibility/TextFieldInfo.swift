@@ -5,7 +5,7 @@ struct ElementInfo: Equatable, Hashable {
     let text: String
     let applicationName: String
     let applicationBundleId: String
-    let frame: CGRect
+    var frame: CGRect
     
     func hash(into hasher: inout Hasher) {
         hasher.combine(text)

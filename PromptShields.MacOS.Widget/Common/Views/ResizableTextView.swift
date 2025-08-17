@@ -5,7 +5,6 @@ struct ResizableTextView: NSViewRepresentable {
     @Binding var dynamicHeight: CGFloat
     let placeholderTextColor: NSColor
     let placeholderText: String
-    let action: () -> Void
     
     func makeNSView(context: Context) -> NSTextView {
         let textView = PlaceholderTextView()
@@ -21,17 +20,15 @@ struct ResizableTextView: NSViewRepresentable {
         textView.textContainer?.lineFragmentPadding = 0
         textView.font = .body1
         textView.textColor = .black
-        textView.action = self.action
         return textView
     }
 
+    @MainActor
     func updateNSView(_ nsView: NSTextView, context: Context) {
         if nsView.string != text {
             nsView.string = text
         }
-        DispatchQueue.main.async {
-            dynamicHeight = calculateHeight(for: nsView)
-        }
+        dynamicHeight = calculateHeight(for: nsView)
     }
 
     func makeCoordinator() -> Coordinator {

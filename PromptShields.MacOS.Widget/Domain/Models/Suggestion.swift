@@ -111,7 +111,6 @@ struct SuggestionAPIResponse: APIResponse {
     }
     
     func toDomain() -> Suggestion {
-        let dateFormatter = ISO8601DateFormatter()
         let model = Suggestion.SuggestionModel(uuid: "",
                                                text: "",
                                                suggestion: "",

@@ -1,7 +1,6 @@
 import AppKit
 
-actor TextExtractor {
-    @MainActor
+final class TextExtractor: Sendable {
     func getAllText(from element: AXUIElement) -> String {
         var collectedText: [String] = []
             

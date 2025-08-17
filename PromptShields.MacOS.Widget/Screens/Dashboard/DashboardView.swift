@@ -33,7 +33,13 @@ struct DashboardView: View {
     
     init(overlayStateModel: StateObject<OverlayStateModel>) {
         self.overlayStateModel = overlayStateModel
-        self._accessibilityMonitorService = StateObject(wrappedValue: AccessibilityMonitorService(overlayStateModel: overlayStateModel.wrappedValue))
+        self._accessibilityMonitorService = StateObject(wrappedValue: AccessibilityMonitorService(elementInfo: Binding(get: {
+            return overlayStateModel.wrappedValue.elementInfo
+        }, set: { newValue in
+            Task { @MainActor in
+                overlayStateModel.wrappedValue.elementInfo = newValue
+            }
+        })))
     }
 
     var body: some View {
