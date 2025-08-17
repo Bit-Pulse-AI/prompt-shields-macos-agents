@@ -131,7 +131,6 @@ actor AccessibilityMonitorService: ObservableObject {
     
     private func analyzeTextIfPossible(element: CFTypeRef) async {
         do {
-            print("Focused element \(element)")
             try Task.checkCancellation()
             let focusedElement = try await self.getFocusedElementWithRetry()
             let isValidElement = await self.isValidElement(focusedElement)
@@ -143,7 +142,6 @@ actor AccessibilityMonitorService: ObservableObject {
             }
             
             let elementInfo = try self.textFieldDetector.getAXElementOrSelectionInfo(focusedElement)
-            print("elementInfo \(elementInfo.frame)")
             await self.updateElementInfo(elementInfo: elementInfo)
         } catch {
             logger.error("Error received analyzing textfield \(error)")

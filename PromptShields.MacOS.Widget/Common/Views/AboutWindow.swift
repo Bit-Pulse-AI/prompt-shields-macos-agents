@@ -5,7 +5,7 @@ import AppKit
 class AboutWindow: NSWindow {
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 600),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -44,7 +44,7 @@ struct AboutView: View {
         VStack(spacing: 20) {
             // App icon and name
             VStack(spacing: 12) {
-                Image(ImageResource(name: "logo_mid", bundle: .main))
+                Image(ImageResource(name: "logo_about", bundle: .main))
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 80, height: 80)
@@ -72,7 +72,7 @@ struct AboutView: View {
             
             // Copyright and company info
             VStack(spacing: 4) {
-                Text("© 2024 Bit Pulse AI")
+                Text("© 2025 Promptshields")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
@@ -100,8 +100,4 @@ struct AboutView: View {
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "\(version) (\(build))"
     }
-}
-
-#Preview {
-    AboutView(window: NSWindow())
 }

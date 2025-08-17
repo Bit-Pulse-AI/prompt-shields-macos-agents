@@ -17,9 +17,6 @@ struct MainView: View {
         VStack {
             contentView
                 .showLoading(isLoading: globalMainStateModel.isBusy)
-                .overlay {
-                    EmptyView()
-                }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .environmentObject(globalMainStateModel)

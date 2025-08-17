@@ -1,6 +1,8 @@
 import SwiftUI
 import Combine
 import SwiftData
+import AppKit
+import os
 
 enum ActionToolState {
     case idle

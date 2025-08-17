@@ -1,6 +1,7 @@
 import AppKit
 import RevenueCat
 import os
+import SwiftUI
 
 /// Application delegate responsible for handling application lifecycle events
 /// Manages third-party service configurations and app initialization
@@ -22,13 +23,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Configures third-party services and performs initial setup
     /// - Parameter notification: Notification containing launch information
     func applicationDidFinishLaunching(_ notification: Notification) {
-//        configureRevenueCat()
-//        setupStatusBarMenu()
+        configureRevenueCat()
+        setupStatusBarMenu()
         
         // Prevent the app from terminating when all windows are closed
-//        NSApp.setActivationPolicy(.accessory)
+        NSApp.setActivationPolicy(.accessory)
         
-//        logger.info("Application finished launching successfully")
+        logger.info("Application finished launching successfully")
     }
     
     /// Called when the last window is closed
@@ -56,14 +57,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let button = statusBarItem?.button {
             button.image = NSImage(named: "logo_status_bar")
             button.imagePosition = .imageLeft
+            button.toolTip = "PromptShields"
+            logger.info("Status bar item created successfully")
+        } else {
+            logger.error("Failed to create status bar button")
         }
         
         // Create the menu
         let menu = NSMenu()
         
-        // Add "Open Main Window" menu item
+        // Add "Show PromptShields" menu item
         let openMainWindowItem = NSMenuItem(
-            title: "Open Main Window",
+            title: "Show PromptShields",
             action: #selector(openMainWindow),
             keyEquivalent: "o"
         )
@@ -87,7 +92,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Add "Quit" menu item
         let quitItem = NSMenuItem(
-            title: "Quit",
+            title: "Quit PromptShields",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -99,18 +104,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     @MainActor
     @objc private func openMainWindow() {
+        logger.info("Opening main window...")
+        
         // Temporarily change activation policy to show windows
         NSApp.setActivationPolicy(.regular)
         
         // Find and show the main window
         if let mainWindow = NSApp.windows.first(where: { 
-            $0.identifier?.rawValue == "main-window" 
+            $0.identifier?.rawValue == MainApp.mainWindow 
         }) {
+            logger.info("Found main window, showing it...")
+            if mainWindow.isMiniaturized {
+                mainWindow.deminiaturize(nil)
+            }
             mainWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         } else {
-            // If main window doesn't exist, create it by sending the openWindow action
-            NSApp.sendAction(Selector(("openWindow:")), to: nil, from: nil)
+            logger.info("Main window not found, will retry...")
+            // If main window doesn't exist, try to create it
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                if let mainWindow = NSApp.windows.first(where: {
+                    $0.identifier?.rawValue == MainApp.mainWindow 
+                }) {
+                    self?.logger.info("Found main window on retry, showing it...")
+                    if mainWindow.isMiniaturized {
+                        mainWindow.deminiaturize(nil)
+                    }
+                    mainWindow.makeKeyAndOrderFront(nil)
+                    NSApp.activate(ignoringOtherApps: true)
+                } else {
+                    self?.logger.error("Main window still not found after retry")
+                }
+            }
         }
     }
     
