@@ -23,11 +23,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Configures third-party services and performs initial setup
     /// - Parameter notification: Notification containing launch information
     func applicationDidFinishLaunching(_ notification: Notification) {
-        configureRevenueCat()
-        setupStatusBarMenu()
+        logger.info("Application did finish launching - starting setup...")
         
-        // Prevent the app from terminating when all windows are closed
-        NSApp.setActivationPolicy(.accessory)
+        // Clean up any hanging windows first
+        cleanupHangingWindows()
+        
+        // Configure RevenueCat first
+        configureRevenueCat()
+        
+        // Test just the activation policy change first
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            self.logger.info("Setting activation policy to accessory...")
+            NSApp.setActivationPolicy(.accessory)
+        }
         
         logger.info("Application finished launching successfully")
     }
@@ -50,17 +58,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     @MainActor
     private func setupStatusBarMenu() {
+        logger.info("Starting status bar menu setup...")
+        
+        // Ensure we're on the main thread
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async {
+                self.setupStatusBarMenu()
+            }
+            return
+        }
+        
         // Create status bar item
         statusBarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
+        guard let statusBarItem = statusBarItem else {
+            logger.error("Failed to create status bar item")
+            return
+        }
+        
         // Set the status bar icon (using the app's logo)
-        if let button = statusBarItem?.button {
-            button.image = NSImage(named: "logo_status_bar")
-            button.imagePosition = .imageLeft
+        if let button = statusBarItem.button {
+            // Use a simple text fallback first to avoid image loading issues
+            button.title = "PS"
             button.toolTip = "PromptShields"
-            logger.info("Status bar item created successfully")
+            
+            // Try to load the image after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                if let image = NSImage(named: "logo_status_bar") {
+                    button.image = image
+                    button.title = ""
+                    button.imagePosition = .imageLeft
+                    self.logger.info("Status bar item created successfully with image")
+                } else {
+                    self.logger.error("Failed to load status bar image, keeping text fallback")
+                }
+            }
         } else {
             logger.error("Failed to create status bar button")
+            return
         }
         
         // Create the menu
@@ -99,12 +134,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(quitItem)
         
         // Set the menu to the status bar item
-        statusBarItem?.menu = menu
+        statusBarItem.menu = menu
+        
+        logger.info("Status bar menu setup completed successfully")
     }
     
     @MainActor
     @objc private func openMainWindow() {
         logger.info("Opening main window...")
+        
+        // Clean up any hanging windows first
+        cleanupHangingWindows()
         
         // Temporarily change activation policy to show windows
         NSApp.setActivationPolicy(.regular)
@@ -153,7 +193,57 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Configures RevenueCat for in-app purchase management
     /// This method sets up the RevenueCat SDK with the appropriate API key
     private func configureRevenueCat() {
-        Purchases.configure(withAPIKey: revenueCatAPIKey)
-        logger.info("RevenueCat configured successfully")
+        do {
+            Purchases.configure(withAPIKey: revenueCatAPIKey)
+            logger.info("RevenueCat configured successfully")
+        } catch {
+            logger.error("Failed to configure RevenueCat: \(error)")
+        }
+    }
+    
+    /// Cleans up any hanging windows from previous app runs
+    private func cleanupHangingWindows() {
+        logger.info("Cleaning up hanging windows...")
+        
+        // Get all existing windows
+        let existingWindows = NSApp.windows
+        
+        // Close any windows that match our known identifiers
+        let windowIdentifiers = ["main-window", "overlay-render", "action-render"]
+        
+        for window in existingWindows {
+            if let identifier = window.identifier?.rawValue,
+               windowIdentifiers.contains(identifier) {
+                logger.info("Closing hanging window with identifier: \(identifier)")
+                window.close()
+            }
+        }
+        
+        logger.info("Window cleanup completed")
+    }
+}
+
+// MARK: - NSWindowDelegate
+extension AppDelegate: NSWindowDelegate {
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // Ensure we're on the main thread
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async {
+                _ = self.windowShouldClose(sender)
+            }
+            return false
+        }
+        
+        if sender.identifier?.rawValue == MainApp.mainWindow {
+            logger.info("Main window close requested, minimizing instead...")
+            // Minimize the window instead of closing it
+            sender.miniaturize(nil)
+            // Switch back to accessory mode
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                NSApp.setActivationPolicy(.accessory)
+            }
+            return false
+        }
+        return true
     }
 }

@@ -36,7 +36,10 @@ struct MainApp: App {
         WindowGroup("Main", id: MainApp.mainWindow) {
             MainView(overlayStateObject: _overlayStateModel)
                 .onAppear {
+                    cleanupHangingWindows()
                     configureAppAppearance()
+                    // Temporarily disable window delegate setup
+                     setupWindowDelegate()
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -58,5 +61,37 @@ struct MainApp: App {
         openWindow(id: "overlay-render")
         openWindow(id: "action-render")
         NSApp.appearance = NSAppearance(named: .aqua)
+    }
+    
+    /// Sets up the window delegate to handle window closing behavior
+    private func setupWindowDelegate() {
+        // Try to find the main window and set its delegate with a longer delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if let mainWindow = NSApp.windows.first(where: { 
+                $0.identifier?.rawValue == MainApp.mainWindow 
+            }) {
+                // Only set delegate if it's not already set
+                if mainWindow.delegate == nil {
+                    mainWindow.delegate = NSApp.delegate as? NSWindowDelegate
+                }
+            }
+        }
+    }
+    
+    /// Cleans up any hanging windows from previous app runs
+    private func cleanupHangingWindows() {
+        // Get all existing windows
+        let existingWindows = NSApp.windows
+        
+        // Close any windows that match our known identifiers
+        let windowIdentifiers = [MainApp.mainWindow, MainApp.overlayRender, MainApp.actionRender]
+        
+        for window in existingWindows {
+            if let identifier = window.identifier?.rawValue,
+               windowIdentifiers.contains(identifier) {
+                print("Cleaning up hanging window with identifier: \(identifier)")
+                window.close()
+            }
+        }
     }
 }
