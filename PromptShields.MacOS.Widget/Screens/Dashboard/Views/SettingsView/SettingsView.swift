@@ -25,7 +25,7 @@ struct SettingsView: View {
                         suggestionTypesSection(preferences)
                         
                         // Application Blocking
-                        applicationBlockingSection(preferences)
+//                        applicationBlockingSection(preferences)
                         
                         // UI Settings
                         uiSettingsSection(preferences)
@@ -49,34 +49,28 @@ struct SettingsView: View {
             Text("General")
                 .font(.headline)
             
-            VStack(spacing: 8) {
-                Toggle("Enable Assistant", isOn: Binding(
-                    get: { preferences.model.isEnabled },
-                    set: { newValue in
-                        var newPreferences = preferences
-                        newPreferences.model.isEnabled = newValue
-                        Task {
-                            do {
-                                try await updatePreferences(newPreferences)
-                            } catch {
-                                logger.error("Error saving prefs : \(error)")
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Toggle("Enable Assistant", isOn: Binding(
+                        get: { preferences.model.isEnabled },
+                        set: { newValue in
+                            var newPreferences = preferences
+                            newPreferences.model.isEnabled = newValue
+                            Task {
+                                do {
+                                    try await updatePreferences(newPreferences)
+                                } catch {
+                                    logger.error("Error saving prefs : \(error)")
+                                }
                             }
                         }
-                    }
-                ))
-                
-                Toggle("Auto-apply suggestions", isOn: Binding(
-                    get: { preferences.model.autoApplySuggestions },
-                    set: { newValue in
-                        var newPreferences = preferences
-                        newPreferences.model.autoApplySuggestions = newValue
-                        Task {
-                            try await updatePreferences(newPreferences)
-                        }
-                    }
-                ))
+                    ))
+                    Spacer()
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(width: 350)
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
@@ -87,29 +81,34 @@ struct SettingsView: View {
             Text("Suggestion Types")
                 .font(.headline)
             
-            VStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(SuggestionType.allCases, id: \.self) { type in
-                    Toggle(type.displayName, isOn: Binding(
-                        get: { preferences.model.enabledSuggestionTypes.contains(type.rawValue) },
-                        set: { newValue in
-                            var newTypes = preferences.model.enabledSuggestionTypes
-                            if newValue {
-                                newTypes.append(type.rawValue)
-                            } else {
-                                newTypes.removeAll(where: {
-                                    $0 == type.rawValue
-                                })
+                    HStack {
+                        Toggle(type.displayName, isOn: Binding(
+                            get: { preferences.model.enabledSuggestionTypes.contains(type.rawValue) },
+                            set: { newValue in
+                                var newTypes = preferences.model.enabledSuggestionTypes
+                                if newValue {
+                                    newTypes.append(type.rawValue)
+                                } else {
+                                    newTypes.removeAll(where: {
+                                        $0 == type.rawValue
+                                    })
+                                }
+                                var newPreferences = preferences
+                                newPreferences.model.enabledSuggestionTypes = newTypes
+                                Task { @Sendable in
+                                    try await updatePreferences(newPreferences)
+                                }
                             }
-                            var newPreferences = preferences
-                            newPreferences.model.enabledSuggestionTypes = newTypes
-                            Task { @Sendable in
-                                try await updatePreferences(newPreferences)
-                            }
-                        }
-                    ))
+                        ))
+                        Spacer()
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(width: 350)
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
@@ -168,17 +167,6 @@ struct SettingsView: View {
                 .font(.headline)
             
             VStack(spacing: 8) {
-                Toggle("Show floating panel", isOn: Binding(
-                    get: { preferences.model.showFloatingPanel },
-                    set: { newValue in
-                        var newPreferences = preferences
-                        newPreferences.model.showFloatingPanel = newValue
-                        Task {
-                            try await updatePreferences(newPreferences)
-                        }
-                    }
-                ))
-                
                 Picker("Panel position", selection: Binding(
                     get: { preferences.model.panelPosition },
                     set: { newValue in

@@ -1,30 +1,18 @@
 import Foundation
 import SwiftData
 
-// MARK: - Suggestion Type
-enum SuggestionType: String, CaseIterable, Codable {
-    case grammar = "grammar"
-    case spelling = "spelling"
-    case style = "style"
-    case clarity = "clarity"
-    case tone = "tone"
-}
-
 struct Suggestion: Domain {
     typealias M = SuggestionModel
     typealias P = SuggestionPersistentModel
     typealias R = SuggestionAPIResponse
     
     struct SuggestionModel: Model {
-        let uuid: UID
-        let text: String
-        let suggestion: String
-        let type: SuggestionType
-        let offset: Int
-        let length: Int
-        let confidence: Double
-        let explanation: String
-        let timestamp: Date
+        var uuid: UID
+        let originalText: String
+        let suggestedText: String
+        let suggestionType: SuggestionType?
+        let application: String
+        let createdAt: Date
     }
     
     let identifier: ModelIdentifier?
@@ -44,29 +32,23 @@ struct Suggestion: Domain {
     
     func toPersistentModel(context: ModelContext?) -> SuggestionPersistentModel {
         let persistent = SuggestionPersistentModel()
-        persistent.uuid = model.uuid
-        persistent.text = model.text
-        persistent.suggestion = model.suggestion
-        persistent.type = model.type.rawValue
-        persistent.offset = model.offset
-        persistent.length = model.length
-        persistent.confidence = model.confidence
-        persistent.explanation = model.explanation
-        persistent.timestamp = model.timestamp
+        persistent.uuid = model.uuid.encrypt
+        persistent.originalText = model.originalText.encrypt
+        persistent.suggestedText = model.suggestedText.encrypt
+        persistent.suggestionType = model.suggestionType?.rawValue.encrypt
+        persistent.application = model.application.encrypt
+        persistent.createdAt = model.createdAt
         return persistent
     }
     
     static func fromPersistentModel(_ persistent: SuggestionPersistentModel) -> Suggestion {
         let model = SuggestionModel(
-            uuid: persistent.uuid,
-            text: persistent.text,
-            suggestion: persistent.suggestion,
-            type: SuggestionType(rawValue: persistent.type) ?? .grammar,
-            offset: persistent.offset,
-            length: persistent.length,
-            confidence: persistent.confidence,
-            explanation: persistent.explanation,
-            timestamp: persistent.timestamp
+            uuid: persistent.uuid.decrypt,
+            originalText: persistent.originalText.decrypt,
+            suggestedText: persistent.suggestedText.decrypt,
+            suggestionType: SuggestionType(rawValue: persistent.suggestionType?.decrypt ?? ""),
+            application: persistent.application.decrypt,
+            createdAt: persistent.createdAt
         )
         return Suggestion(model: model, identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
     }
@@ -82,44 +64,29 @@ struct Suggestion: Domain {
 // MARK: - API Models
 
 struct SuggestionAPIResponse: APIResponse {
-    let id: String
-    let title: String
-    let authorId: String
-    let memberIds: [String]
-    let messageCount: Int
-    let channelStatus: String
-    let projectId: String
-    let publicKey: String?
-    let llmProvider: String?
-    let llmKey: String?
-    let createdAt: String
-    let updatedAt: String
+    let uuid: String?
+    let originalText: String
+    let suggestedText: String
+    let suggestionType: String
+    let application: String
+    let createdAt: Date
     
     enum CodingKeys: String, CodingKey {
-        case id
-        case title
-        case authorId = "author"
-        case memberIds = "member_ids"
-        case messageCount = "message_count"
-        case channelStatus = "channel_status"
-        case projectId = "project_id"
-        case publicKey = "public_key"
-        case llmProvider = "llm_provider"
-        case llmKey = "llm_key"
+        case uuid = "id"
+        case originalText = "original_text"
+        case suggestedText = "suggested_text"
+        case suggestionType = "suggestion_type"
+        case application
         case createdAt = "created_at"
-        case updatedAt = "updated_at"
     }
     
     func toDomain() -> Suggestion {
-        let model = Suggestion.SuggestionModel(uuid: "",
-                                               text: "",
-                                               suggestion: "",
-                                               type: .clarity,
-                                               offset: 0,
-                                               length: 0,
-                                               confidence: 0,
-                                               explanation: "n/a",
-                                               timestamp: Date())
+        let model = Suggestion.SuggestionModel(uuid: uuid ?? UUID().uuidString,
+                                               originalText: originalText,
+                                               suggestedText: suggestedText,
+                                               suggestionType: SuggestionType(rawValue: suggestionType),
+                                               application: application,
+                                               createdAt: Date())
         return Suggestion(model: model)
     }
 }
@@ -129,30 +96,22 @@ struct SuggestionAPIResponse: APIResponse {
 @Model
 final class SuggestionPersistentModel: UpdatablePersistentModel {
     var pk: String?
-    
     var ik: String?
-    
     var uuid: String = ""
-    var text: String = ""
-    var suggestion: String = ""
-    var type: String = ""
-    var offset: Int = 0
-    var length: Int = 0
-    var confidence: Double = 0.0
-    var explanation: String = ""
-    var timestamp: Date = Date()
+    var originalText: String = ""
+    var suggestedText: String = ""
+    var suggestionType: String?
+    var application: String = ""
+    var createdAt: Date = Date()
     
     init() {}
     
     func updateProperties(from suggestion: SuggestionPersistentModel) {
         self.uuid = suggestion.uuid
-        self.text = suggestion.text
-        self.suggestion = suggestion.suggestion
-        self.type = suggestion.type
-        self.offset = suggestion.offset
-        self.length = suggestion.length
-        self.confidence = suggestion.confidence
-        self.explanation = suggestion.explanation
-        self.timestamp = suggestion.timestamp
+        self.originalText = suggestion.originalText
+        self.suggestedText = suggestion.suggestedText
+        self.suggestionType = suggestion.suggestionType
+        self.application = suggestion.application
+        self.createdAt = suggestion.createdAt
     }
 }

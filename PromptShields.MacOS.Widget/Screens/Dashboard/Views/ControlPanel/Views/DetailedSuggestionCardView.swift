@@ -3,21 +3,23 @@ import SwiftUI
 extension SuggestionType {
     var displayName: String {
         switch self {
-        case .grammar: return "Grammar"
-        case .spelling: return "Spelling"
-        case .style: return "Style"
-        case .clarity: return "Clarity"
-        case .tone: return "Tone"
+        case .SHAKESPEARE: return "Shakespeare"
+        case .OPTIMIZE: return "Optimize"
+        case .GPT: return "GPT"
+        case .REDACTION: return "Redaction"
+        case .SUMMARIZE: return "Summarize"
+        case .ENHANCE: return "Enhance"
         }
     }
 
     var color: String {
         switch self {
-        case .grammar: return "#FF6B6B"
-        case .spelling: return "#4ECDC4"
-        case .style: return "#45B7D1"
-        case .clarity: return "#96CEB4"
-        case .tone: return "#FFEAA7"
+        case .SHAKESPEARE: return "#FF6B6B"
+        case .OPTIMIZE: return "#4ECDC4"
+        case .GPT: return "#45B7D1"
+        case .REDACTION: return "#96CEB4"
+        case .SUMMARIZE: return "#FFEAA7"
+        case .ENHANCE: return "#FFA7EA"
         }
     }
 }
@@ -29,15 +31,14 @@ struct DetailedSuggestionCard: View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack {
-                Label(suggestion.model.type.displayName, systemImage: "textformat.abc.dottedunderline")
+                Label(suggestion.model.suggestionType?.displayName ?? "n/a", systemImage: "textformat.abc.dottedunderline")
                     .font(.caption)
-                    .foregroundColor(Color(hex: suggestion.model.type.color))
+                    .foregroundColor(Color(hex: suggestion.model.suggestionType?.color ?? "#FFFFFF"))
+                Label(suggestion.model.application, systemImage: "apple.terminal")
+                    .font(.caption)
+                    .foregroundColor(Color(hex: suggestion.model.suggestionType?.color ?? "#FFFFFF"))
                 
                 Spacer()
-                
-                Text("\(Int(suggestion.model.confidence * 100))% confidence")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
             
             // Original Text
@@ -46,7 +47,7 @@ struct DetailedSuggestionCard: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                Text(suggestion.model.text)
+                Text(suggestion.model.originalText)
                     .font(.body)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -60,43 +61,12 @@ struct DetailedSuggestionCard: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                Text(suggestion.model.suggestion)
+                Text(suggestion.model.suggestedText)
                     .font(.body)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(Color.green.opacity(0.1))
                     .cornerRadius(4)
-            }
-            
-            // Explanation
-            if !suggestion.model.explanation.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Explanation")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Text(suggestion.model.explanation)
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            // Actions
-            HStack(spacing: 12) {
-                Button("Apply") {
-                    Task {
-//                        [coordinator] in
-//                        await coordinator.applySuggestion(suggestion)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                
-                Button("Ignore") {
-//                    coordinator.ignoreSuggestion(suggestion)
-                }
-                .buttonStyle(.bordered)
-                
-                Spacer()
             }
         }
         .padding()

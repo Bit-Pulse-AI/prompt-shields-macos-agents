@@ -25,22 +25,8 @@ final class DashboardStateModel: ObservableObject {
 }
 
 struct DashboardView: View {
-    @StateObject private var dashboardStateModel = DashboardStateModel()
-    @StateObject private var accessibilityMonitorService: AccessibilityMonitorService
+    @EnvironmentObject private var dashboardStateModel: DashboardStateModel
     @State private var localValue: CGRect = .zero
-    private var overlayStateModel: StateObject<OverlayStateModel>
-    private var cancellables = Set<AnyCancellable>()
-    
-    init(overlayStateModel: StateObject<OverlayStateModel>) {
-        self.overlayStateModel = overlayStateModel
-        self._accessibilityMonitorService = StateObject(wrappedValue: AccessibilityMonitorService(elementInfo: Binding(get: {
-            return overlayStateModel.wrappedValue.elementInfo
-        }, set: { newValue in
-            Task { @MainActor in
-                overlayStateModel.wrappedValue.elementInfo = newValue
-            }
-        })))
-    }
 
     var body: some View {
         HStack(spacing: .zero) {
@@ -49,7 +35,6 @@ struct DashboardView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .environmentObject(dashboardStateModel)
-        .environmentObject(accessibilityMonitorService)
         .dashboardStyle()
     }
 }

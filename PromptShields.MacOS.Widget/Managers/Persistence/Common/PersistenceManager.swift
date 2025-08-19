@@ -44,7 +44,8 @@ protocol PersistenceManager: Sendable {
 
 @ModelActor
 actor PersistenceManagerImpl: PersistenceManager {
-    static let entity: [any PersistentModel.Type] = [OrganisationPersistentModel.self,
+    static let entity: [any PersistentModel.Type] = [SuggestionPersistentModel.self,
+                                                     OrganisationPersistentModel.self,
                                                      SubscriptionPersistentModel.self,
                                                      TeamPersistentModel.self,
                                                      TenantPersistentModel.self,

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ActionView: View {
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
+    @Environment(\.llmDomainService) private var llmDomainService
     
     var body: some View {
         ZStack(alignment: .leading) {
@@ -27,23 +28,29 @@ struct ActionView: View {
             case .options:
                 VStack {
                     VStack(alignment: .leading) {
-                        Button {
-                            overlayStateModel.actionToolState = .loading
-                            Task {
-                                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                                overlayStateModel.actionToolState = .idle
+                        ForEach(SuggestionType.allCases, id: \.self) { type in
+                            Button {
+                                overlayStateModel.actionToolState = .loading
+                                Task {
+                                    do {
+                                        let result = try await llmDomainService.process(text: overlayStateModel.elementInfo?.text ?? "", llmProvider: .AZURE_PROMPTSHIELDS, suggestionType: type, application: overlayStateModel.elementInfo?.applicationName ?? "n/a")
+                                        if let axUIElement = overlayStateModel.elementInfo?.element {
+                                            Task {
+                                                do {
+                                                    try await TextInjector().injectText(result, into: axUIElement)
+                                                } catch {
+                                                    print("Error \(error)")
+                                                }
+                                            }
+                                        }
+                                        overlayStateModel.actionToolState = .idle
+                                    } catch {
+                                        print("Error \(error)")
+                                    }
+                                }
+                            } label: {
+                                Text(type.displayName)
                             }
-                        } label: {
-                            Text("Enhance privacy and security")
-                        }
-                        Button {
-                            overlayStateModel.actionToolState = .loading
-                            Task {
-                                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                                overlayStateModel.actionToolState = .idle
-                            }
-                        } label: {
-                            Text("Enhance prompt")
                         }
                     }
                 }

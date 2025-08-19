@@ -29,7 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         cleanupHangingWindows()
         
         // Configure RevenueCat first
-        configureRevenueCat()
+//        configureRevenueCat()
         
         // Test just the activation policy change first
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -38,6 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         logger.info("Application finished launching successfully")
+        setupStatusBarMenu()
     }
     
     /// Called when the last window is closed
@@ -59,14 +60,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     private func setupStatusBarMenu() {
         logger.info("Starting status bar menu setup...")
-        
-        // Ensure we're on the main thread
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async {
-                self.setupStatusBarMenu()
-            }
-            return
-        }
         
         // Create status bar item
         statusBarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -144,14 +137,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         logger.info("Opening main window...")
         
         // Clean up any hanging windows first
-        cleanupHangingWindows()
+        cleanupHangingWindows(windowIdentifiers: [MainApp.mainWindow])
         
         // Temporarily change activation policy to show windows
         NSApp.setActivationPolicy(.regular)
         
         // Find and show the main window
         if let mainWindow = NSApp.windows.first(where: { 
-            $0.identifier?.rawValue == MainApp.mainWindow 
+            $0.identifier?.rawValue.hasPrefix(MainApp.mainWindow) ?? false
         }) {
             logger.info("Found main window, showing it...")
             if mainWindow.isMiniaturized {
@@ -164,7 +157,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // If main window doesn't exist, try to create it
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 if let mainWindow = NSApp.windows.first(where: {
-                    $0.identifier?.rawValue == MainApp.mainWindow 
+                    $0.identifier?.rawValue.hasPrefix(MainApp.mainWindow) ?? false
                 }) {
                     self?.logger.info("Found main window on retry, showing it...")
                     if mainWindow.isMiniaturized {
@@ -193,23 +186,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Configures RevenueCat for in-app purchase management
     /// This method sets up the RevenueCat SDK with the appropriate API key
     private func configureRevenueCat() {
-        do {
-            Purchases.configure(withAPIKey: revenueCatAPIKey)
-            logger.info("RevenueCat configured successfully")
-        } catch {
-            logger.error("Failed to configure RevenueCat: \(error)")
-        }
+//        Purchases.configure(withAPIKey: revenueCatAPIKey)
+//        logger.info("RevenueCat configured successfully")
     }
     
-    /// Cleans up any hanging windows from previous app runs
-    private func cleanupHangingWindows() {
+    @MainActor
+    private func cleanupHangingWindows(windowIdentifiers: [String] = [MainApp.mainWindow, MainApp.overlayRender, MainApp.actionRender]) {
         logger.info("Cleaning up hanging windows...")
-        
-        // Get all existing windows
         let existingWindows = NSApp.windows
-        
-        // Close any windows that match our known identifiers
-        let windowIdentifiers = ["main-window", "overlay-render", "action-render"]
         
         for window in existingWindows {
             if let identifier = window.identifier?.rawValue,
@@ -234,7 +218,7 @@ extension AppDelegate: NSWindowDelegate {
             return false
         }
         
-        if sender.identifier?.rawValue == MainApp.mainWindow {
+        if sender.identifier?.rawValue.hasPrefix(MainApp.mainWindow) ?? false {
             logger.info("Main window close requested, minimizing instead...")
             // Minimize the window instead of closing it
             sender.miniaturize(nil)

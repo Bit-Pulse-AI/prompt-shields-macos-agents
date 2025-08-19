@@ -8,11 +8,7 @@ final class MainStateModel: ObservableObject {
 
 struct MainView: View {
     @StateObject private var globalMainStateModel = MainStateModel()
-    @StateObject private var overlayStateObject: OverlayStateModel
     
-    init(overlayStateObject: StateObject<OverlayStateModel>) {
-        self._overlayStateObject = overlayStateObject
-    }
     var body: some View {
         VStack {
             contentView
@@ -26,7 +22,7 @@ struct MainView: View {
     var contentView: some View {
         switch globalMainStateModel.authState {
         case .loggedIn:
-            DashboardView(overlayStateModel: _overlayStateObject)
+            DashboardView()
         case .loggedOut:
             AuthView()
         case .undetermined:

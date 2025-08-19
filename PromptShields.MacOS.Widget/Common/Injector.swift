@@ -37,6 +37,8 @@ struct Inject<T>: Sendable {
             return UserPreferencesDomainServiceImpl() as! T
         } else if T.self == NetworkManager.self {
             return NetworkManagerImpl() as! T
+        } else if T.self == LLMNetworkService.self {
+            return LLMNetworkServiceImpl() as! T
         } else {
             logger.error("Missing injectable type \(T.self)")
             fatalError()

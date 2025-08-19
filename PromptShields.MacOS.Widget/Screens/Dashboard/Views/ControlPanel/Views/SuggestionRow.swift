@@ -6,24 +6,20 @@ struct SuggestionRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             Circle()
-                .fill(Color(hex: suggestion.model.type.color))
+                .fill(Color(hex: suggestion.model.suggestionType?.color ?? "#FFFFFF"))
                 .frame(width: 8, height: 8)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(suggestion.model.suggestion)
+                Text(suggestion.model.suggestedText)
                     .font(.body)
                     .fontWeight(.medium)
                 
-                Text(suggestion.model.type.displayName)
+                Text(suggestion.model.suggestionType?.displayName ?? "n/a")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
             Spacer()
-            
-            Text("\(Int(suggestion.model.confidence * 100))%")
-                .font(.caption)
-                .foregroundColor(.secondary)
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))

@@ -4,40 +4,52 @@ import Foundation
 import ApplicationServices
 import AppKit
 
-actor AccessibilityMonitorService: ObservableObject {
+actor AccessibilityManagerImpl: ObservableObject {
     private let elementInfo: Binding<ElementInfo?>
+    private let applicationInfo: Binding<ApplicationInfo>
+    private let isActive: Binding<Bool>
+    
     private let pollInterval: TimeInterval = 0.2
     private let timer: PausableTimer
     private let textFieldDetector = TextFieldDetector()
-    private let textInjector = TextInjector()
+    private var previousText: String?
     private var previousRect: CGRect?
     private var lastIsProcessTrusted: Bool?
     private var shouldDisplayPermissionPrompt = true
     private var shouldDisplayRestartPrompt = true
+    private var shouldUpdateFrame = true
+    private var shouldUpdateText = true
     
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
-        category: String(describing: AccessibilityMonitorService.self)
+        category: String(describing: AccessibilityManagerImpl.self)
     )
     
-    init(elementInfo: Binding<ElementInfo?>) {
+    init(elementInfo: Binding<ElementInfo?>,
+         applicationInfo: Binding<ApplicationInfo>,
+         isActive: Binding<Bool>) {
         self.elementInfo = elementInfo
+        self.applicationInfo = applicationInfo
+        self.isActive = isActive
         self.timer = PausableTimer(interval: .seconds(pollInterval))
         Task {
-            await self.startTimer()
+            await startTimer()
         }
     }
 
-    private func startTimer() {
+    func startTimer() {
         Task {
+            UserDefaults.standard.setValue(true, forKey: "shouldHideWelcome")
+            isActive.wrappedValue = true
             await timer.start { @MainActor [weak self] in
                 await self?.timerTick()
             }
         }
     }
     
-    private func stopTimer() {
+    func stopTimer() {
         Task {
+            isActive.wrappedValue = false
             await timer.stop()
         }
     }
@@ -143,15 +155,19 @@ actor AccessibilityMonitorService: ObservableObject {
             
             let elementInfo = try self.textFieldDetector.getAXElementOrSelectionInfo(focusedElement)
             await self.updateElementInfo(elementInfo: elementInfo)
+//            print("Element info \(elementInfo)")
         } catch {
             logger.error("Error received analyzing textfield \(error)")
             await updateElementInfo()
         }
     }
     
-    var shouldUpdateFrame = true
-    
     func updateElementInfo(elementInfo: ElementInfo? = nil) async {
+        if let appName = elementInfo?.applicationName {
+            applicationInfo.wrappedValue = .init(name: appName)
+        } else {
+            applicationInfo.wrappedValue = .empty
+        }
         let isSelf = elementInfo?.applicationBundleId == Bundle.main.bundleIdentifier
         guard let frame = elementInfo?.frame, frame.isValid else {
             if elementInfo?.applicationBundleId != nil && !isSelf {
@@ -162,6 +178,10 @@ actor AccessibilityMonitorService: ObservableObject {
         if !shouldUpdateFrame {
             shouldUpdateFrame = previousRect != elementInfo?.frame
         }
+        if !shouldUpdateText {
+            shouldUpdateText = previousText != elementInfo?.text
+        }
+        
         if shouldUpdateFrame && previousRect == elementInfo?.frame {
             if elementInfo?.applicationBundleId != nil && !isSelf {
                 self.elementInfo.wrappedValue = elementInfo?.withFrame(frame: frame)
@@ -172,8 +192,21 @@ actor AccessibilityMonitorService: ObservableObject {
                 self.elementInfo.wrappedValue = nil
             }
         }
+        
+        if shouldUpdateText && previousText == elementInfo?.text {
+            if elementInfo?.applicationBundleId != nil && !isSelf {
+                self.elementInfo.wrappedValue = elementInfo?.withText(text: elementInfo?.text ?? "")
+                shouldUpdateText = false
+            }
+        } else if previousText != elementInfo?.text {
+            if elementInfo?.applicationBundleId != nil && !isSelf {
+                self.elementInfo.wrappedValue = nil
+            }
+        }
+        
         if elementInfo?.applicationBundleId != nil && !isSelf {
             previousRect = elementInfo?.frame
+            previousText = elementInfo?.text
         }
     }
 
@@ -274,6 +307,12 @@ extension ElementInfo {
     func withFrame(frame: CGRect) -> ElementInfo {
         var copy = self
         copy.frame = frame
+        return copy
+    }
+    
+    func withText(text: String) -> ElementInfo {
+        var copy = self
+        copy.text = text
         return copy
     }
 }

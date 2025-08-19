@@ -166,7 +166,8 @@ final class TextFieldDetector: Sendable {
         return .init(text: self.textExtractor.getAllText(from: element),
                      applicationName: applicationInfo.name,
                      applicationBundleId: applicationInfo.bundleId,
-                     frame: try getElementRect(element))
+                     frame: try getElementRect(element),
+                     element: element)
     }
 
     // MARK: - Helpers

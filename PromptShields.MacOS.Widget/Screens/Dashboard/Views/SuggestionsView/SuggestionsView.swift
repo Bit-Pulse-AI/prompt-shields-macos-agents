@@ -1,14 +1,17 @@
 import SwiftUI
 
 struct SuggestionsView: View {
-    @EnvironmentObject var stateModel: DashboardStateModel
+    @StateObject private var suggestionsQueryable = ObservableQueryable(
+        sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)],
+        mapping: DefaultMapping<Suggestion>.self
+    )
+    
+    private var currentSuggestions: [Suggestion] {
+        return suggestionsQueryable.wrappedValue
+    }
     
     var hasCurrentSuggestions: Bool {
         currentSuggestions.count > 0
-    }
-    
-    var currentSuggestions: [Suggestion] {
-        stateModel.currentSuggestions
     }
     
     var body: some View {
@@ -43,7 +46,7 @@ struct SuggestionsView: View {
     private var suggestionsList: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
-                ForEach(stateModel.currentSuggestions, id: \.id) { suggestion in
+                ForEach(currentSuggestions, id: \.identifier) { suggestion in
                     DetailedSuggestionCard(suggestion: suggestion)
                 }
             }

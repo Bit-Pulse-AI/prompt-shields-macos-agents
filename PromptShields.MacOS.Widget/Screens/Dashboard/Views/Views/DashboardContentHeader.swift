@@ -1,18 +1,29 @@
 import SwiftUI
 
 struct DashboardContentHeaderView: View {
+    @EnvironmentObject private var overlayState: OverlayStateModel
     @EnvironmentObject private var dashboardState: DashboardStateModel
+    @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
+    
+    @StateObject private var suggestionsQueryable = ObservableQueryable(
+        sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)],
+        mapping: DefaultMapping<Suggestion>.self
+    )
+    
+    private var currentSuggestions: [Suggestion] {
+        return suggestionsQueryable.wrappedValue
+    }
     
     var hasCurrentApplication: Bool {
-        dashboardState.currentApplication != .empty
+        overlayState.elementInfo?.applicationBundleId != nil
     }
     
     var applicationStatusIndicator: String {
-        !hasCurrentApplication ? "None" : dashboardState.currentApplication.name
+        overlayState.elementInfo?.applicationName ?? "None"
     }
     
     var suggestionStatusIndicator: Int {
-        dashboardState.currentSuggestions.count
+        currentSuggestions.count
     }
     var body: some View {
         VStack(spacing: 12) {
@@ -32,6 +43,17 @@ struct DashboardContentHeaderView: View {
                 
                 // Toggle Button
                 Button {
+                    if dashboardState.isActive {
+                        Task {
+                            await accessibilityManager.stopTimer()
+                        }
+                    } else {
+                        Task {
+                            overlayState.elementInfo = nil
+                            overlayState.actionToolState = .idle
+                            await accessibilityManager.startTimer()
+                        }
+                    }
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: dashboardState.isActive ? "stop.circle.fill" : "play.circle.fill")
@@ -46,29 +68,29 @@ struct DashboardContentHeaderView: View {
             }
             
             // Status Indicators
-            if dashboardState.isActive {
-                HStack(spacing: 16) {
-                    StatusIndicator(
-                        title: "Application",
-                        value: applicationStatusIndicator,
-                        icon: "app.badge"
-                    )
-                    
-                    StatusIndicator(
-                        title: "Suggestions",
-                        value: "\(suggestionStatusIndicator)",
-                        icon: "textformat.abc.dottedunderline"
-                    )
-                    
-                    if dashboardState.isAnalyzing {
-                        StatusIndicator(
-                            title: "Analyzing",
-                            value: "In Progress",
-                            icon: "clock"
-                        )
-                    }
-                }
-            }
+//            if dashboardState.isActive {
+//                HStack(spacing: 16) {
+//                    StatusIndicator(
+//                        title: "Application",
+//                        value: applicationStatusIndicator,
+//                        icon: "app.badge"
+//                    )
+//                    
+//                    StatusIndicator(
+//                        title: "Suggestions",
+//                        value: "\(suggestionStatusIndicator)",
+//                        icon: "textformat.abc.dottedunderline"
+//                    )
+//                    
+//                    if dashboardState.isAnalyzing {
+//                        StatusIndicator(
+//                            title: "Analyzing",
+//                            value: "In Progress",
+//                            icon: "clock"
+//                        )
+//                    }
+//                }
+//            }
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))

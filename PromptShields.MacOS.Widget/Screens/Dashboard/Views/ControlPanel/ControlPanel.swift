@@ -3,41 +3,48 @@ import SwiftUI
 // MARK: - Suggestion Row
 
 struct ControlPanelView: View {
+    @StateObject private var suggestionsQueryable = ObservableQueryable(
+        sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)],
+        mapping: DefaultMapping<Suggestion>.self
+    )
+    
+    private var currentSuggestions: [Suggestion] {
+        return suggestionsQueryable.wrappedValue
+    }
+    
     var hasCurrentApplication: Bool {
-        dashboardState.currentApplication != .empty
+        return dashboardState.currentApplication != .empty
     }
     
     var applicationStatusIndicator: String {
-        !hasCurrentApplication ? "None" : dashboardState.currentApplication.name
+        dashboardState.currentApplication.name
     }
     
     var suggestionStatusIndicator: Int {
-        dashboardState.currentSuggestions.count
+        currentSuggestions.count
     }
     
     var hasSuggestions: Bool {
-        dashboardState.currentSuggestions.count > 0
+        currentSuggestions.count > 0
     }
     
     var topSuggestions: [Suggestion] {
-        Array(dashboardState.currentSuggestions.prefix(5))
+        Array(currentSuggestions.prefix(5))
     }
     
+    @EnvironmentObject private var accessibilityManagerImpl: AccessibilityManagerImpl
+    @EnvironmentObject private var overlayState: OverlayStateModel
     @EnvironmentObject private var dashboardState: DashboardStateModel
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
                 // Welcome Section
-                welcomeSection
+                if UserDefaults.standard.bool(forKey: "shouldHideWelcome") != true {
+                    welcomeSection
+                }
                 
                 // Quick Stats
                 quickStatsSection
-                
-                // Recent Activity
-                recentActivitySection
-                
-                // Quick Actions
-                quickActionsSection
             }
             .padding()
         }
@@ -55,7 +62,9 @@ struct ControlPanelView: View {
             
             if !dashboardState.isActive {
                 Button("Get Started") {
-//                    coordinator.start()
+                    Task {
+                        await accessibilityManagerImpl.startTimer()
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -74,14 +83,14 @@ struct ControlPanelView: View {
             HStack(spacing: 16) {
                 StatCardView(
                     title: "Suggestions Today",
-                    value: "\(dashboardState.currentSuggestions.count)",
+                    value: "\(currentSuggestions.count)",
                     icon: "textformat.abc.dottedunderline",
                     color: .blue
                 )
                 
                 StatCardView(
                     title: "Active Applications",
-                    value: hasCurrentApplication ? "0" : "1",
+                    value: hasCurrentApplication ? "1" : "0",
                     icon: "app.badge",
                     color: .green
                 )
@@ -112,32 +121,6 @@ struct ControlPanelView: View {
                     ForEach(topSuggestions, id: \.model.uuid) { _ in
                     }
                 }
-            }
-        }
-    }
-    
-    private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Quick Actions")
-                .font(.headline)
-            
-            HStack(spacing: 12) {
-                Button("Start Assistant") {
-//                    coordinator.start()
-                }
-                .buttonStyle(.bordered)
-                .disabled(dashboardState.isActive)
-                
-                Button("Stop Assistant") {
-//                    coordinator.stop()
-                }
-                .buttonStyle(.bordered)
-                .disabled(!dashboardState.isActive)
-                
-                Button("Settings") {
-                    // Navigate to settings tab
-                }
-                .buttonStyle(.bordered)
             }
         }
     }
