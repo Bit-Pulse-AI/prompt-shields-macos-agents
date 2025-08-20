@@ -58,12 +58,19 @@ actor PersistenceManagerImpl: PersistenceManager {
         return PersistenceManagerImpl(modelContainer: persistenceStack.modelContainer)
     }()
     
+    // Track memory usage and cleanup
+    private var lastCleanupTime: Date = Date()
+    private let cleanupInterval: TimeInterval = 300 // 5 minutes
+    
     func insert<D: Domain>(domains: [D]) throws {
         domains.forEach {
             let persistent = $0.toPersistentModel(context: modelContext)
             modelContext.insert(persistent)
         }
         try modelContext.save()
+        Task {
+            await checkAndPerformCleanup()
+        }
     }
     
     @discardableResult
@@ -75,7 +82,42 @@ actor PersistenceManagerImpl: PersistenceManager {
             throw PersistenceManagerError.missingModel
         }
         
+        // Check if cleanup is needed
+        await checkAndPerformCleanup()
+        
         return D.fromPersistentModel(persistent)
+    }
+    
+    // MARK: - Memory Management
+    
+    private func checkAndPerformCleanup() async {
+        let now = Date()
+        if now.timeIntervalSince(lastCleanupTime) > cleanupInterval {
+            await performMemoryCleanup()
+            lastCleanupTime = now
+        }
+    }
+    
+    private func performMemoryCleanup() async {
+        do {
+            // Clear encryption cache
+            String.clearEncryptionCache()
+            
+            // Force garbage collection if available
+            #if DEBUG
+            // In debug builds, we can be more aggressive with cleanup
+            #endif
+            
+            // Log memory usage for monitoring
+            print("Memory cleanup performed at \(Date())")
+        } catch {
+            print("Error during memory cleanup: \(error)")
+        }
+    }
+    
+    // Public method to force cleanup
+    func forceMemoryCleanup() async {
+        await performMemoryCleanup()
     }
     
     func query<D: Domain>(predicate: Predicate<D.P>? = nil, sortDescriptors: [SortDescriptor<D.P>] = [], limit: Int?) async throws -> [D] where D.M == D.M {

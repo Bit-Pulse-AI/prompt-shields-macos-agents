@@ -36,9 +36,36 @@ struct LLMDomainServiceImpl: LLMDomainService {
     @Inject
     private var llmNetworkService: LLMNetworkService
     
+    // Limit the number of suggestions to keep in memory
+    private let maxSuggestionsToKeep = 100
+    
     func process(text: String, llmProvider: LLMProvider, suggestionType: SuggestionType, application: String) async throws -> String {
         let result = try await llmNetworkService.process(text: text, llmProvider: llmProvider.rawValue, suggestionType: suggestionType.rawValue, application: application)
-        try await persistenceManager.insert(domain: result.toDomain())
+        
+        // Insert the new suggestion
+//        try await persistenceManager.insert(domain: result.toDomain())
+        
+        // Clean up old suggestions to prevent memory accumulation
+        await cleanupOldSuggestions()
+        
         return result.suggestedText
+    }
+    
+    private func cleanupOldSuggestions() async {
+        do {
+            // Get all suggestions sorted by creation date (oldest first)
+            let allSuggestions: [Suggestion] = try await persistenceManager.query(
+                sortDescriptors: [SortDescriptor(\.createdAt, order: .forward)]
+            )
+            
+            // If we have more than the limit, delete the oldest ones
+            if allSuggestions.count > maxSuggestionsToKeep {
+                let suggestionsToDelete = Array(allSuggestions.prefix(allSuggestions.count - maxSuggestionsToKeep))
+                try await persistenceManager.delete(domains: suggestionsToDelete)
+            }
+        } catch {
+            // Log error but don't fail the main operation
+            print("Failed to cleanup old suggestions: \(error)")
+        }
     }
 }

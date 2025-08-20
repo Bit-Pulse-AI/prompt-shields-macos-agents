@@ -15,44 +15,6 @@ struct RequestParameterFile: Sendable {
 }
 
 struct RequestBuilder {
-    //    @discardableResult
-    //    func request<RE: SendableDecodable, RQ: SendableEncodable>(
-    //        url: String,
-    //        method: HTTPMethod,
-    //        body: RQ?,
-    //        queryParameters: [String: String]?,
-    //        headers: [String: String]?
-    //    ) async throws -> RE
-    //
-    //    @discardableResult
-    //    func request<RE: SendableDecodable, RQ: SendableEncodable>(
-    //        url: String,
-    //        method: HTTPMethod,
-    //        body: RQ?,
-    //        headers: [String: String]?
-    //    ) async throws -> RE
-    //
-    //    func request<RE: SendableDecodable>(
-    //        url: String,
-    //        method: HTTPMethod,
-    //        headers: [String: String]?
-    //    ) async throws -> RE where RE: SendableDecodable
-    //
-    //    func request(
-    //        url: String,
-    //        method: HTTPMethod,
-    //        headers: [String: String]?
-    //    ) async throws
-    //
-        
-    //
-    //    @discardableResult
-    //    func request(
-    //        url: String,
-    //        method: HTTPMethod,
-    //        headers: [String: String]?
-    //    ) async throws -> Data
-    
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: NetworkManagerImpl.self)

@@ -234,75 +234,68 @@ actor AccessibilityManagerImpl: ObservableObject {
     }
 
     private func isValidElement(_ element: AXUIElement) async -> Bool {
-        var pid: pid_t = 0
-        let result = AXUIElementGetPid(element, &pid)
-        guard result == .success else {
-            return false
-        }
-        let app = NSWorkspace.shared.runningApplications.first { $0.processIdentifier == pid }
-        return app != nil
+        return AXUIElementSafeWrapper.isValidElement(element)
     }
     
     func getRobustFocusedElement() async throws -> AXUIElement {
-        guard let frontApp = NSWorkspace.shared.frontmostApplication else {
-            throw AccessibilityError.failedToGetFrame
-        }
-        let appElement = AXUIElementCreateApplication(frontApp.processIdentifier)
-        
-        var focusedRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
-           let focusedElement = focusedRef {
-            // AXUIElement is a type alias for CFTypeRef, so this cast is safe
-            let axElement = focusedElement as! AXUIElement
-            // Validate the element is still valid
-            guard await isValidElement(axElement) else {
-                throw AccessibilityError.failedToGetFocusedElement
+        let element: AXUIElement? = AXUIElementSafeWrapper.withMemoryCleanup {
+            guard let frontApp = NSWorkspace.shared.frontmostApplication else {
+                return nil
             }
-            return axElement
+            
+            guard let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier) else {
+                return nil
+            }
+            
+            // Try to get focused element
+            if let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) {
+                let focusedElement = focusedRef as! AXUIElement
+                // Validate the element is still valid
+                guard AXUIElementSafeWrapper.isValidElement(focusedElement) else {
+                    return nil
+                }
+                return focusedElement
+            }
+            
+            // Fallback to window-based search
+            if let windowRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedWindowAttribute) {
+                let windowElement = windowRef as! AXUIElement
+                // Validate the element is still valid
+                guard AXUIElementSafeWrapper.isValidElement(windowElement) else {
+                    return nil
+                }
+                if let found = findFocusedInTree(windowElement) {
+                    return found
+                }
+            }
+            
+            return nil
         }
-        
-        var windowRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowRef) != .success {
+        guard let element else {
             throw AccessibilityError.failedToGetFrame
         }
-        guard let windowElement = windowRef else {
-            throw AccessibilityError.failedToGetFrame
-        }
-        
-        // AXUIElement is a type alias for CFTypeRef, so this cast is safe
-        let windowAXElement = windowElement as! AXUIElement
-        // Validate the element is still valid
-        guard await isValidElement(windowAXElement) else {
-            throw AccessibilityError.failedToGetFocusedElement
-        }
-        if let found = findFocusedInTree(windowAXElement) {
-            return found
-        }
-        
-        throw AccessibilityError.failedToGetFrame
+        return element
     }
 
     private func findFocusedInTree(_ element: AXUIElement) -> AXUIElement? {
-        var focusedValue: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element, kAXFocusedAttribute as CFString, &focusedValue) == .success,
-           let boolVal = focusedValue as? Bool, boolVal == true {
-            return element
-        }
-        var childrenRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) != .success {
-            return nil
-        }
-        guard let children = childrenRef as? [AXUIElement] else {
-            return nil
-        }
-        
-        for child in children {
-            if let found = findFocusedInTree(child) {
-                return found
+        return AXUIElementSafeWrapper.withMemoryCleanup {
+            // Check if this element is focused
+            if let focusedValue = AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXFocusedAttribute),
+               let boolVal = focusedValue as? Bool, boolVal == true {
+                return element
             }
+            
+            // Get children safely
+            let children = AXUIElementSafeWrapper.getChildren(from: element)
+            
+            for child in children {
+                if let found = findFocusedInTree(child) {
+                    return found
+                }
+            }
+            
+            return nil
         }
-        
-        return nil
     }
     
     @MainActor

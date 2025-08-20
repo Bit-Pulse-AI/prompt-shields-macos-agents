@@ -4,6 +4,20 @@ struct ActionView: View {
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
     @Environment(\.llmDomainService) private var llmDomainService
     
+    // Track processing state to prevent multiple simultaneous requests
+    @State private var isProcessing = false
+    
+    // Cache suggestion types to avoid repeated allCases calls
+    private let suggestionTypes = SuggestionType.allCases
+    
+    // Track if view is active to prevent memory leaks
+    @State private var isViewActive = true
+    
+    // Cache display names to avoid repeated computation
+    private var suggestionTypeDisplayNames: [SuggestionType: String] {
+        Dictionary(uniqueKeysWithValues: suggestionTypes.map { ($0, $0.displayName) })
+    }
+    
     var body: some View {
         ZStack(alignment: .leading) {
             switch overlayStateModel.actionToolState {
@@ -28,29 +42,54 @@ struct ActionView: View {
             case .options:
                 VStack {
                     VStack(alignment: .leading) {
-                        ForEach(SuggestionType.allCases, id: \.self) { type in
-                            Button {
-                                overlayStateModel.actionToolState = .loading
+                        ForEach(suggestionTypes, id: \.self) { type in
+                            Button { [weak overlayStateModel] in
+                                guard !isProcessing else { return }
+                                isProcessing = true
+                                overlayStateModel?.actionToolState = .loading
+                                
                                 Task {
                                     do {
-                                        let result = try await llmDomainService.process(text: overlayStateModel.elementInfo?.text ?? "", llmProvider: .AZURE_PROMPTSHIELDS, suggestionType: type, application: overlayStateModel.elementInfo?.applicationName ?? "n/a")
-                                        if let axUIElement = overlayStateModel.elementInfo?.element {
-                                            Task {
-                                                do {
-                                                    try await TextInjector().injectText(result, into: axUIElement)
-                                                } catch {
-                                                    print("Error \(error)")
+                                        let result = try await llmDomainService.process(text: overlayStateModel?.elementInfo?.text ?? "", llmProvider: .AZURE_PROMPTSHIELDS, suggestionType: type, application: overlayStateModel?.elementInfo?.applicationName ?? "n/a")
+                                        
+                                        // Check for cancellation before proceeding
+                                        try Task.checkCancellation()
+                                        
+                                        if let axUIElement = overlayStateModel?.elementInfo?.element {
+                                            // Validate the element before using it
+                                            if await isValidAXUIElement(axUIElement) {
+                                                Task { [weak axUIElement] in
+                                                    guard let axUIElement else {
+                                                        return
+                                                    }
+                                                    do {
+                                                        try await TextInjector.shared.injectText(result, into: axUIElement)
+                                                    } catch {
+                                                        print("Error injecting text: \(error)")
+                                                    }
                                                 }
+                                            } else {
+                                                print("AXUIElement is no longer valid")
                                             }
                                         }
-                                        overlayStateModel.actionToolState = .idle
+                                        
+                                        overlayStateModel?.actionToolState = .idle
+                                    } catch is CancellationError {
+                                        print("LLM processing was cancelled")
+                                        overlayStateModel?.actionToolState = .idle
                                     } catch {
-                                        print("Error \(error)")
+                                        print("Error processing LLM request: \(error)")
+                                        overlayStateModel?.actionToolState = .idle
                                     }
+                                    
+                                    // Force memory cleanup after processing
+                                    await forceMemoryCleanup()
+                                    isProcessing = false
                                 }
                             } label: {
-                                Text(type.displayName)
+                                Text(suggestionTypeDisplayNames[type] ?? type.displayName)
                             }
+                            .disabled(isProcessing)
                         }
                     }
                 }
@@ -58,11 +97,40 @@ struct ActionView: View {
                 .background(.white)
                 .cornerRadius(8)
             }
-//            if overlayStateModel.isLoadingFromLLM {
-//
-//            } else {
-//
-//            }
         }
+        .onAppear {
+            isViewActive = true
+        }
+        .onDisappear {
+            isViewActive = false
+            // Cancel any ongoing processing
+            isProcessing = false
+        }
+    }
+    
+    private func forceMemoryCleanup() async {
+        // Only perform cleanup if view is still active
+        guard isViewActive else { return }
+        
+        // Clear encryption cache
+        String.clearEncryptionCache()
+        
+        // Force persistence manager cleanup
+        do {
+            let persistenceManager = PersistenceManagerImpl.shared
+            await persistenceManager.forceMemoryCleanup()
+        } catch {
+            print("Error during forced cleanup: \(error)")
+        }
+    }
+    
+    private func isValidAXUIElement(_ element: AXUIElement) async -> Bool {
+        var pid: pid_t = 0
+        let result = AXUIElementGetPid(element, &pid)
+        guard result == .success else {
+            return false
+        }
+        let app = NSWorkspace.shared.runningApplications.first { $0.processIdentifier == pid }
+        return app != nil
     }
 }

@@ -2,76 +2,58 @@ import AppKit
 
 final class TextExtractor: Sendable {
     func getAllText(from element: AXUIElement) -> String {
-        // Validate the element first
-        guard isValidElement(element) else {
-            return ""
-        }
-        
-        var collectedText: [String] = []
-            
-        // Attributes to check for "text-like" values
-        let attributesToCheck: [String] = [
-            kAXValueAttribute,          // Editable fields, static text
-            kAXTitleAttribute,          // Buttons, windows, group boxes
-            kAXLabelValueAttribute,     // Some labels
-            kAXDescriptionAttribute,    // Images, icons, etc.
-            kAXPlaceholderValueAttribute // Placeholder text in text fields
-        ]
-            
-        // Check each attribute for a string or attributed string
-        for attr in attributesToCheck {
-            var value: AnyObject?
-            let error = AXUIElementCopyAttributeValue(element, attr as CFString, &value)
-                
-            if error == .success, let value = value {
-                // Safely handle string values
-                if let str = value as? String, !str.isEmpty {
-                    collectedText.append(str)
-                }
-                // Safely handle attributed string values
-                if let attrStr = value as? NSAttributedString, !attrStr.string.isEmpty {
-                    collectedText.append(attrStr.string)
-                }
+        return AXUIElementSafeWrapper.withMemoryCleanup {
+            // Validate the element first
+            guard AXUIElementSafeWrapper.isValidElement(element) else {
+                return ""
             }
-        }
             
-        // Recursively check children with proper error handling
-        var children: AnyObject?
-        if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children) == .success,
-           let childArray = children as? [AXUIElement] {
-            for child in childArray {
+            var collectedText: [String] = []
+                
+            // Use safe wrapper for text extraction
+            let text = AXUIElementSafeWrapper.extractText(from: element)
+            if !text.isEmpty {
+                collectedText.append(text)
+            }
+                
+            // Recursively check children with safe wrapper
+            let children = AXUIElementSafeWrapper.getChildren(from: element)
+            for child in children {
                 // Validate child element before processing
-                guard isValidElement(child) else { continue }
+                guard AXUIElementSafeWrapper.isValidElement(child) else { continue }
                 
                 let childText = getAllText(from: child)
                 if !childText.isEmpty {
                     collectedText.append(childText)
                 }
             }
+                
+            // Return combined text
+            return collectedText.joined(separator: " ")
         }
-            
-        // Return combined text
-        return collectedText.joined(separator: " ")
     }
     
     // MARK: - Helper Methods
     
     /// Validates if an AXUIElement is still valid and accessible
     private func isValidElement(_ element: AXUIElement) -> Bool {
-        // Check if the element is still valid by trying to get a basic attribute
-        var pid: pid_t = 0
-        let result = AXUIElementGetPid(element, &pid)
-        return result == .success && pid > 0
+        return AXUIElementSafeWrapper.isValidElement(element)
     }
     
     /// Safe version of getAllText with error handling
     func getAllTextSafely(from element: AXUIElement) -> Result<String, AccessibilityError> {
-        // Validate the element first
-        guard isValidElement(element) else {
+        let text: String? = AXUIElementSafeWrapper.withMemoryCleanup {
+            // Validate the element first
+            guard AXUIElementSafeWrapper.isValidElement(element) else {
+                return nil
+            }
+            
+            let text = getAllText(from: element)
+            return text
+        }
+        guard let text else {
             return .failure(.invalidUIElement)
         }
-        
-        let text = getAllText(from: element)
         return .success(text)
     }
 }

@@ -28,7 +28,7 @@ class AboutWindow: NSWindow {
 extension AboutWindow: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         // Switch back to accessory mode when about window is closed
-        NSApp.setActivationPolicy(.accessory)
+//        NSApp.setActivationPolicy(.accessory)
     }
 }
 

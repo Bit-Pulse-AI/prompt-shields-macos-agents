@@ -7,7 +7,7 @@ struct ElementInfo: Equatable, Hashable {
     let applicationBundleId: String
     var frame: CGRect
     let element: AXUIElement?
-    
+        
     func hash(into hasher: inout Hasher) {
         hasher.combine(text)
         hasher.combine(applicationName)

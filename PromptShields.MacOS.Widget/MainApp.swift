@@ -70,7 +70,7 @@ struct MainApp: App {
     
     var body: some Scene {
         Window("Main", id: MainApp.mainWindow) {
-            if $overlayStateModel.isMainConfigured.wrappedValue {
+//            if $overlayStateModel.isMainConfigured.wrappedValue {
                 MainView()
                     .onChange(of: overlayStateModel.elementInfo?.frame) { _, _ in
                         updateMainWindow(isInitial: false)
@@ -78,16 +78,16 @@ struct MainApp: App {
                     .onChange(of: overlayStateModel.actionToolState) { _, _ in
                         updateMainWindow(isInitial: false)
                     }
-            } else {
-                VStack {
-                }
-                .frame(width: 1, height: 1)
+//            } else {
+//                VStack {
+//                }
+//                .frame(width: 1, height: 1)
                     .onAppear {
                         configureAppAppearance()
                         setupWindowDelegate()
                         updateMainWindow(isInitial: true)
                     }
-            }
+//            }
         }
         .defaultSize(.zero)
         .environmentObject(accessibilityManager)
@@ -95,7 +95,7 @@ struct MainApp: App {
         .environmentObject(dashboardStateModel)
         .windowStyle(.hiddenTitleBar)
         Window("Overlay Render", id: MainApp.overlayRender) {
-            if $overlayStateModel.isOverlayConfigured.wrappedValue {
+//            if $overlayStateModel.isOverlayConfigured.wrappedValue {
                 OverlayView()
                     .onChange(of: overlayStateModel.elementInfo?.frame) { _, _ in
                         updateOverlayWindow(isInitial: false)
@@ -103,14 +103,14 @@ struct MainApp: App {
                     .onChange(of: overlayStateModel.actionToolState) { _, _ in
                         updateOverlayWindow(isInitial: false)
                     }
-            } else {
-                VStack {
-                }
-                .frame(width: 1, height: 1)
+//            } else {
+//                VStack {
+//                }
+//                .frame(width: 1, height: 1)
                 .onAppear {
                     updateOverlayWindow(isInitial: true)
                 }
-            }
+//            }
         }
         .defaultSize(.zero)
         .environmentObject(accessibilityManager)
@@ -118,7 +118,7 @@ struct MainApp: App {
         .windowStyle(.hiddenTitleBar)
         
         Window("Action", id: MainApp.actionRender) {
-            if $overlayStateModel.isActionConfigured.wrappedValue {
+//            if $overlayStateModel.isActionConfigured.wrappedValue {
                 ActionView()
                     .onChange(of: overlayStateModel.elementInfo?.frame) { _, _ in
                         updateActionWindow(isInitial: false)
@@ -126,14 +126,14 @@ struct MainApp: App {
                     .onChange(of: overlayStateModel.actionToolState) { _, _ in
                         updateActionWindow(isInitial: false)
                     }
-            } else {
-                VStack {
-                }
-                .frame(width: 1, height: 1)
+//            } else {
+//                VStack {
+//                }
+//                .frame(width: 1, height: 1)
                 .onAppear {
                     updateActionWindow(isInitial: true)
                 }
-            }
+//            }
         }
         .defaultSize(.zero)
         .environmentObject(accessibilityManager)

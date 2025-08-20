@@ -36,7 +36,7 @@ struct Inject<T>: Sendable {
         } else if T.self == UserPreferencesDomainService.self {
             return UserPreferencesDomainServiceImpl() as! T
         } else if T.self == NetworkManager.self {
-            return NetworkManagerImpl() as! T
+            return NetworkManagerImpl.shared as! T
         } else if T.self == LLMNetworkService.self {
             return LLMNetworkServiceImpl() as! T
         } else {

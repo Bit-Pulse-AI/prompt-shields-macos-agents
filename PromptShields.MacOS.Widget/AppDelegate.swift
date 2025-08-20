@@ -34,7 +34,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Test just the activation policy change first
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             self.logger.info("Setting activation policy to accessory...")
-            NSApp.setActivationPolicy(.accessory)
+//            NSApp.setActivationPolicy(.accessory)
         }
         
         logger.info("Application finished launching successfully")
@@ -45,14 +45,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Prevents the app from terminating when windows are closed
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Switch back to accessory mode when all windows are closed
-        NSApp.setActivationPolicy(.accessory)
+//        NSApp.setActivationPolicy(.accessory)
         return false
     }
     
     /// Called when the application is about to hide
     /// Switches back to accessory mode
     func applicationWillHide(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+//        NSApp.setActivationPolicy(.accessory)
     }
     
     // MARK: - Private Methods
@@ -224,7 +224,7 @@ extension AppDelegate: NSWindowDelegate {
             sender.miniaturize(nil)
             // Switch back to accessory mode
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                NSApp.setActivationPolicy(.accessory)
+//                NSApp.setActivationPolicy(.accessory)
             }
             return false
         }
