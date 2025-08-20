@@ -163,7 +163,20 @@ final class TextFieldDetector: Sendable {
 
     func getAXElementOrSelectionInfo(_ element: AXUIElement) throws -> ElementInfo {
         let applicationInfo = try getApplicationInfo(for: element)
-        return .init(text: self.textExtractor.getAllText(from: element),
+        
+        // Use the safer version of text extraction
+        let textResult = self.textExtractor.getAllTextSafely(from: element)
+        let text: String
+        switch textResult {
+        case .success(let extractedText):
+            text = extractedText
+        case .failure(let error):
+            // Log the error but don't fail the entire operation
+            logger.warning("Failed to extract text: \(error.localizedDescription)")
+            text = ""
+        }
+        
+        return .init(text: text,
                      applicationName: applicationInfo.name,
                      applicationBundleId: applicationInfo.bundleId,
                      frame: try getElementRect(element),

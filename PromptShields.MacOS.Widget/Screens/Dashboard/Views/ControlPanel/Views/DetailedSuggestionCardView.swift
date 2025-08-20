@@ -3,10 +3,10 @@ import SwiftUI
 extension SuggestionType {
     var displayName: String {
         switch self {
-        case .SHAKESPEARE: return "Shakespeare"
+//        case .SHAKESPEARE: return "Shakespeare"
         case .OPTIMIZE: return "Optimize"
         case .GPT: return "GPT"
-        case .REDACTION: return "Redaction"
+//        case .REDACTION: return "Redaction"
         case .SUMMARIZE: return "Summarize"
         case .ENHANCE: return "Enhance"
         }
@@ -14,10 +14,10 @@ extension SuggestionType {
 
     var color: String {
         switch self {
-        case .SHAKESPEARE: return "#FF6B6B"
+//        case .SHAKESPEARE: return "#FF6B6B"
         case .OPTIMIZE: return "#4ECDC4"
         case .GPT: return "#45B7D1"
-        case .REDACTION: return "#96CEB4"
+//        case .REDACTION: return "#96CEB4"
         case .SUMMARIZE: return "#FFEAA7"
         case .ENHANCE: return "#FFA7EA"
         }

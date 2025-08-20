@@ -24,10 +24,8 @@ enum LLMProvider: String {
 }
 
 enum SuggestionType: String, CaseIterable {
-    case SHAKESPEARE = "SHAKESPEARE"
     case OPTIMIZE = "OPTIMIZE"
     case GPT = "GPT"
-    case REDACTION = "REDACTION"
     case SUMMARIZE = "SUMMARIZE"
     case ENHANCE = "ENHANCE"
 }

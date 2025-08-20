@@ -32,8 +32,8 @@ actor AccessibilityManagerImpl: ObservableObject {
         self.applicationInfo = applicationInfo
         self.isActive = isActive
         self.timer = PausableTimer(interval: .seconds(pollInterval))
-        Task {
-            await startTimer()
+        Task { [weak self] in
+            await self?.startTimer()
         }
     }
 
@@ -62,6 +62,7 @@ actor AccessibilityManagerImpl: ObservableObject {
             showPromptIfNeeded()
             // Hide overlay when accessibility is not available
             Task { [weak self] in
+                try? Task.checkCancellation()
                 await self?.updateElementInfo()
             }
         } else if lastIsProcessTrusted != isProcessTrusted && isProcessTrusted {
@@ -70,18 +71,21 @@ actor AccessibilityManagerImpl: ObservableObject {
             logger.log("user disabled AX")
             // Hide overlay when accessibility is disabled
             Task { [weak self] in
+                try? Task.checkCancellation()
                 await self?.updateElementInfo()
             }
         } else if lastIsProcessTrusted == isProcessTrusted && isProcessTrusted {
 //            logger.log("ticking on a trusted process")
             shouldDisplayRestartPrompt = false
             Task { [weak self] in
+                try? Task.checkCancellation()
                 await self?.onAXAccessGranted()
             }
         } else if lastIsProcessTrusted == isProcessTrusted && !isProcessTrusted {
             logger.log("ticking on a not trusted process")
             // Hide overlay when accessibility is not available
             Task { [weak self] in
+                try? Task.checkCancellation()
                 await self?.updateElementInfo()
             }
         }
@@ -98,8 +102,9 @@ actor AccessibilityManagerImpl: ObservableObject {
     }
 
     deinit {
+        // Cancel the timer synchronously to prevent memory leaks
         Task { [weak self] in
-            await self?.stopTimer()
+            await self?.timer.stop()
         }
     }
     
@@ -119,6 +124,7 @@ actor AccessibilityManagerImpl: ObservableObject {
 
         alert.runModal()
         Task { @MainActor [weak self] in
+            try? Task.checkCancellation()
             self?.restartApp()
         }
     }
@@ -127,13 +133,14 @@ actor AccessibilityManagerImpl: ObservableObject {
         if shouldDisplayRestartPrompt {
             shouldDisplayRestartPrompt = false
             Task { [weak self] in
+                try? Task.checkCancellation()
                 await self?.displayRestart()
             }
         }
     }
 
     private func onAXAccessGranted() async {
-        if let focusedElement = try? getRobustFocusedElement() {
+        if let focusedElement = try? await getRobustFocusedElement() {
             await analyzeTextIfPossible(element: focusedElement)
         } else {
             displayRestartIfNeeded()
@@ -181,8 +188,7 @@ actor AccessibilityManagerImpl: ObservableObject {
         if !shouldUpdateText {
             shouldUpdateText = previousText != elementInfo?.text
         }
-        
-        if shouldUpdateFrame && previousRect == elementInfo?.frame {
+        if shouldUpdateFrame && previousRect == frame {
             if elementInfo?.applicationBundleId != nil && !isSelf {
                 self.elementInfo.wrappedValue = elementInfo?.withFrame(frame: frame)
                 shouldUpdateFrame = false
@@ -192,8 +198,8 @@ actor AccessibilityManagerImpl: ObservableObject {
                 self.elementInfo.wrappedValue = nil
             }
         }
-        
-        if shouldUpdateText && previousText == elementInfo?.text {
+        let text = elementInfo?.text
+        if shouldUpdateText && previousText == text {
             if elementInfo?.applicationBundleId != nil && !isSelf {
                 self.elementInfo.wrappedValue = elementInfo?.withText(text: elementInfo?.text ?? "")
                 shouldUpdateText = false
@@ -215,7 +221,7 @@ actor AccessibilityManagerImpl: ObservableObject {
 
         for attempt in 1...maxRetries {
             do {
-                return try getRobustFocusedElement()
+                return try await getRobustFocusedElement()
             } catch {
                 if attempt == maxRetries {
                     throw error
@@ -237,7 +243,7 @@ actor AccessibilityManagerImpl: ObservableObject {
         return app != nil
     }
     
-    func getRobustFocusedElement() throws -> AXUIElement {
+    func getRobustFocusedElement() async throws -> AXUIElement {
         guard let frontApp = NSWorkspace.shared.frontmostApplication else {
             throw AccessibilityError.failedToGetFrame
         }
@@ -246,7 +252,13 @@ actor AccessibilityManagerImpl: ObservableObject {
         var focusedRef: CFTypeRef?
         if AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
            let focusedElement = focusedRef {
-            return focusedElement as! AXUIElement
+            // AXUIElement is a type alias for CFTypeRef, so this cast is safe
+            let axElement = focusedElement as! AXUIElement
+            // Validate the element is still valid
+            guard await isValidElement(axElement) else {
+                throw AccessibilityError.failedToGetFocusedElement
+            }
+            return axElement
         }
         
         var windowRef: CFTypeRef?
@@ -257,7 +269,13 @@ actor AccessibilityManagerImpl: ObservableObject {
             throw AccessibilityError.failedToGetFrame
         }
         
-        if let found = findFocusedInTree(windowElement as! AXUIElement) {
+        // AXUIElement is a type alias for CFTypeRef, so this cast is safe
+        let windowAXElement = windowElement as! AXUIElement
+        // Validate the element is still valid
+        guard await isValidElement(windowAXElement) else {
+            throw AccessibilityError.failedToGetFocusedElement
+        }
+        if let found = findFocusedInTree(windowAXElement) {
             return found
         }
         
