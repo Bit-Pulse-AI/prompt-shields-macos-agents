@@ -124,9 +124,9 @@ struct TeamDomainServiceImpl: TeamDomainService {
     
     func getTeams(subscription: Subscription) async throws {
         // Get local teams first
-        let localTeams: [Team] = try await persistenceManager.query(
-            sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)]
-        )
+//        let localTeams: [Team] = try await persistenceManager.query(
+//            sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)]
+//        )
 //        do {
 //            let remoteTeams = try await teamNetworkService.list(subscriptionId: subscription.model.uuid)
 //

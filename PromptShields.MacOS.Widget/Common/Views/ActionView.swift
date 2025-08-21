@@ -81,9 +81,7 @@ struct ActionView: View {
                                         print("Error processing LLM request: \(error)")
                                         overlayStateModel?.actionToolState = .idle
                                     }
-                                    
-                                    // Force memory cleanup after processing
-                                    await forceMemoryCleanup()
+                                
                                     isProcessing = false
                                 }
                             } label: {
@@ -105,22 +103,6 @@ struct ActionView: View {
             isViewActive = false
             // Cancel any ongoing processing
             isProcessing = false
-        }
-    }
-    
-    private func forceMemoryCleanup() async {
-        // Only perform cleanup if view is still active
-        guard isViewActive else { return }
-        
-        // Clear encryption cache
-        String.clearEncryptionCache()
-        
-        // Force persistence manager cleanup
-        do {
-            let persistenceManager = PersistenceManagerImpl.shared
-            await persistenceManager.forceMemoryCleanup()
-        } catch {
-            print("Error during forced cleanup: \(error)")
         }
     }
     

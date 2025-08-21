@@ -93,31 +93,8 @@ actor PersistenceManagerImpl: PersistenceManager {
     private func checkAndPerformCleanup() async {
         let now = Date()
         if now.timeIntervalSince(lastCleanupTime) > cleanupInterval {
-            await performMemoryCleanup()
             lastCleanupTime = now
         }
-    }
-    
-    private func performMemoryCleanup() async {
-        do {
-            // Clear encryption cache
-            String.clearEncryptionCache()
-            
-            // Force garbage collection if available
-            #if DEBUG
-            // In debug builds, we can be more aggressive with cleanup
-            #endif
-            
-            // Log memory usage for monitoring
-            print("Memory cleanup performed at \(Date())")
-        } catch {
-            print("Error during memory cleanup: \(error)")
-        }
-    }
-    
-    // Public method to force cleanup
-    func forceMemoryCleanup() async {
-        await performMemoryCleanup()
     }
     
     func query<D: Domain>(predicate: Predicate<D.P>? = nil, sortDescriptors: [SortDescriptor<D.P>] = [], limit: Int?) async throws -> [D] where D.M == D.M {

@@ -36,7 +36,8 @@ final class TextExtractor: Sendable {
     // MARK: - Helper Methods
     
     /// Validates if an AXUIElement is still valid and accessible
-    private func isValidElement(_ element: AXUIElement) -> Bool {
+    private func
+    isValidElement(_ element: AXUIElement) -> Bool {
         return AXUIElementSafeWrapper.isValidElement(element)
     }
     

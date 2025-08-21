@@ -13,6 +13,7 @@ enum AccessibilityError: Error, LocalizedError {
     case failedToGetApplicationInfo
     case failedToExtractText
     case failedToInjectText
+    case timeout
     
     var errorDescription: String? {
         switch self {
@@ -38,6 +39,8 @@ enum AccessibilityError: Error, LocalizedError {
             return "Failed to extract text from element"
         case .failedToInjectText:
             return "Failed to inject text into element"
+        case .timeout:
+            return "Operation timed out"
         }
     }
 }

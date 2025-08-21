@@ -9,7 +9,7 @@ actor AccessibilityManagerImpl: ObservableObject {
     private let applicationInfo: Binding<ApplicationInfo>
     private let isActive: Binding<Bool>
     
-    private let pollInterval: TimeInterval = 0.2
+    private let pollInterval: TimeInterval = 0.5 // Increased from 0.2 to reduce frequency
     private let timer: PausableTimer
     private let textFieldDetector = TextFieldDetector()
     private var previousText: String?
@@ -19,6 +19,7 @@ actor AccessibilityManagerImpl: ObservableObject {
     private var shouldDisplayRestartPrompt = true
     private var shouldUpdateFrame = true
     private var shouldUpdateText = true
+    private var isProcessing = false // Prevent concurrent processing
     
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
@@ -38,10 +39,10 @@ actor AccessibilityManagerImpl: ObservableObject {
     }
 
     func startTimer() {
+        UserDefaults.standard.setValue(true, forKey: "shouldHideWelcome")
+        isActive.wrappedValue = true
         Task {
-            UserDefaults.standard.setValue(true, forKey: "shouldHideWelcome")
-            isActive.wrappedValue = true
-            await timer.start { @MainActor [weak self] in
+            await timer.start { [weak self] in
                 await self?.timerTick()
             }
         }
@@ -77,6 +78,14 @@ actor AccessibilityManagerImpl: ObservableObject {
         } else if lastIsProcessTrusted == isProcessTrusted && isProcessTrusted {
 //            logger.log("ticking on a trusted process")
             shouldDisplayRestartPrompt = false
+            
+            // Prevent concurrent processing
+            guard !isProcessing else {
+                logger.debug("Skipping tick - already processing")
+                return
+            }
+            
+            isProcessing = true
             Task { [weak self] in
                 try? Task.checkCancellation()
                 await self?.onAXAccessGranted()
@@ -146,12 +155,16 @@ actor AccessibilityManagerImpl: ObservableObject {
             displayRestartIfNeeded()
             await updateElementInfo()
         }
+        isProcessing = false
     }
     
     private func analyzeTextIfPossible(element: CFTypeRef) async {
         do {
             try Task.checkCancellation()
-            let focusedElement = try await self.getFocusedElementWithRetry()
+            
+            // Use a simple timeout approach without complex concurrency
+            let focusedElement = try await getFocusedElementWithRetry()
+            
             let isValidElement = await self.isValidElement(focusedElement)
             
             guard isValidElement else {
@@ -218,15 +231,25 @@ actor AccessibilityManagerImpl: ObservableObject {
 
     private func getFocusedElementWithRetry() async throws -> AXUIElement {
         let maxRetries = 3
+        let retryDelay: UInt64 = 100_000_000 // 100ms
 
+        let startTime = Date()
+        
         for attempt in 1...maxRetries {
+            // Check if we've exceeded the total timeout
+            if Date().timeIntervalSince(startTime) > 2.0 {
+                logger.warning("Total timeout reached while getting focused element")
+                throw AccessibilityError.timeout
+            }
+            
             do {
                 return try await getRobustFocusedElement()
             } catch {
+                logger.warning("Attempt \(attempt) failed: \(error.localizedDescription)")
                 if attempt == maxRetries {
                     throw error
                 }
-                try await Task.sleep(nanoseconds: 100_000_000)
+                try await Task.sleep(nanoseconds: retryDelay)
             }
         }
 
@@ -247,7 +270,7 @@ actor AccessibilityManagerImpl: ObservableObject {
                 return nil
             }
             
-            // Try to get focused element
+            // Try to get focused element directly first
             if let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) {
                 let focusedElement = focusedRef as! AXUIElement
                 // Validate the element is still valid
@@ -257,13 +280,14 @@ actor AccessibilityManagerImpl: ObservableObject {
                 return focusedElement
             }
             
-            // Fallback to window-based search
+            // Fallback to window-based search with timeout protection
             if let windowRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedWindowAttribute) {
                 let windowElement = windowRef as! AXUIElement
                 // Validate the element is still valid
                 guard AXUIElementSafeWrapper.isValidElement(windowElement) else {
                     return nil
                 }
+                
                 if let found = findFocusedInTree(windowElement) {
                     return found
                 }
@@ -278,18 +302,73 @@ actor AccessibilityManagerImpl: ObservableObject {
     }
 
     private func findFocusedInTree(_ element: AXUIElement) -> AXUIElement? {
+        return findFocusedInTree(element, depth: 0, maxDepth: 20, visitedElements: Set<AXElementID>())
+    }
+    
+    private func findFocusedInTree(_ element: AXUIElement, depth: Int, maxDepth: Int, visitedElements: Set<AXElementID>) -> AXUIElement? {
+        // Prevent infinite recursion
+        guard depth < maxDepth else {
+            logger.warning("Maximum depth reached in findFocusedInTree at depth \(depth)")
+            return nil
+        }
+        
+        let elementID = AXElementID(element)
+        
+        // Prevent cycles by tracking visited elements
+        guard !visitedElements.contains(elementID) else {
+            logger.warning("Cycle detected in accessibility tree at depth \(depth)")
+            return nil
+        }
+        
+        // Log progress for debugging (only at certain depths to avoid spam)
+        if depth % 5 == 0 {
+            logger.debug("Searching accessibility tree at depth \(depth)")
+        }
+        
         return AXUIElementSafeWrapper.withMemoryCleanup {
-            // Check if this element is focused
-            if let focusedValue = AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXFocusedAttribute),
-               let boolVal = focusedValue as? Bool, boolVal == true {
-                return element
+            // Check if this element has text content (indicating it might be focused)
+            // Work directly with the original element to avoid reconstruction issues
+            let hasValue = AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXValueAttribute) != nil
+            let hasSelectedText = AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) != nil
+            
+            if hasValue || hasSelectedText {
+                // This element has text content, check if it's the focused element
+                guard let frontApp = NSWorkspace.shared.frontmostApplication,
+                      let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier),
+                      let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) else {
+                    return nil
+                }
+                
+                let focusedElement = focusedRef as! AXUIElement
+                
+                // Compare the current element with the focused element
+                if Unmanaged.passUnretained(element).toOpaque() == Unmanaged.passUnretained(focusedElement).toOpaque() {
+                    return element
+                }
             }
             
-            // Get children safely
+            // Get children safely with a limit to prevent excessive recursion
             let children = AXUIElementSafeWrapper.getChildren(from: element)
+            let maxChildren = 50 // Limit to prevent excessive recursion
             
-            for child in children {
-                if let found = findFocusedInTree(child) {
+            // Create new set with current element added
+            var newVisitedElements = visitedElements
+            newVisitedElements.insert(elementID)
+            
+            for (index, child) in children.enumerated() {
+                // Limit the number of children we process
+                if index >= maxChildren {
+                    logger.warning("Too many children in accessibility tree, stopping search")
+                    break
+                }
+                
+                // Skip invalid children
+                guard AXUIElementSafeWrapper.isValidElement(child) else {
+                    logger.debug("Skipping invalid child element at depth \(depth)")
+                    continue
+                }
+                
+                if let found = findFocusedInTree(child, depth: depth + 1, maxDepth: maxDepth, visitedElements: newVisitedElements) {
                     return found
                 }
             }

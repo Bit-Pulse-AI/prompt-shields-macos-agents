@@ -12,10 +12,6 @@ struct EncryptResult {
 }
 
 extension String {
-    // Cache for encryption results to avoid repeated expensive operations
-    private static var encryptionCache: [String: String] = [:]
-    private static let encryptionCacheLock = NSLock()
-    
     func encrypt(publicKey: String, info: String) async throws -> EncryptResult? {
         let key = try P521.KeyAgreement.PublicKey(pemRepresentation: publicKey)
         
@@ -106,22 +102,9 @@ extension String {
     }
     
     var encrypt: String {
-        // Check cache first
-        String.encryptionCacheLock.lock()
-        defer { String.encryptionCacheLock.unlock() }
-        
-        if let cached = String.encryptionCache[self] {
-            return cached
-        }
-        
         do {
             let key = try KeychainManagerImpl.shared.loadEncryptionKey()
             let encryptedString = try encryptString(using: key)
-            
-            // Cache the result (limit cache size to prevent memory leaks)
-            if String.encryptionCache.count < 1000 {
-                String.encryptionCache[self] = encryptedString
-            }
             
             return encryptedString
         } catch {
@@ -139,22 +122,6 @@ extension String {
         } catch {
             fatalError("E101: Please contact technical support.")
         }
-    }
-    
-    // Clear encryption cache to free memory
-    static func clearEncryptionCache() {
-        encryptionCacheLock.lock()
-        defer { encryptionCacheLock.unlock() }
-        let cacheSize = encryptionCache.count
-        encryptionCache.removeAll()
-        print("Cleared encryption cache with \(cacheSize) entries")
-    }
-    
-    // Memory monitoring
-    static func getEncryptionCacheSize() -> Int {
-        encryptionCacheLock.lock()
-        defer { encryptionCacheLock.unlock() }
-        return encryptionCache.count
     }
     
     func replaceMultiple(_ replacements: [StringReplacement]) -> String {

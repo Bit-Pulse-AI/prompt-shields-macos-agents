@@ -1,6 +1,43 @@
 import Foundation
 import AppKit
 
+// MARK: - AXUIElement Hashable Conformance
+
+/// A Sendable identifier for AXUIElement with graceful error handling
+/// A Sendable identifier for AXUIElement with graceful error handling
+struct AXElementID: Sendable, Hashable {
+    private let pointerValue: UInt
+    
+    init(_ element: AXUIElement) {
+        self.pointerValue = UInt(bitPattern: Unmanaged.passUnretained(element).toOpaque())
+    }
+    
+    /// Check if this element ID matches the given element
+    /// - Parameter element: The element to compare against
+    /// - Returns: True if they represent the same element
+    func matches(_ element: AXUIElement) -> Bool {
+        let elementPointer = UInt(bitPattern: Unmanaged.passUnretained(element).toOpaque())
+        return pointerValue == elementPointer
+    }
+    
+    /// Get the pointer value for debugging
+    var debugPointerValue: UInt {
+        return pointerValue
+    }
+}
+
+extension AXUIElement: @retroactive Hashable {
+    public func hash(into hasher: inout Hasher) {
+        // Use the underlying pointer value for hashing
+        hasher.combine(Unmanaged.passUnretained(self).toOpaque())
+    }
+    
+    public static func == (lhs: AXUIElement, rhs: AXUIElement) -> Bool {
+        // Compare the underlying pointer values
+        return Unmanaged.passUnretained(lhs).toOpaque() == Unmanaged.passUnretained(rhs).toOpaque()
+    }
+}
+
 /// Safe wrapper for AXUIElement operations to prevent memory leaks
 final class AXUIElementSafeWrapper {
     // MARK: - Safe Attribute Access
@@ -21,16 +58,22 @@ final class AXUIElementSafeWrapper {
         return value
     }
     
-    /// Safely get children from an AXUIElement
+    /// Safely get children from an AXUIElement with validation
     /// - Parameter element: The AXUIElement to get children from
     /// - Returns: Array of child AXUIElements or empty array if failed
     static func getChildren(from element: AXUIElement) -> [AXUIElement] {
+        // First validate the element is still valid
+        guard isValidElement(element) else {
+            return []
+        }
+        
         guard let childrenRef = getAttributeValue(from: element, attribute: kAXChildrenAttribute),
               let children = childrenRef as? [AXUIElement] else {
             return []
         }
         
-        return children
+        // Filter out invalid children
+        return children.filter { isValidElement($0) }
     }
     
     /// Safely get a parameterized attribute value
