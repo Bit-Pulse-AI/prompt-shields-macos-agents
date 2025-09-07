@@ -6,7 +6,6 @@ import SwiftData
 struct Subscription: Domain {
     typealias M = SubscriptionModel
     typealias P = SubscriptionPersistentModel
-    typealias R = SubscriptionAPIResponse
     
     struct SubscriptionModel: Model {
         var uuid: UID
@@ -52,21 +51,6 @@ struct Subscription: Domain {
             modifiedAt: persistent.modifiedAt
         )
         return Subscription(model: model, identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
-    }
-    
-    static func fromAPIResponse(_ response: Data) throws -> Subscription {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        
-        let subscriptionDTO = try decoder.decode(SubscriptionAPIResponse.self, from: response)
-        return subscriptionDTO.toDomain()
-    }
-    
-    func toAPIRequest() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let request = SubscriptionAPIRequest(from: self)
-        return try encoder.encode(request)
     }
 }
 

@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Combine
+import os
 
 struct ApplicationInfo: Equatable {
     let name: String
@@ -25,9 +26,15 @@ final class DashboardStateModel: ObservableObject {
 }
 
 struct DashboardView: View {
+    @Environment(\.suggestionDomainService) private var suggestionDomainService
     @EnvironmentObject private var dashboardStateModel: DashboardStateModel
     @State private var localValue: CGRect = .zero
-
+    
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier!,
+        category: String(describing: ActionView.self)
+    )
+    
     var body: some View {
         HStack(spacing: .zero) {
             DashboardSidebarView()
@@ -36,5 +43,16 @@ struct DashboardView: View {
         }
         .environmentObject(dashboardStateModel)
         .dashboardStyle()
+        .task {
+            await loadData()
+        }
+    }
+    
+    private func loadData() async {
+        do {
+            try await suggestionDomainService.fetchSuggestionTypes()
+        } catch {
+            logger.error("Error fetching suggestion types \(error)")
+        }
     }
 }

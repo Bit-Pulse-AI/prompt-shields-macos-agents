@@ -1,21 +1,35 @@
 import SwiftUI
+import os
 
 struct ActionView: View {
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
-    @Environment(\.llmDomainService) private var llmDomainService
-    
-    // Track processing state to prevent multiple simultaneous requests
+    @Environment(\.suggestionDomainService) private var suggestionDomainService
+    @Environment(\.profileDomainService) private var profileDomainService
+    @Environment(\.userPreferencesDomainService) private var userPreferencesDomainService
+    @StateObject private var suggestionTypesQueryable = ObservableQueryable(
+        sortDescriptors: [SortDescriptor(\.suggestionName, order: .reverse)],
+        mapping: DefaultMapping<SuggestionType>.self
+    )
+    @StateObject private var userPreferencesTypesQueryable = ObservableQueryable(
+        mapping: DefaultMapping<UserPreferences>.self
+    )
     @State private var isProcessing = false
-    
-    // Cache suggestion types to avoid repeated allCases calls
-    private let suggestionTypes = SuggestionType.allCases
-    
-    // Track if view is active to prevent memory leaks
     @State private var isViewActive = true
     
-    // Cache display names to avoid repeated computation
-    private var suggestionTypeDisplayNames: [SuggestionType: String] {
-        Dictionary(uniqueKeysWithValues: suggestionTypes.map { ($0, $0.displayName) })
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier!,
+        category: String(describing: ActionView.self)
+    )
+    
+    private var suggestionTypes: [SuggestionType] {
+        let enabledFilters = userPreferences?.model.enabledSuggestionTypes ?? []
+        return suggestionTypesQueryable.wrappedValue.filter {
+            enabledFilters.contains($0.model.suggestionType)
+        }
+    }
+    
+    private var userPreferences: UserPreferences? {
+        userPreferencesTypesQueryable.wrappedValue.first
     }
     
     var body: some View {
@@ -42,7 +56,7 @@ struct ActionView: View {
             case .options:
                 VStack {
                     VStack(alignment: .leading) {
-                        ForEach(suggestionTypes, id: \.self) { type in
+                        ForEach(suggestionTypes, id: \.model.suggestionType) { suggestionType in
                             Button { [weak overlayStateModel] in
                                 guard !isProcessing else { return }
                                 isProcessing = true
@@ -50,42 +64,47 @@ struct ActionView: View {
                                 
                                 Task {
                                     do {
-                                        let result = try await llmDomainService.process(text: overlayStateModel?.elementInfo?.text ?? "", llmProvider: .AZURE_PROMPTSHIELDS, suggestionType: type, application: overlayStateModel?.elementInfo?.applicationName ?? "n/a")
-                                        
-                                        // Check for cancellation before proceeding
+                                        let result = try await suggestionDomainService
+                                            .process(
+                                                text:
+                                                    overlayStateModel?.elementInfo?.text ?? "",
+                                                    llmProvider: LLMProvider
+                                                                    .AZURE_PROMPTSHIELDS
+                                                                    .rawValue,
+                                                suggestionGroupId: profileDomainService.currentProfile.model.defaultSuggestionGroupId,
+                                                    suggestionType: suggestionType.model.suggestionType,
+                                                    application: overlayStateModel?.elementInfo?.applicationName ?? "n/a")
+
                                         try Task.checkCancellation()
                                         
                                         if let axUIElement = overlayStateModel?.elementInfo?.element {
-                                            // Validate the element before using it
                                             if await isValidAXUIElement(axUIElement) {
                                                 Task { [weak axUIElement] in
                                                     guard let axUIElement else {
                                                         return
                                                     }
                                                     do {
-                                                        try await TextInjector.shared.injectText(result, into: axUIElement)
+                                                        try await TextInjector.shared.injectText(result.model.suggestedText, into: axUIElement)
                                                     } catch {
-                                                        print("Error injecting text: \(error)")
+                                                        logger.error("Error injecting text: \(error)")
                                                     }
                                                 }
                                             } else {
-                                                print("AXUIElement is no longer valid")
+                                                logger.error("AXUIElement is no longer valid")
                                             }
                                         }
-                                        
                                         overlayStateModel?.actionToolState = .idle
                                     } catch is CancellationError {
-                                        print("LLM processing was cancelled")
+                                        logger.warning("LLM processing was cancelled")
                                         overlayStateModel?.actionToolState = .idle
                                     } catch {
-                                        print("Error processing LLM request: \(error)")
+                                        logger.error("Error processing LLM request: \(error)")
                                         overlayStateModel?.actionToolState = .idle
                                     }
-                                
                                     isProcessing = false
                                 }
                             } label: {
-                                Text(suggestionTypeDisplayNames[type] ?? type.displayName)
+                                Text(suggestionType.model.suggestionName)
                             }
                             .disabled(isProcessing)
                         }

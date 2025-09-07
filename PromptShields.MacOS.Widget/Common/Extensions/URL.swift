@@ -2,7 +2,9 @@ import Foundation
 
 extension URL {
     var encrypt: String {
-        absoluteString.encrypt
+        get throws {
+            absoluteString.encrypt
+        }
     }
     
     init?(string: String?) {

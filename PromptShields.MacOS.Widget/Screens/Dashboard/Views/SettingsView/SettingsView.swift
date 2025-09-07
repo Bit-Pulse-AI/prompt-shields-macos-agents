@@ -4,9 +4,18 @@ import os
 struct SettingsView: View {
     @Environment(\.userDomainService) private var userDomainService
     @Environment(\.userPreferencesDomainService) private var userPreferencesDomainService
-    @EnvironmentObject private var dashboardState: DashboardStateModel
-    @State private var isLoading = true
+    @Environment(\.suggestionDomainService) private var suggestionDomainService
+    @State private var isLoading = false
     @State private var preferences: UserPreferences?
+    @StateObject private var suggestionTypesQueryable = ObservableQueryable(
+        sortDescriptors: [SortDescriptor(\.suggestionName, order: .forward)],
+        mapping: DefaultMapping<SuggestionType>.self
+    )
+    private var suggestionTypes: [SuggestionType] {
+        suggestionTypesQueryable.wrappedValue.sorted { a, b in
+            a.model.suggestionName < b.model.suggestionName
+        }
+    }
     
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
@@ -18,9 +27,6 @@ struct SettingsView: View {
             if !isLoading, let preferences = preferences {
                 ScrollView {
                     VStack(spacing: 20) {
-                        // General Settings
-                        generalSettingsSection(preferences)
-                        
                         // Suggestion Types
                         suggestionTypesSection(preferences)
                         
@@ -28,7 +34,7 @@ struct SettingsView: View {
 //                        applicationBlockingSection(preferences)
                         
                         // UI Settings
-                        uiSettingsSection(preferences)
+//                        uiSettingsSection(preferences)
                     }
                     .padding()
                 }
@@ -40,40 +46,8 @@ struct SettingsView: View {
             }
         }
         .task {
-            await loadPreferences()
+            await loadData()
         }
-    }
-    
-    private func generalSettingsSection(_ preferences: UserPreferences) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("General")
-                .font(.headline)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Toggle("Enable Assistant", isOn: Binding(
-                        get: { preferences.model.isEnabled },
-                        set: { newValue in
-                            var newPreferences = preferences
-                            newPreferences.model.isEnabled = newValue
-                            Task {
-                                do {
-                                    try await updatePreferences(newPreferences)
-                                } catch {
-                                    logger.error("Error saving prefs : \(error)")
-                                }
-                            }
-                        }
-                    ))
-                    Spacer()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .frame(width: 350)
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(12)
     }
     
     private func suggestionTypesSection(_ preferences: UserPreferences) -> some View {
@@ -82,25 +56,32 @@ struct SettingsView: View {
                 .font(.headline)
             
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(SuggestionType.allCases, id: \.self) { type in
+                ForEach(suggestionTypes, id: \.model.uuid) { suggestionType in
                     HStack {
-                        Toggle(type.displayName, isOn: Binding(
-                            get: { preferences.model.enabledSuggestionTypes.contains(type.rawValue) },
-                            set: { newValue in
-                                var newTypes = preferences.model.enabledSuggestionTypes
-                                if newValue {
-                                    newTypes.append(type.rawValue)
-                                } else {
-                                    newTypes.removeAll(where: {
-                                        $0 == type.rawValue
-                                    })
-                                }
-                                var newPreferences = preferences
-                                newPreferences.model.enabledSuggestionTypes = newTypes
-                                Task { @Sendable in
-                                    try await updatePreferences(newPreferences)
-                                }
-                            }
+                        Toggle(suggestionType.model.suggestionName,
+                               isOn:
+                                Binding(
+                                    get: {
+                                        preferences
+                                            .model
+                                            .enabledSuggestionTypes
+                                            .contains(suggestionType.model.suggestionType)
+                                    },
+                                    set: { newValue in
+                                        var newTypes = preferences.model.enabledSuggestionTypes
+                                        if newValue {
+                                            newTypes.append(suggestionType.model.suggestionType)
+                                        } else {
+                                            newTypes.removeAll(where: {
+                                                $0 == suggestionType.model.suggestionType
+                                            })
+                                        }
+                                        var newPreferences = preferences
+                                        newPreferences.model.enabledSuggestionTypes = newTypes
+                                        Task { @Sendable in
+                                            try await updatePreferences(newPreferences)
+                                        }
+                                    }
                         ))
                         Spacer()
                     }
@@ -188,14 +169,16 @@ struct SettingsView: View {
         .cornerRadius(12)
     }
     
-    private func loadPreferences() async {
+    private func loadData() async {
         isLoading = true
         do {
             let preferences = try await userPreferencesDomainService.currentUserPreferences
             self.preferences = preferences
+            try await suggestionDomainService.fetchSuggestionTypes()
             isLoading = false
         } catch {
             logger.error("Error fetching user details \(error)")
+            isLoading = false
         }
     }
     

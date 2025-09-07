@@ -44,7 +44,8 @@ protocol PersistenceManager: Sendable {
 
 @ModelActor
 actor PersistenceManagerImpl: PersistenceManager {
-    static let entity: [any PersistentModel.Type] = [SuggestionPersistentModel.self,
+    static let entity: [any PersistentModel.Type] = [SuggestionTypePersistentModel.self,
+                                                     SuggestionPersistentModel.self,
                                                      OrganisationPersistentModel.self,
                                                      SubscriptionPersistentModel.self,
                                                      TeamPersistentModel.self,
@@ -68,9 +69,6 @@ actor PersistenceManagerImpl: PersistenceManager {
             modelContext.insert(persistent)
         }
         try modelContext.save()
-        Task {
-            await checkAndPerformCleanup()
-        }
     }
     
     @discardableResult
@@ -82,20 +80,10 @@ actor PersistenceManagerImpl: PersistenceManager {
             throw PersistenceManagerError.missingModel
         }
         
-        // Check if cleanup is needed
-        await checkAndPerformCleanup()
-        
         return D.fromPersistentModel(persistent)
     }
     
     // MARK: - Memory Management
-    
-    private func checkAndPerformCleanup() async {
-        let now = Date()
-        if now.timeIntervalSince(lastCleanupTime) > cleanupInterval {
-            lastCleanupTime = now
-        }
-    }
     
     func query<D: Domain>(predicate: Predicate<D.P>? = nil, sortDescriptors: [SortDescriptor<D.P>] = [], limit: Int?) async throws -> [D] where D.M == D.M {
         var fetchDescriptor = FetchDescriptor(predicate: predicate, sortBy: sortDescriptors)

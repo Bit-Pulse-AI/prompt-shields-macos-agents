@@ -4,7 +4,6 @@ import SwiftData
 struct User: Domain {
     typealias M = UserModel
     typealias P = UserPersistentModel
-    typealias R = UserAPIResponse
     
     struct UserModel: Model {
         var uuid: UID
@@ -60,20 +59,6 @@ struct User: Domain {
             modifiedAt: persistent.modifiedAt
         )
         return User(model: model, identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
-    }
-    
-    static func fromAPIResponse(_ response: Data) throws -> User {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let userDTO = try decoder.decode(UserAPIResponse.self, from: response)
-        return userDTO.toDomain(profileId: nil, preferenceId: nil)
-    }
-    
-    func toAPIRequest() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let request = UserAPIRequest(from: self)
-        return try encoder.encode(request)
     }
 }
 

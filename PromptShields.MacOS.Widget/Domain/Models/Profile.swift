@@ -4,13 +4,13 @@ import SwiftData
 struct Profile: Domain {
     typealias M = ProfileModel
     typealias P = ProfilePersistentModel
-    typealias R = ProfileAPIResponse
     
     struct ProfileModel: Model {
         let uuid: UID
         let defaultTenantId: UID
         let defaultOrganisationId: UID
         let defaultSubscriptionId: UID
+        let defaultSuggestionGroupId: UID
         let defaultTeamId: UID
         let defaultProjectId: UID
     }
@@ -47,22 +47,12 @@ struct Profile: Domain {
             defaultTenantId: persistent.defaultTenantId.decrypt,
             defaultOrganisationId: persistent.defaultOrganisationId.decrypt,
             defaultSubscriptionId: persistent.defaultSubscriptionId.decrypt,
+            defaultSuggestionGroupId: persistent.defaultSuggestionGroupId,
             defaultTeamId: persistent.defaultTeamId.decrypt,
             defaultProjectId: persistent.defaultProjectId.decrypt
         )
         return Profile(model: model,
                        identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
-    }
-    
-    static func fromAPIResponse(_ response: Data) throws -> Profile {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let profileDTO = try decoder.decode(ProfileAPIResponse.self, from: response)
-        return profileDTO.toDomain()
-    }
-    
-    func toAPIRequest() throws -> Data {
-        Data()
     }
 }
 
@@ -73,6 +63,7 @@ struct ProfileAPIResponse: APIResponse {
     let defaultTenantId: UID
     let defaultOrganisationId: UID
     let defaultSubscriptionId: UID
+    let defaultSuggestionGroupId: UID
     let defaultTeamId: UID
     let defaultProjectId: UID
     
@@ -81,6 +72,7 @@ struct ProfileAPIResponse: APIResponse {
         case defaultTenantId = "default_tenant_id"
         case defaultOrganisationId = "default_organisation_id"
         case defaultSubscriptionId = "default_subscription_id"
+        case defaultSuggestionGroupId = "default_suggestions_group_id"
         case defaultTeamId = "default_team_id"
         case defaultProjectId = "default_project_id"
     }
@@ -91,6 +83,7 @@ struct ProfileAPIResponse: APIResponse {
             defaultTenantId: defaultTenantId,
             defaultOrganisationId: defaultOrganisationId,
             defaultSubscriptionId: defaultSubscriptionId,
+            defaultSuggestionGroupId: defaultSuggestionGroupId,
             defaultTeamId: defaultTeamId,
             defaultProjectId: defaultProjectId
         )
@@ -109,6 +102,7 @@ final class ProfilePersistentModel: UpdatablePersistentModel {
     var defaultTenantId: UID = ""
     var defaultOrganisationId: UID = ""
     var defaultSubscriptionId: UID = ""
+    var defaultSuggestionGroupId: UID = ""
     var defaultTeamId: UID = ""
     var defaultProjectId: UID = ""
     
@@ -120,6 +114,7 @@ final class ProfilePersistentModel: UpdatablePersistentModel {
         self.defaultTenantId = other.defaultTenantId
         self.defaultOrganisationId = other.defaultOrganisationId
         self.defaultSubscriptionId = other.defaultSubscriptionId
+        self.defaultSuggestionGroupId = other.defaultSuggestionGroupId
         self.defaultTeamId = other.defaultTeamId
         self.defaultProjectId = other.defaultProjectId
     }

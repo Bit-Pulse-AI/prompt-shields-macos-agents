@@ -20,7 +20,6 @@ enum PanelPosition: String, CaseIterable, Codable {
 struct UserPreferences: Domain {
     typealias M = UserPreferencesModel
     typealias P = UserPreferencesPersistentModel
-    typealias R = UserPreferencesAPIResponse
     
     struct UserPreferencesModel: Model {
         let uuid: UID
@@ -77,13 +76,6 @@ struct UserPreferences: Domain {
             lastUpdated: persistent.lastUpdated
         )
         return UserPreferences(model: model, identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
-    }
-    
-    static func fromAPIResponse(_ response: Data) throws -> User {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let userDTO = try decoder.decode(UserAPIResponse.self, from: response)
-        return userDTO.toDomain(profileId: nil, preferenceId: nil)
     }
 }
 

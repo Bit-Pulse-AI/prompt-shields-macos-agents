@@ -21,7 +21,6 @@ protocol APIResponse: SendableDecodable {
 protocol Domain: Sendable, Equatable, Identifiable, Hashable {
     associatedtype M: Model
     associatedtype P: UpdatablePersistentModel
-    associatedtype R: SendableDecodable
     
     var identifier: ModelIdentifier? { get }
     var model: M { get }

@@ -142,8 +142,6 @@ actor QueryableActor<D: Domain, M: QueryableMapping> where M.SourceType == D, M.
     var currentError: Error? { error }
     
     deinit {
-        print("actor removed")
-        // Cancel all tasks to prevent retain cycles
         observerTask?.cancel()
         initialLoadTask?.cancel()
     }

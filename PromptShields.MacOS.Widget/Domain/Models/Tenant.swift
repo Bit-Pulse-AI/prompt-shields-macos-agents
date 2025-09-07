@@ -4,7 +4,6 @@ import SwiftData
 struct Tenant: Domain {
     typealias M = TenantModel
     typealias P = TenantPersistentModel
-    typealias R = TenantAPIResponse
     
     struct TenantModel: Model {
         var uuid: UID
@@ -54,21 +53,6 @@ struct Tenant: Domain {
             modifiedAt: persistent.modifiedAt
         )
         return Tenant(model: model, identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
-    }
-    
-    static func fromAPIResponse(_ response: Data) throws -> Tenant {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        
-        let tenantDTO = try decoder.decode(TenantAPIResponse.self, from: response)
-        return tenantDTO.toDomain()
-    }
-    
-    func toAPIRequest() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let request = TenantAPIRequest(from: self)
-        return try encoder.encode(request)
     }
 }
 

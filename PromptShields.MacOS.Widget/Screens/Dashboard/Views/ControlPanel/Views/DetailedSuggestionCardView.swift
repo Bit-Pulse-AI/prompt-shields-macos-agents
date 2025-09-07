@@ -1,42 +1,20 @@
 import SwiftUI
 
-extension SuggestionType {
-    var displayName: String {
-        switch self {
-//        case .SHAKESPEARE: return "Shakespeare"
-        case .OPTIMIZE: return "Optimize"
-        case .GPT: return "GPT"
-//        case .REDACTION: return "Redaction"
-        case .SUMMARIZE: return "Summarize"
-        case .ENHANCE: return "Enhance"
-        }
-    }
-
-    var color: String {
-        switch self {
-//        case .SHAKESPEARE: return "#FF6B6B"
-        case .OPTIMIZE: return "#4ECDC4"
-        case .GPT: return "#45B7D1"
-//        case .REDACTION: return "#96CEB4"
-        case .SUMMARIZE: return "#FFEAA7"
-        case .ENHANCE: return "#FFA7EA"
-        }
-    }
-}
 struct DetailedSuggestionCard: View {
     let suggestion: Suggestion
     @EnvironmentObject var dashboardState: DashboardStateModel
+    let suggestionName: (String) -> String
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack {
-                Label(suggestion.model.suggestionType?.displayName ?? "n/a", systemImage: "textformat.abc.dottedunderline")
+                Label(suggestionName(suggestion.model.suggestionType), systemImage: "textformat.abc.dottedunderline")
                     .font(.caption)
-                    .foregroundColor(Color(hex: suggestion.model.suggestionType?.color ?? "#FFFFFF"))
+                    .foregroundColor(.secondary)
                 Label(suggestion.model.application, systemImage: "apple.terminal")
                     .font(.caption)
-                    .foregroundColor(Color(hex: suggestion.model.suggestionType?.color ?? "#FFFFFF"))
+                    .foregroundColor(.secondary)
                 
                 Spacer()
             }

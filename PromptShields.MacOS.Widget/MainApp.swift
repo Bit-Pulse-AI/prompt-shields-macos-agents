@@ -118,7 +118,7 @@ struct MainApp: App {
         .windowStyle(.hiddenTitleBar)
         
         Window("Action", id: MainApp.actionRender) {
-//            if $overlayStateModel.isActionConfigured.wrappedValue {
+            if $overlayStateModel.isActionConfigured.wrappedValue {
                 ActionView()
                     .onChange(of: overlayStateModel.elementInfo?.frame) { _, _ in
                         updateActionWindow(isInitial: false)
@@ -126,14 +126,14 @@ struct MainApp: App {
                     .onChange(of: overlayStateModel.actionToolState) { _, _ in
                         updateActionWindow(isInitial: false)
                     }
-//            } else {
-//                VStack {
-//                }
-//                .frame(width: 1, height: 1)
+            } else {
+                VStack {
+                }
+                .frame(width: 1, height: 1)
                 .onAppear {
                     updateActionWindow(isInitial: true)
                 }
-//            }
+            }
         }
         .defaultSize(.zero)
         .environmentObject(accessibilityManager)
@@ -194,8 +194,8 @@ struct MainApp: App {
         }
         window.isRestorable = false
         window.setFrameAutosaveName("")
-        window.isOpaque = false
-        window.backgroundColor = .clear
+        window.isOpaque = true
+        window.backgroundColor = .white
          
         window.level = .modalPanel
         window.hasShadow = false
