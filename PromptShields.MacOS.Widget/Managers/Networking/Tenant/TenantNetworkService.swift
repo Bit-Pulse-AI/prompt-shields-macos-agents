@@ -16,6 +16,6 @@ struct TenantNetworkServiceImpl: TenantNetworkService {
             method: .GET,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        return try await networkManager.perform(request: request).decode()
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
 }

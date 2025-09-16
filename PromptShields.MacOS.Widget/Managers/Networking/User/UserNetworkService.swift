@@ -6,6 +6,8 @@ import JWTDecode
 enum UserNetworkServiceError: Error {
     case missingUserInfo
     case missingSub
+    case tokenRefreshFailed
+    case noRefreshTokenAvailable
 }
 
 protocol UserNetworkService: NetworkService {
@@ -13,6 +15,7 @@ protocol UserNetworkService: NetworkService {
     func logout() async throws
     func updateUser(firstName: String?, lastName: String?) async throws -> UserAPIResponse
     func getUser() async throws -> UserAPIResponse
+    func refreshToken() async throws -> UserAPIResponse
 }
 
 struct UserNetworkServiceImpl: UserNetworkService {
@@ -112,7 +115,7 @@ struct UserNetworkServiceImpl: UserNetworkService {
             Auth0
                 .webAuth()
                 .audience("promptshields-api")
-                .scope("openid profile email offline")
+                .scope("openid profile email offline_access")
                 .useHTTPS()
                 .start { result in
                     do {
@@ -125,17 +128,26 @@ struct UserNetworkServiceImpl: UserNetworkService {
         }
     }
     
+    func refreshToken() async throws -> UserAPIResponse {
+        return try await TokenRefreshManager.shared.refreshToken()
+    }
+    
     private func convertAuth0UserToAPIResponse(_ userInfo: UserInfo, accessToken: String) throws -> UserAPIResponse {
         let userId = userInfo.sub
         let email = userInfo.email
         let firstName = userInfo.givenName ?? "n/a"
         let lastName = userInfo.familyName ?? "n/a"
         let photoURL = userInfo.picture?.absoluteString
+        
+        // Get existing refresh token from stored credentials if available
+        let existingRefreshToken = try? keychainManager.loadUserCredentials().refreshToken
+        
         return UserAPIResponse(id: userId,
                                firstName: firstName,
                                lastName: lastName,
                                email: email,
                                accessToken: accessToken,
+                               refreshToken: existingRefreshToken,
                                photoURL: photoURL,
                                createdAt: Date(),
                                updatedAt: Date())
@@ -158,6 +170,7 @@ private extension Credentials {
                                lastName: lastName,
                                email: email,
                                accessToken: accessToken,
+                               refreshToken: refreshToken,
                                photoURL: photoURL,
                                createdAt: Date(),
                                updatedAt: Date())

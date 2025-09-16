@@ -24,7 +24,7 @@ struct OrganisationNetworkServiceImpl: OrganisationNetworkService {
             body: payload,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        return try await networkManager.perform(request: request).decode()
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
     
     func read(tenantId: String, organisationId: String) async throws -> OrganisationAPIResponse {
@@ -33,7 +33,7 @@ struct OrganisationNetworkServiceImpl: OrganisationNetworkService {
             method: .GET,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        return try await networkManager.perform(request: request).decode()
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
     
     func update(tenantId: String, organisationId: String, name: String? = nil, description: String? = nil) async throws -> OrganisationAPIResponse {
@@ -44,7 +44,7 @@ struct OrganisationNetworkServiceImpl: OrganisationNetworkService {
             body: payload,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        return try await networkManager.perform(request: request).decode()
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
     
     func delete(tenantId: String, organisationId: String) async throws {
@@ -53,7 +53,7 @@ struct OrganisationNetworkServiceImpl: OrganisationNetworkService {
             method: .DELETE,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        try await networkManager.perform(request: request)
+        try await networkManager.performWithAutoRefresh(request: request)
     }
     
     func list(tenantId: String) async throws -> PaginatedResponse<OrganisationAPIResponse> {
@@ -66,6 +66,6 @@ struct OrganisationNetworkServiceImpl: OrganisationNetworkService {
             method: .GET,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        return try await networkManager.perform(request: request).decode()
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
 } 

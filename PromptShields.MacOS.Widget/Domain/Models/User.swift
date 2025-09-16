@@ -70,6 +70,7 @@ struct UserAPIResponse: APIResponse, Encodable {
     let lastName: String
     let email: String?
     let accessToken: String
+    let refreshToken: String?
     let photoURL: String?
     let createdAt: Date
     let updatedAt: Date
@@ -81,6 +82,7 @@ struct UserAPIResponse: APIResponse, Encodable {
         case email
         case photoURL
         case accessToken
+        case refreshToken
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

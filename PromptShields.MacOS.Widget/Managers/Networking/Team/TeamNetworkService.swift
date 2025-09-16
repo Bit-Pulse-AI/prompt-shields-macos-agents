@@ -22,7 +22,7 @@ struct TeamNetworkServiceImpl: TeamNetworkService {
             body: payload,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        return try await networkManager.perform(request: request).decode()
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
     
     func read(subscriptionId: String, teamId: String) async throws -> TeamAPIResponse {
@@ -31,7 +31,7 @@ struct TeamNetworkServiceImpl: TeamNetworkService {
             method: .GET,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        return try await networkManager.perform(request: request).decode()
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
     
     func update(subscriptionId: String, teamId: String, name: String? = nil, teamStatus: TeamStatus? = nil) async throws -> TeamAPIResponse {
@@ -53,7 +53,7 @@ struct TeamNetworkServiceImpl: TeamNetworkService {
             body: payload,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        return try await networkManager.perform(request: request).decode()
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
     
     func delete(subscriptionId: String, teamId: String) async throws {
@@ -62,7 +62,7 @@ struct TeamNetworkServiceImpl: TeamNetworkService {
             method: .DELETE,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        try await networkManager.perform(request: request)
+        try await networkManager.performWithAutoRefresh(request: request)
     }
     
     func list(subscriptionId: String) async throws -> PaginatedResponse<TeamAPIResponse> {
@@ -75,6 +75,6 @@ struct TeamNetworkServiceImpl: TeamNetworkService {
             method: .GET,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        return try await networkManager.perform(request: request).decode()
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
 } 

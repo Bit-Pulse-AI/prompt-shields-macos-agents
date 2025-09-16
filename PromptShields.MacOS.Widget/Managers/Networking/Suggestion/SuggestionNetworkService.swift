@@ -30,7 +30,7 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
             body: payload,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        return try await networkManager.perform(request: request).decode()
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
     
     func list(suggestionGroupId: String, llmProvider: String, teamId: String, offset: Int, limit: Int) async throws -> PaginatedResponse<SuggestionAPIResponse> {
@@ -40,7 +40,7 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
             queryParameters: ["offset": "\(offset)", "limit": "\(limit)"],
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        return try await networkManager.perform(request: request).decode()
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
     
     func fetchSuggestionTypes() async throws -> ListResponse<SuggestionTypeAPIResponse> {
@@ -49,6 +49,6 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
             method: .GET,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
-        return try await networkManager.perform(request: request).decode()
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
 }

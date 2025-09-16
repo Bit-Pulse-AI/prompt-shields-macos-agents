@@ -11,6 +11,8 @@ extension EnvironmentValues {
 enum LLMProvider: String {
     case AZURE_PROMPTSHIELDS = "AZURE_PROMPTSHIELDS"
     case GOOGLE = "GOOGLE"
+}
+
 struct LLMDomainServiceKey: EnvironmentKey {
     static let defaultValue = {
         return LLMDomainServiceImpl()
