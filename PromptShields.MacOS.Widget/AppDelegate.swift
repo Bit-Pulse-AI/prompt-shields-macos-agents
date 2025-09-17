@@ -1,5 +1,4 @@
 import AppKit
-import RevenueCat
 import os
 import SwiftUI
 
@@ -27,9 +26,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Clean up any hanging windows first
         cleanupHangingWindows()
-        
-        // Configure RevenueCat first
-        configureRevenueCat()
         
         // Test just the activation policy change first
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -183,12 +179,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
     
-    /// Configures RevenueCat for in-app purchase management
-    /// This method sets up the RevenueCat SDK with the appropriate API key
-    private func configureRevenueCat() {
-        Purchases.configure(withAPIKey: revenueCatAPIKey)
-        logger.info("RevenueCat configured successfully")
-    }
     
     @MainActor
     private func cleanupHangingWindows(windowIdentifiers: [String] = [MainApp.mainWindow, MainApp.overlayRender, MainApp.actionRender]) {
