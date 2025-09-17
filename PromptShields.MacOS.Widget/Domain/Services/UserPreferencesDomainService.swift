@@ -72,12 +72,7 @@ struct UserPreferencesDomainServiceImpl: UserPreferencesDomainService {
     func getPreferences() async throws -> UserPreferences {
         let preference = UserPreferences(model: .init(uuid: UUID().uuidString,
                                                       isEnabled: true,
-                                                      enabledSuggestionTypes: [],
-                                                      blockedApplications: [],
-                                                      language: "en",
-                                                      autoApplySuggestions: false,
-                                                      showFloatingPanel: true,
-                                                      panelPosition: .right,
+                                                      enabledSuggestionTypes: nil,
                                                       lastUpdated: Date()))
         return try await persistenceManager.insert(domain: preference)
     }

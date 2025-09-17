@@ -5,7 +5,7 @@ struct ActionView: View {
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
     @Environment(\.suggestionDomainService) private var suggestionDomainService
     @Environment(\.profileDomainService) private var profileDomainService
-    @Environment(\.userPreferencesDomainService) private var userPreferencesDomainService
+    
     @StateObject private var suggestionTypesQueryable = ObservableQueryable(
         sortDescriptors: [SortDescriptor(\.suggestionName, order: .reverse)],
         mapping: DefaultMapping<SuggestionType>.self
@@ -56,57 +56,61 @@ struct ActionView: View {
             case .options:
                 VStack {
                     VStack(alignment: .leading) {
-                        ForEach(suggestionTypes, id: \.model.suggestionType) { suggestionType in
-                            Button { [weak overlayStateModel] in
-                                guard !isProcessing else { return }
-                                isProcessing = true
-                                overlayStateModel?.actionToolState = .loading
-                                
-                                Task {
-                                    do {
-                                        let result = try await suggestionDomainService
-                                            .process(
-                                                text:
-                                                    overlayStateModel?.elementInfo?.text ?? "",
-                                                    llmProvider: LLMProvider
-                                                                    .AZURE_PROMPTSHIELDS
-                                                                    .rawValue,
-                                                suggestionGroupId: profileDomainService.currentProfile.model.defaultSuggestionGroupId,
-                                                    suggestionType: suggestionType.model.suggestionType,
-                                                    application: overlayStateModel?.elementInfo?.applicationName ?? "n/a")
+                        if suggestionTypes.count > 0 {
+                            ForEach(suggestionTypes, id: \.model.suggestionType) { suggestionType in
+                                Button { [weak overlayStateModel] in
+                                    guard !isProcessing else { return }
+                                    isProcessing = true
+                                    overlayStateModel?.actionToolState = .loading
+                                    
+                                    Task {
+                                        do {
+                                            let result = try await suggestionDomainService
+                                                .process(
+                                                    text:
+                                                        overlayStateModel?.elementInfo?.text ?? "",
+                                                        llmProvider: LLMProvider
+                                                                        .AZURE_PROMPTSHIELDS
+                                                                        .rawValue,
+                                                    suggestionGroupId: profileDomainService.currentProfile.model.defaultSuggestionGroupId,
+                                                        suggestionType: suggestionType.model.suggestionType,
+                                                        application: overlayStateModel?.elementInfo?.applicationName ?? "n/a")
 
-                                        try Task.checkCancellation()
-                                        
-                                        if let axUIElement = overlayStateModel?.elementInfo?.element {
-                                            if await isValidAXUIElement(axUIElement) {
-                                                Task { [weak axUIElement] in
-                                                    guard let axUIElement else {
-                                                        return
+                                            try Task.checkCancellation()
+                                            
+                                            if let axUIElement = overlayStateModel?.elementInfo?.element {
+                                                if await isValidAXUIElement(axUIElement) {
+                                                    Task { [weak axUIElement] in
+                                                        guard let axUIElement else {
+                                                            return
+                                                        }
+                                                        do {
+                                                            try await TextInjector.shared.injectText(result.model.suggestedText, into: axUIElement)
+                                                        } catch {
+                                                            logger.error("Error injecting text: \(error)")
+                                                        }
                                                     }
-                                                    do {
-                                                        try await TextInjector.shared.injectText(result.model.suggestedText, into: axUIElement)
-                                                    } catch {
-                                                        logger.error("Error injecting text: \(error)")
-                                                    }
+                                                } else {
+                                                    logger.error("AXUIElement is no longer valid")
                                                 }
-                                            } else {
-                                                logger.error("AXUIElement is no longer valid")
                                             }
+                                            overlayStateModel?.actionToolState = .idle
+                                        } catch is CancellationError {
+                                            logger.warning("LLM processing was cancelled")
+                                            overlayStateModel?.actionToolState = .idle
+                                        } catch {
+                                            logger.error("Error processing LLM request: \(error)")
+                                            overlayStateModel?.actionToolState = .idle
                                         }
-                                        overlayStateModel?.actionToolState = .idle
-                                    } catch is CancellationError {
-                                        logger.warning("LLM processing was cancelled")
-                                        overlayStateModel?.actionToolState = .idle
-                                    } catch {
-                                        logger.error("Error processing LLM request: \(error)")
-                                        overlayStateModel?.actionToolState = .idle
+                                        isProcessing = false
                                     }
-                                    isProcessing = false
+                                } label: {
+                                    Text(suggestionType.model.suggestionName)
                                 }
-                            } label: {
-                                Text(suggestionType.model.suggestionName)
+                                .disabled(isProcessing)
                             }
-                            .disabled(isProcessing)
+                        } else {
+                            Text("No suggestions enabled")
                         }
                     }
                 }

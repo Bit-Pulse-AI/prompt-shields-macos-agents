@@ -24,12 +24,7 @@ struct UserPreferences: Domain {
     struct UserPreferencesModel: Model {
         let uuid: UID
         var isEnabled: Bool
-        var enabledSuggestionTypes: [String]
-        var blockedApplications: [String]
-        let language: String
-        var autoApplySuggestions: Bool
-        var showFloatingPanel: Bool
-        var panelPosition: PanelPosition
+        var enabledSuggestionTypes: [String]?
         let lastUpdated: Date
     }
     
@@ -53,12 +48,7 @@ struct UserPreferences: Domain {
         persistent.ik = try? model.uuid.sha512
         persistent.uuid = model.uuid
         persistent.isEnabled = model.isEnabled
-        persistent.enabledSuggestionTypes = Array(model.enabledSuggestionTypes)
-        persistent.blockedApplications = Array(model.blockedApplications)
-        persistent.language = model.language
-        persistent.autoApplySuggestions = model.autoApplySuggestions
-        persistent.showFloatingPanel = model.showFloatingPanel
-        persistent.panelPosition = model.panelPosition.rawValue
+        persistent.enabledSuggestionTypes = model.enabledSuggestionTypes
         persistent.lastUpdated = model.lastUpdated
         return persistent
     }
@@ -68,11 +58,6 @@ struct UserPreferences: Domain {
             uuid: persistent.uuid,
             isEnabled: persistent.isEnabled,
             enabledSuggestionTypes: persistent.enabledSuggestionTypes,
-            blockedApplications: persistent.blockedApplications,
-            language: persistent.language,
-            autoApplySuggestions: persistent.autoApplySuggestions,
-            showFloatingPanel: persistent.showFloatingPanel,
-            panelPosition: PanelPosition(rawValue: persistent.panelPosition) ?? .right,
             lastUpdated: persistent.lastUpdated
         )
         return UserPreferences(model: model, identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
@@ -105,11 +90,6 @@ struct UserPreferencesAPIResponse: APIResponse, Encodable {
             uuid: "",
             isEnabled: isEnabled,
             enabledSuggestionTypes: enabledSuggestionTypes,
-            blockedApplications: blockedApplications,
-            language: language,
-            autoApplySuggestions: autoApplySuggestions,
-            showFloatingPanel: showFloatingPanel,
-            panelPosition: PanelPosition(rawValue: panelPosition) ?? .right,
             lastUpdated: Date()
         )
         return UserPreferences(model: model)
@@ -124,29 +104,15 @@ final class UserPreferencesPersistentModel: UpdatablePersistentModel {
     var isEnabled: Bool = true
     
     var enabledSuggestionTypesData: Data?
-    var enabledSuggestionTypes: [String] {
+    var enabledSuggestionTypes: [String]? {
         get {
-            guard let enabledSuggestionTypesData else { return [] }
-            return (try? JSONDecoder().decode([String].self, from: enabledSuggestionTypesData)) ?? []
+            guard let enabledSuggestionTypesData else { return nil }
+            return (try? JSONDecoder().decode([String].self, from: enabledSuggestionTypesData))
         }
         set {
             enabledSuggestionTypesData = try? JSONEncoder().encode(newValue)
         }
     }
-    var blockedApplicationsData: Data?
-    var blockedApplications: [String] {
-        get {
-            guard let blockedApplicationsData else { return [] }
-            return (try? JSONDecoder().decode([String].self, from: blockedApplicationsData)) ?? []
-        }
-        set {
-            blockedApplicationsData = try? JSONEncoder().encode(newValue)
-        }
-    }
-    var language: String = "en"
-    var autoApplySuggestions: Bool = false
-    var showFloatingPanel: Bool = true
-    var panelPosition: String = "right"
     var lastUpdated: Date = Date()
     
     var pk: String?
@@ -159,11 +125,6 @@ final class UserPreferencesPersistentModel: UpdatablePersistentModel {
         self.ik = preferences.ik
         self.isEnabled = preferences.isEnabled
         self.enabledSuggestionTypes = preferences.enabledSuggestionTypes
-        self.blockedApplications = Array(preferences.blockedApplications)
-        self.language = preferences.language
-        self.autoApplySuggestions = preferences.autoApplySuggestions
-        self.showFloatingPanel = preferences.showFloatingPanel
-        self.panelPosition = preferences.panelPosition
         self.lastUpdated = preferences.lastUpdated
     }
 }

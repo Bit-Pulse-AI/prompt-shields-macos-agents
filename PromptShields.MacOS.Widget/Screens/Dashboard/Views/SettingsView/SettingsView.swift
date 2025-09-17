@@ -62,17 +62,19 @@ struct SettingsView: View {
                                isOn:
                                 Binding(
                                     get: {
-                                        preferences
+                                        guard let suggestionTypes = preferences
                                             .model
-                                            .enabledSuggestionTypes
-                                            .contains(suggestionType.model.suggestionType)
+                                            .enabledSuggestionTypes else {
+                                            return true
+                                        }
+                                        return suggestionTypes.contains(suggestionType.model.suggestionType)
                                     },
                                     set: { newValue in
                                         var newTypes = preferences.model.enabledSuggestionTypes
                                         if newValue {
-                                            newTypes.append(suggestionType.model.suggestionType)
+                                            newTypes?.append(suggestionType.model.suggestionType)
                                         } else {
-                                            newTypes.removeAll(where: {
+                                            newTypes?.removeAll(where: {
                                                 $0 == suggestionType.model.suggestionType
                                             })
                                         }
@@ -94,81 +96,7 @@ struct SettingsView: View {
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
     }
-    
-    private func applicationBlockingSection(_ preferences: UserPreferences) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Blocked Applications")
-                .font(.headline)
 
-            Text("Applications where suggestions are disabled")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            if preferences.model.blockedApplications.isEmpty {
-                Text("No applications blocked")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
-            } else {
-                LazyVStack(spacing: 8) {
-                    ForEach(preferences.model.blockedApplications, id: \.self) { app in
-                        HStack {
-                            Text(app)
-                            Spacer()
-                            Button("Remove") {
-                                var newBlocked = preferences.model.blockedApplications
-                                newBlocked.removeAll { blockedApp in
-                                    blockedApp == app
-                                }
-                                var newPreferences = preferences
-                                newPreferences.model.blockedApplications = newBlocked
-                                Task { @Sendable in
-                                    try await updatePreferences(newPreferences)
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.red.opacity(0.1))
-                        .cornerRadius(4)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(12)
-    }
-    
-    private func uiSettingsSection(_ preferences: UserPreferences) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Interface")
-                .font(.headline)
-            
-            VStack(spacing: 8) {
-                Picker("Panel position", selection: Binding(
-                    get: { preferences.model.panelPosition },
-                    set: { newValue in
-                        var newPreferences = preferences
-                        newPreferences.model.panelPosition = newValue
-                        Task {
-                            try await updatePreferences(newPreferences)
-                        }
-                    }
-                )) {
-                    ForEach(PanelPosition.allCases, id: \.self) { position in
-                        Text(position.displayName).tag(position)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(12)
-    }
-    
     private func loadData() async {
         isLoading = true
         do {

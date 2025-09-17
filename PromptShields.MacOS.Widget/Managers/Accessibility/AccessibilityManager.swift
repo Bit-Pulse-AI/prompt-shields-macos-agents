@@ -52,6 +52,7 @@ actor AccessibilityManagerImpl: ObservableObject {
         Task {
             isActive.wrappedValue = false
             await timer.stop()
+            elementInfo.wrappedValue = nil
         }
     }
     

@@ -10,6 +10,7 @@ struct SuggestionsView: View {
         sortDescriptors: [SortDescriptor(\.suggestionName, order: .reverse)],
         mapping: DefaultMapping<SuggestionType>.self
     )
+    @State private var isLoadingNextPage: Bool = false
     @State private var isLoading: Bool = false
     @Environment(\.suggestionDomainService) private var suggestionDomainService
     
@@ -39,19 +40,31 @@ struct SuggestionsView: View {
         }
         .padding()
         .task {
-            await loadData()
+            await loadInitialData()
         }
     }
     
-    private func loadData() async {
+    private func loadInitialData() async {
         isLoading = true
         do {
             try await suggestionDomainService.fetchSuggestionTypes()
-            isLoading = false
+            try await suggestionDomainService.list(offset: 0, limit: 2)
         } catch {
             logger.error("Error fetching user details \(error)")
-            isLoading = false
         }
+        try? await Task.sleep(for: .seconds(1))
+        isLoading = false
+    }
+    
+    private func loadNextPage() async {
+        do {
+            isLoadingNextPage = true
+            try await suggestionDomainService.list(offset: currentSuggestions.count, limit: 2)
+        } catch {
+            logger.error("Error fetching next page \(error)")
+        }
+        try? await Task.sleep(for: .seconds(1))
+        isLoadingNextPage = false
     }
     
     private var emptyStateView: some View {
@@ -74,10 +87,22 @@ struct SuggestionsView: View {
     
     private var suggestionsList: some View {
         ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(currentSuggestions, id: \.identifier) { suggestion in
-                    DetailedSuggestionCard(suggestion: suggestion) { type in
-                        suggestionsTypes.first { $0.model.suggestionType == type }?.model.suggestionName ?? "n/a"
+            if isLoading {
+                HStack(alignment: .center) {
+                    ProgressView()
+                }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            } else {
+                LazyVStack(spacing: 12) {
+                    ForEach(currentSuggestions, id: \.identifier) { suggestion in
+                        DetailedSuggestionCard(suggestion: suggestion) { type in
+                            suggestionsTypes.first { $0.model.suggestionType == type }?.model.suggestionName ?? "n/a"
+                        }
+                        if currentSuggestions.last?.model.uuid == suggestion.model.uuid && !isLoadingNextPage {
+                            ProgressView()
+                                .task {
+                                    await loadNextPage()
+                                }
+                        }
                     }
                 }
             }

@@ -24,10 +24,7 @@ protocol SuggestionDomainService: Sendable {
                  suggestionType: String,
                  application: String) async throws -> Suggestion
     func fetchSuggestionTypes() async throws
-    func list(suggestionGroupId: String,
-              llmProvider: String,
-              teamId: String,
-              offset: Int,
+    func list(offset: Int,
               limit: Int) async throws
 }
 
@@ -36,6 +33,12 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
     private var persistenceManager: PersistenceManager
     @Inject
     private var suggestionNetworkService: SuggestionNetworkService
+    @Inject
+    private var userDomainService: UserDomainService
+    @Inject
+    private var profileDomainService: ProfileDomainService
+    @Inject
+    private var userPreferenceDomainService: UserPreferencesDomainService
     
     private let path = "suggestion"
     
@@ -50,24 +53,27 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
                                                                           suggestionGroupId: suggestionGroupId,
                                                                           suggestionType: suggestionType,
                                                                           application: application)
-        let suggestion = suggestionResult.toDomain()
-        try await persistenceManager.insert(domain: suggestion)
-        return suggestion
+        return suggestionResult.toDomain()
     }
     
-    func list(suggestionGroupId: String,
-              llmProvider: String,
-              teamId: String,
-              offset: Int,
+    func list(offset: Int,
               limit: Int) async throws {
-//        let suggestionsResult = try await suggestionNetworkService
-//            .list(
-//                suggestionGroupId: suggestionGroupId,
-//                llmProvider: llmProvider,
-//                teamId: teamId,
-//                offset: offset,
-//                limit: limit)
-//        persistenceManager.inser
+        if offset == 0 {
+            let existingSuggestions: [Suggestion] = try await persistenceManager.query()
+            try await persistenceManager.delete(domains: existingSuggestions)
+        }
+        let currentProfile = try await profileDomainService.currentProfile.model
+        let suggestionGroupId = currentProfile.defaultSuggestionGroupId
+        let teamId = currentProfile.defaultTeamId
+        let suggestionsResult = try await suggestionNetworkService
+            .list(
+                suggestionGroupId: suggestionGroupId,
+                llmProvider: LLMProvider.AZURE_PROMPTSHIELDS.rawValue,
+                teamId: teamId,
+                offset: offset,
+                limit: limit)
+        let suggestions = suggestionsResult.toDomain()
+        try await persistenceManager.syncLocalWithRemote(domains: suggestions)
     }
     
     func fetchSuggestionTypes() async throws {
@@ -75,5 +81,10 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         let suggestion = suggestionResult.toDomain()
         try await persistenceManager.deleteEntity(entity: SuggestionType.self)
         try await persistenceManager.insert(domains: suggestion)
+        if let preferenceId = try await userDomainService.currentUser.model.preferenceId {
+            var preference: UserPreferences = try await persistenceManager.fetchItem(uid: preferenceId)
+            preference.model.enabledSuggestionTypes = suggestion.compactMap { $0.model.suggestionType }
+            try await persistenceManager.update(domain: preference)
+        }
     }
 }

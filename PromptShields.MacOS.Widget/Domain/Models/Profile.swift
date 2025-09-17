@@ -36,6 +36,7 @@ struct Profile: Domain {
         persistent.defaultTenantId = model.defaultTenantId.encrypt
         persistent.defaultOrganisationId = model.defaultOrganisationId.encrypt
         persistent.defaultSubscriptionId = model.defaultSubscriptionId.encrypt
+        persistent.defaultSuggestionGroupId = model.defaultSuggestionGroupId.encrypt
         persistent.defaultTeamId = model.defaultTeamId.encrypt
         persistent.defaultProjectId = model.defaultProjectId.encrypt
         return persistent
@@ -47,7 +48,7 @@ struct Profile: Domain {
             defaultTenantId: persistent.defaultTenantId.decrypt,
             defaultOrganisationId: persistent.defaultOrganisationId.decrypt,
             defaultSubscriptionId: persistent.defaultSubscriptionId.decrypt,
-            defaultSuggestionGroupId: persistent.defaultSuggestionGroupId,
+            defaultSuggestionGroupId: persistent.defaultSuggestionGroupId.decrypt,
             defaultTeamId: persistent.defaultTeamId.decrypt,
             defaultProjectId: persistent.defaultProjectId.decrypt
         )
