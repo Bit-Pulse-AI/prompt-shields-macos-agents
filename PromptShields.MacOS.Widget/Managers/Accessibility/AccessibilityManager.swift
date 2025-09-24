@@ -396,15 +396,21 @@ actor AccessibilityManagerImpl: ObservableObject {
 
 extension ElementInfo {
     func withFrame(frame: CGRect) -> ElementInfo {
-        var copy = self
-        copy.frame = frame
-        return copy
+        return ElementInfo(text: self.text,
+                          applicationName: self.applicationName,
+                          applicationBundleId: self.applicationBundleId,
+                          frame: frame,
+                          element: self.element,
+                          isSelectedText: self.isSelectedText)
     }
     
     func withText(text: String) -> ElementInfo {
-        var copy = self
-        copy.text = text
-        return copy
+        return ElementInfo(text: text,
+                          applicationName: self.applicationName,
+                          applicationBundleId: self.applicationBundleId,
+                          frame: self.frame,
+                          element: self.element,
+                          isSelectedText: self.isSelectedText)
     }
 }
 

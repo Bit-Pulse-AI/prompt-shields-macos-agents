@@ -186,12 +186,47 @@ final class AXUIElementSafeWrapper {
     
     // MARK: - Safe Text Extraction
     
+    /// Safely get selected text from an AXUIElement
+    /// - Parameter element: The AXUIElement to get selected text from
+    /// - Returns: The selected text or nil if no text is selected
+    static func getSelectedText(from element: AXUIElement) -> String? {
+        guard isValidElement(element) else {
+            return nil
+        }
+        
+        // First check if there's a selection range
+        guard let selectedRangeValue = getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) else {
+            return nil
+        }
+        
+        // Check if the selection range has length > 0
+        var cfRange = CFRange()
+        guard AXValueGetValue(selectedRangeValue as! AXValue, .cfRange, &cfRange),
+              cfRange.length > 0 else {
+            return nil
+        }
+        
+        // Get the selected text
+        guard let selectedTextValue = getAttributeValue(from: element, attribute: kAXSelectedTextAttribute),
+              let selectedText = selectedTextValue as? String,
+              !selectedText.isEmpty else {
+            return nil
+        }
+        
+        return selectedText
+    }
+    
     /// Safely extract text from an AXUIElement
     /// - Parameter element: The AXUIElement to extract text from
-    /// - Returns: The extracted text or empty string
+    /// - Returns: The extracted text or empty string (prioritizes selected text if available)
     static func extractText(from element: AXUIElement) -> String {
         guard isValidElement(element) else {
             return ""
+        }
+        
+        // First check for selected text
+        if let selectedText = getSelectedText(from: element) {
+            return selectedText
         }
         
         var collectedText: [String] = []

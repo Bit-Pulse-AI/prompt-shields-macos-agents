@@ -157,7 +157,9 @@ struct ActionView: View {
         if await isValidAXUIElement(axUIElement) {
             Task {
                 do {
-                    try await TextInjector.shared.injectText(actionText, into: axUIElement)
+                    // Use the isSelectedText information from the element info
+                    let isSelectedText = overlayStateModel.elementInfo?.isSelectedText ?? false
+                    try await TextInjector.shared.injectText(actionText, into: axUIElement, isSelectedText: isSelectedText)
                     self.overlayStateModel.actionToolState = .idle
                 } catch {
                     logger.error("Error injecting text: \(error)")

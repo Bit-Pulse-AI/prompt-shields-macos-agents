@@ -164,23 +164,33 @@ final class TextFieldDetector: Sendable {
     func getAXElementOrSelectionInfo(_ element: AXUIElement) throws -> ElementInfo {
         let applicationInfo = try getApplicationInfo(for: element)
         
-        // Use the safer version of text extraction
-        let textResult = self.textExtractor.getAllTextSafely(from: element)
+        // First check if there's selected text
+        let selectedText = AXUIElementSafeWrapper.getSelectedText(from: element)
+        let isFromSelection = selectedText != nil
+        
         let text: String
-        switch textResult {
-        case .success(let extractedText):
-            text = extractedText
-        case .failure(let error):
-            // Log the error but don't fail the entire operation
-            logger.warning("Failed to extract text: \(error.localizedDescription)")
-            text = ""
+        if let selectedText = selectedText {
+            // Use selected text directly
+            text = selectedText
+        } else {
+            // Use the safer version of text extraction for full element text
+            let textResult = self.textExtractor.getAllTextSafely(from: element)
+            switch textResult {
+            case .success(let extractedText):
+                text = extractedText
+            case .failure(let error):
+                // Log the error but don't fail the entire operation
+                logger.warning("Failed to extract text: \(error.localizedDescription)")
+                text = ""
+            }
         }
         
-        return .init(text: text,
-                     applicationName: applicationInfo.name,
-                     applicationBundleId: applicationInfo.bundleId,
-                     frame: try getElementRect(element),
-                     element: element)
+        return ElementInfo(text: text,
+                          applicationName: applicationInfo.name,
+                          applicationBundleId: applicationInfo.bundleId,
+                          frame: try getElementRect(element),
+                          element: element,
+                          isSelectedText: isFromSelection)
     }
 
     // MARK: - Helpers
