@@ -7,6 +7,7 @@ import os
 enum ActionToolState {
     case idle
     case loading
+    case action
     case options
 }
 
@@ -70,7 +71,7 @@ struct MainApp: App {
     
     var body: some Scene {
         Window("Main", id: MainApp.mainWindow) {
-//            if $overlayStateModel.isMainConfigured.wrappedValue {
+            if $overlayStateModel.isMainConfigured.wrappedValue {
                 MainView()
                     .onChange(of: overlayStateModel.elementInfo?.frame) { _, _ in
                         updateMainWindow(isInitial: false)
@@ -78,16 +79,16 @@ struct MainApp: App {
                     .onChange(of: overlayStateModel.actionToolState) { _, _ in
                         updateMainWindow(isInitial: false)
                     }
-//            } else {
-//                VStack {
-//                }
-//                .frame(width: 1, height: 1)
+            } else {
+                VStack {
+                }
+                .frame(width: 1, height: 1)
                     .onAppear {
                         configureAppAppearance()
                         setupWindowDelegate()
                         updateMainWindow(isInitial: true)
                     }
-//            }
+            }
         }
         .defaultSize(.zero)
         .environmentObject(accessibilityManager)
@@ -95,7 +96,7 @@ struct MainApp: App {
         .environmentObject(dashboardStateModel)
         .windowStyle(.hiddenTitleBar)
         Window("Overlay Render", id: MainApp.overlayRender) {
-//            if $overlayStateModel.isOverlayConfigured.wrappedValue {
+            if $overlayStateModel.isOverlayConfigured.wrappedValue {
                 OverlayView()
                     .onChange(of: overlayStateModel.elementInfo?.frame) { _, _ in
                         updateOverlayWindow(isInitial: false)
@@ -103,14 +104,14 @@ struct MainApp: App {
                     .onChange(of: overlayStateModel.actionToolState) { _, _ in
                         updateOverlayWindow(isInitial: false)
                     }
-//            } else {
-//                VStack {
-//                }
-//                .frame(width: 1, height: 1)
+            } else {
+                VStack {
+                }
+                .frame(width: 1, height: 1)
                 .onAppear {
                     updateOverlayWindow(isInitial: true)
                 }
-//            }
+            }
         }
         .defaultSize(.zero)
         .environmentObject(accessibilityManager)
@@ -153,6 +154,7 @@ struct MainApp: App {
     }
     
     private func updateOverlayWindow(isInitial: Bool) {
+        print(overlayStateModel.elementInfo?.frame)
         if overlayStateModel.elementInfo?.frame == nil {
             overlayStateModel.actionToolState = .idle
         }
@@ -179,6 +181,8 @@ struct MainApp: App {
                 actionSize = CGSize(width: 50, height: 50)
             case .options:
                 actionSize = CGSize(width: 200, height: 100)
+            case .action:
+                actionSize = CGSize(width: 200, height: 200)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak window] in
                 configureActionWindow(isInitial: isInitial, window: window, targetRect: targetFrame, actionSize: actionSize)
@@ -239,16 +243,18 @@ struct MainApp: App {
         window.setFrameAutosaveName("")
         window.isOpaque = false
         window.backgroundColor = .clear
+         
         window.level = .floating
         window.hasShadow = false
          
-        // Use nonactivating panel style for borderless overlay window
-        window.styleMask = [.nonactivatingPanel]
-
+        // Use .titled with .borderless to allow input while keeping borderless appearance
+        window.styleMask.remove(.titled)
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.isMovableByWindowBackground = false
         window.ignoresMouseEvents = true
-        window.isMovableByWindowBackground = true
-        if let targetRect {
-            let targetTransform = CGRect(x: targetRect.origin.x, y: targetRect.origin.y, width: targetRect.size.width, height: targetRect.size.height)
+         
+        if let targetRect = targetRect {
+            let targetTransform = CGRect(x: targetRect.origin.x, y: targetRect.origin.y, width: 0, height: 0)
             window.setFrame(targetTransform, display: true, animate: false)
         } else {
             window.setFrame(CGRect(x: 0, y: 0, width: 10, height: 10), display: false, animate: false)

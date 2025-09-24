@@ -4,3 +4,9 @@ let googleAPI = "https://generativelanguage.googleapis.com/v1beta/models/gemini-
 let defaultTeamId = "31515c14-580c-42b1-97b8-9842764a55a9"
 let defaultTenant = "defaultTenant"
 let defaultOrganisation = "defaultTenant"
+
+// Web Billing URL Scheme
+let webBillingScheme = "promptshields"
+let webBillingSuccessURL = "\(webBillingScheme)://billing/success"
+let webBillingCancelURL = "\(webBillingScheme)://billing/cancel"
+let webBillingReturnURL = "\(webBillingScheme)://billing/return"

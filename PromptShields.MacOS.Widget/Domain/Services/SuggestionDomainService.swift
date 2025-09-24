@@ -76,6 +76,9 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         try await persistenceManager.syncLocalWithRemote(domains: suggestions)
     }
     
+    func fetchSuggestionGroup() async throws {
+    }
+    
     func fetchSuggestionTypes() async throws {
         let suggestionResult = try await suggestionNetworkService.fetchSuggestionTypes()
         let suggestion = suggestionResult.toDomain()

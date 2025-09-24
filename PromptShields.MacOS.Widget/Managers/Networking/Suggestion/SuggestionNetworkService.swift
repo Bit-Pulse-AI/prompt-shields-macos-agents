@@ -43,6 +43,15 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
     
+    func fetchSuggestionGroup() async throws -> ListResponse<SuggestionTypeAPIResponse> {
+        let request = try RequestBuilder().request(
+            url: "\(baseURL)/\(path)/types",
+            method: .GET,
+            headers: keychainManager.applicationJSONAuthorizedHeader
+        )
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
+    }
+    
     func fetchSuggestionTypes() async throws -> ListResponse<SuggestionTypeAPIResponse> {
         let request = try RequestBuilder().request(
             url: "\(baseURL)/\(path)/types",

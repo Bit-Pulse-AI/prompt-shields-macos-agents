@@ -15,6 +15,7 @@ struct ActionView: View {
     )
     @State private var isProcessing = false
     @State private var isViewActive = true
+    @State private var actionText: String = ""
     
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
@@ -53,6 +54,37 @@ struct ActionView: View {
                 .padding()
                 .background(.white)
                 .cornerRadius(8)
+            case .action:
+                VStack {
+                    ScrollView {
+                        Text(actionText)
+                            .foregroundStyle(.black)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(nil)
+                    }
+                    HStack {
+                        Button {
+                            if let axUIElement = overlayStateModel.elementInfo?.element {
+                                Task {
+                                    await replaceText(axUIElement: axUIElement)
+                                }
+                            }
+                        } label: {
+                            Text("Agree & Update")
+                        }
+                        .buttonStyle(ButtonStyleGreen())
+                        Button {
+                            overlayStateModel.actionToolState = .idle
+                        } label: {
+                            Text("Keep Original")
+                        }
+                        .buttonStyle(ButtonStyleRed())
+                    }
+                }
+                .padding()
+                .background(.white)
+                .cornerRadius(8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .options:
                 VStack {
                     VStack(alignment: .leading) {
@@ -80,21 +112,13 @@ struct ActionView: View {
                                             
                                             if let axUIElement = overlayStateModel?.elementInfo?.element {
                                                 if await isValidAXUIElement(axUIElement) {
-                                                    Task { [weak axUIElement] in
-                                                        guard let axUIElement else {
-                                                            return
-                                                        }
-                                                        do {
-                                                            try await TextInjector.shared.injectText(result.model.suggestedText, into: axUIElement)
-                                                        } catch {
-                                                            logger.error("Error injecting text: \(error)")
-                                                        }
-                                                    }
+                                                    actionText = result.model.suggestedText
+                                                    overlayStateModel?.actionToolState = .action
                                                 } else {
                                                     logger.error("AXUIElement is no longer valid")
+                                                    overlayStateModel?.actionToolState = .idle
                                                 }
                                             }
-                                            overlayStateModel?.actionToolState = .idle
                                         } catch is CancellationError {
                                             logger.warning("LLM processing was cancelled")
                                             overlayStateModel?.actionToolState = .idle
@@ -126,6 +150,20 @@ struct ActionView: View {
             isViewActive = false
             // Cancel any ongoing processing
             isProcessing = false
+        }
+    }
+    
+    func replaceText(axUIElement: AXUIElement) async {
+        if await isValidAXUIElement(axUIElement) {
+            Task {
+                do {
+                    try await TextInjector.shared.injectText(actionText, into: axUIElement)
+                    self.overlayStateModel.actionToolState = .idle
+                } catch {
+                    logger.error("Error injecting text: \(error)")
+                    self.overlayStateModel.actionToolState = .idle
+                }
+            }
         }
     }
     

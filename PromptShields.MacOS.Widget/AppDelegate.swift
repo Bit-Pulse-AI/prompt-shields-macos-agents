@@ -179,7 +179,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
     
-    
     @MainActor
     private func cleanupHangingWindows(windowIdentifiers: [String] = [MainApp.mainWindow, MainApp.overlayRender, MainApp.actionRender]) {
         logger.info("Cleaning up hanging windows...")
