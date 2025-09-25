@@ -5,6 +5,7 @@ struct SuggestionRequest: SendableEncodable {
     let suggestionGroupId: String
     let suggestionType: String
     let llmProvider: String
+    let teamId: String
     let application: String
     
     enum CodingKeys: String, CodingKey {
@@ -12,6 +13,7 @@ struct SuggestionRequest: SendableEncodable {
         case suggestionGroupId = "suggestion_group_id"
         case suggestionType = "suggestion_type"
         case llmProvider = "llm_provider"
+        case teamId = "team_id"
         case application
     }
 }

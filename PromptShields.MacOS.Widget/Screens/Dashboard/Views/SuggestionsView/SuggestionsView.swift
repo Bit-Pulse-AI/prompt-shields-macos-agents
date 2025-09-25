@@ -10,20 +10,36 @@ struct SuggestionsView: View {
         sortDescriptors: [SortDescriptor(\.suggestionName, order: .reverse)],
         mapping: DefaultMapping<SuggestionType>.self
     )
+    @StateObject private var currentSuggestionGroupQueryable = ObservableQueryable(
+        sortDescriptors: [SortDescriptor(\.title, order: .reverse)],
+        mapping: DefaultMapping<SuggestionGroup>.self
+    )
     @State private var isLoadingNextPage: Bool = false
     @State private var isLoading: Bool = false
+    
     @Environment(\.suggestionDomainService) private var suggestionDomainService
+    
+    private var currentSuggestionGroup: SuggestionGroup? {
+        return currentSuggestionGroupQueryable.wrappedValue.first
+    }
     
     private var suggestionsTypes: [SuggestionType] {
         return suggestionsTypeQueryable.wrappedValue
     }
+    
     private var currentSuggestions: [Suggestion] {
         return suggestionsQueryable.wrappedValue
     }
     
-    var hasCurrentSuggestions: Bool {
+    private var suggestionsCount: Int {
+        currentSuggestionGroup?.model.suggestionCount ?? 0
+    }
+    
+    private var hasCurrentSuggestions: Bool {
         currentSuggestions.count > 0
     }
+    
+    private let suggestionsPerPage: Int = 2
     
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
@@ -47,20 +63,36 @@ struct SuggestionsView: View {
     private func loadInitialData() async {
         isLoading = true
         do {
+            let suggestionGroup = try await suggestionDomainService.fetchCurrentSuggestionGroup()
+            let totalSuggestions = suggestionGroup.model.suggestionCount
+            guard currentSuggestions.count < totalSuggestions && totalSuggestions > 0  else {
+                isLoading = false
+                return
+            }
+            let numberOfItemsPerPage = min(suggestionsPerPage, totalSuggestions - currentSuggestions.count)
             try await suggestionDomainService.fetchSuggestionTypes()
-            try await suggestionDomainService.list(offset: 0, limit: 2)
+            try await suggestionDomainService.list(offset: 0, limit: numberOfItemsPerPage)
         } catch {
+            isLoading = false
             logger.error("Error fetching user details \(error)")
         }
         try? await Task.sleep(for: .seconds(1))
         isLoading = false
     }
     
-    private func loadNextPage() async {
+    private func loadNextPageIfNeeded() async {
         do {
             isLoadingNextPage = true
-            try await suggestionDomainService.list(offset: currentSuggestions.count, limit: 2)
+            let suggestionGroup = try await suggestionDomainService.fetchCurrentSuggestionGroup()
+            let totalSuggestions = suggestionGroup.model.suggestionCount
+            guard currentSuggestions.count < totalSuggestions && totalSuggestions > 0  else {
+                isLoading = false
+                return
+            }
+            let numberOfItemsPerPage = min(suggestionsPerPage, totalSuggestions - currentSuggestions.count)
+            try await suggestionDomainService.list(offset: currentSuggestions.count, limit: numberOfItemsPerPage)
         } catch {
+            isLoading = false
             logger.error("Error fetching next page \(error)")
         }
         try? await Task.sleep(for: .seconds(1))
@@ -97,10 +129,10 @@ struct SuggestionsView: View {
                         DetailedSuggestionCard(suggestion: suggestion) { type in
                             suggestionsTypes.first { $0.model.suggestionType == type }?.model.suggestionName ?? "n/a"
                         }
-                        if currentSuggestions.last?.model.uuid == suggestion.model.uuid && !isLoadingNextPage {
+                        if currentSuggestions.last?.model.uuid == suggestion.model.uuid && currentSuggestions.count < suggestionsCount {
                             ProgressView()
                                 .task {
-                                    await loadNextPage()
+                                    await loadNextPageIfNeeded()
                                 }
                         }
                     }

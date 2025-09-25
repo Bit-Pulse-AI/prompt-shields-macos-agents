@@ -154,7 +154,6 @@ struct MainApp: App {
     }
     
     private func updateOverlayWindow(isInitial: Bool) {
-        print(overlayStateModel.elementInfo?.frame)
         if overlayStateModel.elementInfo?.frame == nil {
             overlayStateModel.actionToolState = .idle
         }

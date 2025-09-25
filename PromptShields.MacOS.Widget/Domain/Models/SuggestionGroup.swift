@@ -10,7 +10,7 @@ struct SuggestionGroup: Domain {
         let title: String
         let description: String
         let teamId: String
-        let suggestionsCount: Int
+        let suggestionCount: Int
         let createdAt: Date
     }
     
@@ -35,7 +35,7 @@ struct SuggestionGroup: Domain {
         persistent.title = model.title.encrypt
         persistent.suggestionDescription = model.description.encrypt
         persistent.teamId = model.teamId.encrypt
-        persistent.suggestionsCount = model.suggestionsCount
+        persistent.suggestionCount = model.suggestionCount
         persistent.createdAt = model.createdAt
         return persistent
     }
@@ -46,7 +46,7 @@ struct SuggestionGroup: Domain {
             title: persistent.title.decrypt,
             description: persistent.suggestionDescription.decrypt,
             teamId: persistent.teamId.decrypt,
-            suggestionsCount: persistent.suggestionsCount,
+            suggestionCount: persistent.suggestionCount,
             createdAt: persistent.createdAt
         )
         return SuggestionGroup(model: model, identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
@@ -58,15 +58,15 @@ struct SuggestionGroupAPIResponse: APIResponse {
     let title: String
     let description: String
     let teamId: String
-    let suggestionsCount: Int
+    let suggestionCount: Int
     let createdAt: Date
     
     enum CodingKeys: String, CodingKey {
         case uuid = "id"
-        case title = "original_text"
-        case description = "suggested_text"
+        case title = "title"
+        case description = "description"
         case teamId = "team_id"
-        case suggestionsCount = "suggestions_count"
+        case suggestionCount = "suggestion_count"
         case createdAt = "created_at"
     }
     
@@ -75,7 +75,7 @@ struct SuggestionGroupAPIResponse: APIResponse {
                                                          title: title,
                                                          description: description,
                                                          teamId: teamId,
-                                                         suggestionsCount: suggestionsCount,
+                                                         suggestionCount: suggestionCount,
                                                          createdAt: createdAt)
         return SuggestionGroup(model: model)
     }
@@ -91,7 +91,7 @@ final class SuggestionGroupPersistentModel: UpdatablePersistentModel {
     var title: String = ""
     var suggestionDescription: String = ""
     var teamId: String = ""
-    var suggestionsCount: Int = 0
+    var suggestionCount: Int = 0
     var createdAt: Date = Date()
     
     init() {}
@@ -101,7 +101,7 @@ final class SuggestionGroupPersistentModel: UpdatablePersistentModel {
         self.title = suggestion.title
         self.suggestionDescription = suggestion.suggestionDescription
         self.teamId = suggestion.teamId
-        self.suggestionsCount = suggestion.suggestionsCount
+        self.suggestionCount = suggestion.suggestionCount
         self.createdAt = suggestion.createdAt
     }
 }

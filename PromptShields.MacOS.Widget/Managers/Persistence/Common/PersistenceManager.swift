@@ -45,6 +45,7 @@ protocol PersistenceManager: Sendable {
 @ModelActor
 actor PersistenceManagerImpl: PersistenceManager {
     static let entity: [any PersistentModel.Type] = [SuggestionTypePersistentModel.self,
+                                                     SuggestionGroupPersistentModel.self,
                                                      SuggestionPersistentModel.self,
                                                      OrganisationPersistentModel.self,
                                                      SubscriptionPersistentModel.self,
@@ -76,10 +77,6 @@ actor PersistenceManagerImpl: PersistenceManager {
         let persistent = domain.toPersistentModel(context: modelContext)
         modelContext.insert(persistent)
         try modelContext.save()
-        guard let persistent = modelContext.model(for: persistent.persistentModelID) as? D.P else {
-            throw PersistenceManagerError.missingModel
-        }
-        
         return D.fromPersistentModel(persistent)
     }
     

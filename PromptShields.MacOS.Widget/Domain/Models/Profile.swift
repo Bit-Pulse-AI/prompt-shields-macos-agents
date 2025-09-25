@@ -73,7 +73,7 @@ struct ProfileAPIResponse: APIResponse {
         case defaultTenantId = "default_tenant_id"
         case defaultOrganisationId = "default_organisation_id"
         case defaultSubscriptionId = "default_subscription_id"
-        case defaultSuggestionGroupId = "default_suggestions_group_id"
+        case defaultSuggestionGroupId = "default_suggestion_group_id"
         case defaultTeamId = "default_team_id"
         case defaultProjectId = "default_project_id"
     }

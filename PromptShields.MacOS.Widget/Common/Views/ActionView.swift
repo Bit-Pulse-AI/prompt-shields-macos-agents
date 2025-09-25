@@ -105,6 +105,7 @@ struct ActionView: View {
                                                                         .AZURE_PROMPTSHIELDS
                                                                         .rawValue,
                                                     suggestionGroupId: profileDomainService.currentProfile.model.defaultSuggestionGroupId,
+                                                    teamId: profileDomainService.currentProfile.model.defaultTeamId,
                                                         suggestionType: suggestionType.model.suggestionType,
                                                         application: overlayStateModel?.elementInfo?.applicationName ?? "n/a")
 

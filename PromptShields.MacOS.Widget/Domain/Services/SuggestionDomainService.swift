@@ -21,9 +21,11 @@ protocol SuggestionDomainService: Sendable {
     func process(text: String,
                  llmProvider: String,
                  suggestionGroupId: String,
+                 teamId: String,
                  suggestionType: String,
                  application: String) async throws -> Suggestion
     func fetchSuggestionTypes() async throws
+    func fetchCurrentSuggestionGroup() async throws -> SuggestionGroup
     func list(offset: Int,
               limit: Int) async throws
 }
@@ -46,11 +48,13 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
     func process(text: String,
                  llmProvider: String,
                  suggestionGroupId: String,
+                 teamId: String,
                  suggestionType: String,
                  application: String) async throws -> Suggestion {
-        let suggestionResult = try await suggestionNetworkService.process(text: text,
+        let suggestionResult = try await suggestionNetworkService.analyze(text: text,
                                                                           llmProvider: llmProvider,
                                                                           suggestionGroupId: suggestionGroupId,
+                                                                          teamId: teamId,
                                                                           suggestionType: suggestionType,
                                                                           application: application)
         return suggestionResult.toDomain()
@@ -76,7 +80,17 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         try await persistenceManager.syncLocalWithRemote(domains: suggestions)
     }
     
-    func fetchSuggestionGroup() async throws {
+    func fetchSuggestionGroup(suggestionGroupId: String, teamId: String) async throws -> SuggestionGroup {
+        let suggestionGroup = try await suggestionNetworkService.fetchSuggestionGroup(suggestionGroupId: suggestionGroupId, teamId: teamId)
+        return try await persistenceManager.syncLocalWithRemote(domain: suggestionGroup.toDomain())
+    }
+    
+    func fetchCurrentSuggestionGroup() async throws -> SuggestionGroup {
+        let currentProfile = try await profileDomainService.currentProfile.model
+        let suggestionGroupId = currentProfile.defaultSuggestionGroupId
+        let teamId = currentProfile.defaultTeamId
+        let currentSuggestionGroup = try await fetchSuggestionGroup(suggestionGroupId: suggestionGroupId, teamId: teamId)
+        return currentSuggestionGroup
     }
     
     func fetchSuggestionTypes() async throws {
