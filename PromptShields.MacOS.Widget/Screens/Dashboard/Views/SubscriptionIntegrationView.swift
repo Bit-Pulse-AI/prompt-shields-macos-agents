@@ -1,91 +1,123 @@
 import SwiftUI
+import os
 
-/// A simple integration view that can be added to your existing dashboard
+enum BillingPeriod: String {
+    case yearly
+    case monthly
+}
+
 struct SubscriptionIntegrationView: View {
-    @Environment(\.subscriptionDomainService) private var subscriptionService
+    @Environment(\.subscriptionDomainService) private var subscriptionDomainService
+    @Environment(\.profileDomainService) private var profileDomainService
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
-    
-    @State private var subscription: Subscription?
+
+    private let availableSubscriptionTiers = [SubscriptionTier.tin, SubscriptionTier.bronze]
+    private let pricingPlans = [PricingPlan]()
+
+    @State private var checkout: Checkout?
+    @State private var currentSubscription: Subscription?
     @State private var isLoading = false
     @State private var showingSubscriptionDetail = false
-    
+
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier!,
+        category: String(describing: ActionView.self)
+    )
+
     var body: some View {
-        HStack(spacing: 12) {
-            // Subscription status indicator
-            statusIndicator
-            
-            // Subscription info
-            VStack(alignment: .leading, spacing: 4) {
-                Text(subscription?.model.name ?? "Free Plan")
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                
-//                Text(subscription?.subscriptionStatus.displayText ?? "No active subscription")
-//                    .font(.caption)
-//                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-            
-            // Action button
-//            Button(subscription?.model.isActive == true ? "Manage" : "Upgrade") {
-//                showingSubscriptionDetail = true
-//            }
-            .buttonStyle(.bordered)
-        }
-        .padding()
+        subscriptionStatusView
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(8)
-        .onAppear {
-            Task {
-                await loadSubscription()
+        .sheet(isPresented: $showingSubscriptionDetail) {
+
+        }
+//        .billingResultOverlay(overlayStateModel: overlayStateModel)
+        .frame(alignment: .leading)
+        .task {
+            do {
+                try await loadCurrentSubscription()
+            } catch {
+                print("Error \(error)")
+                // TBD: Add toast
             }
         }
-        .sheet(isPresented: $showingSubscriptionDetail) {
-            BillingSubscriptionView()
-        }
-        .billingResultOverlay(overlayStateModel: overlayStateModel)
     }
-    
-    private var statusIndicator: some View {
-        Group {
-//            if isLoading {
-//                ProgressView()
-//                    .scaleEffect(0.8)
-//            } else if let subscription = subscription {
-//                Image(systemName: subscription.subscriptionStatus.systemImageName)
-//                    .foregroundColor(colorForStatus(subscription.subscriptionStatus))
-//                    .font(.title2)
-//            } else {
-//                Image(systemName: "crown.fill")
-//                    .foregroundColor(.orange)
-//                    .font(.title2)
-//            }
+
+    @ViewBuilder
+    private var subscriptionStatusView: some View {
+        if isLoading {
+            ProgressView()
+                .scaleEffect(0.8)
+        } else if let currentSubscription {
+            switch currentSubscription.model.tier {
+            case SubscriptionTier.tin.rawValue:
+                HStack {
+                    let monthlyPlan = PricingPlan(subscriptionTier: .bronze, billingPeriod: .monthly, features: ["Monthly premium offering"])
+                    PricingPlanCard(plan: monthlyPlan) {
+                        Task {
+                            await subscribeUser(subscriptionTier: monthlyPlan.subscriptionTier, billingPeriod: monthlyPlan.billingPeriod)
+                        }
+                    }
+                    Spacer()
+                    let yearlyPlan = PricingPlan(subscriptionTier: .bronze, billingPeriod: .yearly, features: ["Yearly premium deal!"])
+                    PricingPlanCard(plan: yearlyPlan) {
+                        Task {
+                            await subscribeUser(subscriptionTier: yearlyPlan.subscriptionTier, billingPeriod: yearlyPlan.billingPeriod)
+                        }
+                    }
+                }
+            case SubscriptionTier.bronze.rawValue:
+                Text("You're already a premium user - thinking about an upgrade ?")
+                if currentSubscription.model.stripeBillingPeriod == BillingPeriod.monthly.rawValue {
+                    let yearlyPlan = PricingPlan(subscriptionTier: .bronze, billingPeriod: .yearly, features: ["Upgrade now for a better deal!"])
+                    PricingPlanCard(plan: yearlyPlan) {
+                        Task {
+                            await subscribeUser(subscriptionTier: yearlyPlan.subscriptionTier, billingPeriod: yearlyPlan.billingPeriod)
+                        }
+                    }
+                }
+                Button("Cancel subscription") {
+                    print("Cancel sub")
+                }
+            default:
+                Image(systemName: "crown.fill")
+                    .foregroundColor(.orange)
+                    .font(.title2)
+            }
+        } else {
+            Image(systemName: "crown.fill")
+                .foregroundColor(.orange)
+                .font(.title2)
         }
     }
-    
-//    private func colorForStatus(_ status: SubscriptionStatus) -> Color {
-//        switch status.color {
-//        case "green":
-//            return .green
-//        case "orange":
-//            return .orange
-//        case "red":
-//            return .red
-//        default:
-//            return .secondary
-//        }
-//    }
-    
-    private func loadSubscription() async {
+
+    private func subscribeUser(subscriptionTier: SubscriptionTier, billingPeriod: BillingPeriod) async {
         isLoading = true
-        
         do {
-            subscription = try await subscriptionService.currentSubscription
+            let profile = try await profileDomainService.currentProfile.model
+            let organisationId = profile.defaultOrganisationId
+            let tenantId = profile.defaultTenantId
+
+            checkout = try await subscriptionDomainService.checkout(
+                subscriptionTier: SubscriptionTier.bronze.rawValue,
+                organisationId: organisationId,
+                tenantId: tenantId,
+                billingPeriod: billingPeriod.rawValue,
+                successURL: "https://www.google.com",
+                cancelURL: "https://www.google.com"
+            )
         } catch {
-            subscription = nil
+            logger.error("error \(error)")
+            checkout = nil
         }
-        
+
+        isLoading = false
+    }
+
+    @MainActor
+    private func loadCurrentSubscription() async throws {
+        isLoading = true
+        currentSubscription = try await subscriptionDomainService.currentSubscription
         isLoading = false
     }
 }

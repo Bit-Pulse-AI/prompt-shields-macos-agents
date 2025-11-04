@@ -5,33 +5,33 @@ import os
 /// Manages token refresh operations independently to avoid circular dependencies
 actor TokenRefreshManager {
     static let shared = TokenRefreshManager()
-    
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: TokenRefreshManager.self)
     )
-    
+
     private var isRefreshing = false
-    
+
     private init() {}
-    
+
     /// Attempts to refresh the access token using the stored refresh token
     func refreshToken() async throws -> UserAPIResponse {
         // Prevent multiple simultaneous refresh attempts
         guard !isRefreshing else {
             throw AuthError.tokenRefreshFailed
         }
-        
+
         isRefreshing = true
         defer { isRefreshing = false }
-        
+
         let keychainManager = KeychainManagerImpl.shared
         let credentials = try keychainManager.loadUserCredentials()
-        
+
         guard let refreshToken = credentials.refreshToken else {
             throw AuthError.noRefreshTokenAvailable
         }
-        
+
         return try await withCheckedThrowingContinuation { continuation in
             Auth0
                 .authentication()

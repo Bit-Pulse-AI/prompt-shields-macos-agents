@@ -14,13 +14,13 @@ struct EncryptResult {
 extension String {
     func encrypt(publicKey: String, info: String) async throws -> EncryptResult? {
         let key = try P521.KeyAgreement.PublicKey(pemRepresentation: publicKey)
-        
+
         let ephemeralPrivKey = P521.KeyAgreement.PrivateKey()
         let ephemeralPubKey = ephemeralPrivKey.publicKey
-        
+
         // Perform ECDH key agreement
         let sharedSecret = try ephemeralPrivKey.sharedSecretFromKeyAgreement(with: key)
-        
+
         // Derive symmetric AES key from shared secret
         let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
             using: SHA256.self,
@@ -28,18 +28,18 @@ extension String {
             sharedInfo: Data(info.utf8),
             outputByteCount: 32
         )
-        
+
         // Encrypt secret using AES-GCM
         let secretData = data(using: .utf8)!
         let nonce = AES.GCM.Nonce()
         let sealedBox = try AES.GCM.seal(secretData, using: symmetricKey, nonce: nonce)
-        
+
         // Export ephemeral public key as PEM string
         let ephemeralPubKeyPem = ephemeralPubKey.pemRepresentation
-        
+
         return EncryptResult(ephemeralPubKeyPem: ephemeralPubKeyPem, encryptedSecret: sealedBox.ciphertext + sealedBox.tag, nonce: nonce)
     }
-    
+
     var url: URL {
         get throws {
             guard let url = URL(string: self) else {
@@ -53,7 +53,7 @@ extension String {
             try decrypt.url
         }
     }
-    
+
     func toBase64() -> String {
         return Data(self.utf8).base64EncodedString()
     }
@@ -65,7 +65,7 @@ extension String {
         }
         return decoded
     }
-    
+
     var sha512: String {
         get throws {
             guard let data = data(using: .utf8) else {
@@ -78,7 +78,7 @@ extension String {
             return hashString
         }
     }
-    
+
     func encryptString(using key: SymmetricKey) throws -> String {
         guard let data = data(using: .utf8) else {
             throw StringEncryptionError.failedEncodingStringToData
@@ -100,12 +100,12 @@ extension String {
             return nil
         }
     }
-    
+
     var encrypt: String {
         do {
             let key = try KeychainManagerImpl.shared.loadEncryptionKey()
             let encryptedString = try encryptString(using: key)
-            
+
             return encryptedString
         } catch {
             fatalError("E100: Please contact technical support.")
@@ -123,43 +123,43 @@ extension String {
             fatalError("E101: Please contact technical support.")
         }
     }
-    
+
     func replaceMultiple(_ replacements: [StringReplacement]) -> String {
         let sortedReplacements = replacements.sorted { $0.startPosition < $1.startPosition }
-        
+
         var result = self
         var offset = 0
-        
+
         for replacement in sortedReplacements {
             let adjustedStart = replacement.startPosition + offset
             let adjustedEnd = replacement.endPosition + offset
-    
+
             guard adjustedStart >= 0 && adjustedEnd <= result.count && adjustedStart <= adjustedEnd else {
                 continue
             }
-            
+
             let startIndex = result.index(result.startIndex, offsetBy: adjustedStart)
             let endIndex = result.index(result.startIndex, offsetBy: adjustedEnd)
             let range = startIndex..<endIndex
-            
+
             let originalLength = result.distance(from: startIndex, to: endIndex)
             let newLength = replacement.replacementText.count
             let lengthDifference = newLength - originalLength
-            
+
             result.replaceSubrange(range, with: replacement.replacementText)
-            
+
             offset += lengthDifference
         }
-        
+
         return result
     }
-    
+
     func replaceMultipleOptimized(_ replacements: [StringReplacement]) -> String {
         // Sort replacements by start position (descending to avoid position shifts)
         let sortedReplacements = replacements.sorted { $0.startPosition > $1.startPosition }
-        
+
         var result = self
-        
+
         for replacement in sortedReplacements {
             // Validate positions
             guard replacement.startPosition >= 0 &&
@@ -167,16 +167,16 @@ extension String {
                   replacement.startPosition <= replacement.endPosition else {
                 continue
             }
-            
+
             // Create NSRange for the replacement
             let range = NSRange(location: replacement.startPosition,
                               length: replacement.endPosition - replacement.startPosition)
-            
+
             // Perform replacement using NSString
             let nsString = result as NSString
             result = nsString.replacingCharacters(in: range, with: replacement.replacementText)
         }
-        
+
         return result
     }
 }

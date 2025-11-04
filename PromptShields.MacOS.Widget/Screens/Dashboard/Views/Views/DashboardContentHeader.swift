@@ -4,24 +4,24 @@ struct DashboardContentHeaderView: View {
     @EnvironmentObject private var overlayState: OverlayStateModel
     @EnvironmentObject private var dashboardState: DashboardStateModel
     @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
-    
+
     @StateObject private var suggestionsQueryable = ObservableQueryable(
         sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)],
         mapping: DefaultMapping<Suggestion>.self
     )
-    
+
     private var currentSuggestions: [Suggestion] {
         return suggestionsQueryable.wrappedValue
     }
-    
+
     var hasCurrentApplication: Bool {
         overlayState.elementInfo?.applicationBundleId != nil
     }
-    
+
     var applicationStatusIndicator: String {
         overlayState.elementInfo?.applicationName ?? "None"
     }
-    
+
     var suggestionStatusIndicator: Int {
         currentSuggestions.count
     }
@@ -33,14 +33,14 @@ struct DashboardContentHeaderView: View {
                     Text("PromptShields Assistant")
                         .font(.title2)
                         .fontWeight(.bold)
-                    
+
                     Text(dashboardState.isActive ? "Active" : "Inactive")
                         .font(.caption)
                         .foregroundColor(dashboardState.isActive ? .green : .secondary)
                 }
-                
+
                 Spacer()
-                
+
                 // Toggle Button
                 Button {
                     if dashboardState.isActive {
@@ -66,7 +66,7 @@ struct DashboardContentHeaderView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
             }
-            
+
             // Status Indicators
 //            if dashboardState.isActive {
 //                HStack(spacing: 16) {

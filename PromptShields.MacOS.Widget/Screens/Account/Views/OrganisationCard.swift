@@ -6,7 +6,7 @@ struct OrganisationCard: View {
     let onDelete: () -> Void
     let onCreateSubscription: () -> Void
     let onCreateTeam: () -> Void
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -14,14 +14,14 @@ struct OrganisationCard: View {
                     Text(organisation.model.name)
                         .font(NSFont.heading4.swiftUIFont)
                         .foregroundStyle(Color.onSurface)
-                    
+
                     if let description = organisation.model.description {
                         Text(description)
                             .font(NSFont.body2.swiftUIFont)
                             .foregroundStyle(Color.onSurfaceVariant)
                     }
                 }
-                
+
 //                Spacer()
 //                
 //                Menu {
@@ -43,7 +43,7 @@ struct OrganisationCard: View {
 //                        .foregroundStyle(Color.onSurfaceVariant)
 //                }
             }
-            
+
             HStack(spacing: 8) {
                 Button("Create Subscription") {
                     onCreateSubscription()
@@ -54,7 +54,7 @@ struct OrganisationCard: View {
                     borderColor: .blue,
                     cornerRadius: 6
                 ))
-                
+
                 Button("Create Team") {
                     onCreateTeam()
                 }

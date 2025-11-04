@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ChevronButton: View {
     @Binding var isCollapsed: Bool
-    
+
     var body: some View {
         VStack(spacing: .zero) {
             Button {

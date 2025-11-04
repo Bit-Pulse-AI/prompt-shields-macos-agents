@@ -27,7 +27,7 @@ struct DashboardSidebarView: View {
     @Environment(\.userDomainService) private var userDomainService
     @State var accountPhoto: URL?
     private let buttonStyle = DashboardButtonStyle()
-    
+
     var body: some View {
         SideBarContainerView(sidebarWidth: Binding(get: {
             DashboardViewParameters.sidebarWidth(isCollapsed: dashboardState.isSideMenuCollapsed)
@@ -35,7 +35,7 @@ struct DashboardSidebarView: View {
             VStack {
                 DashboardMenuHeaderView()
                 DashboardMenuView()
-                
+
                 Button {
                     dashboardState.contentState = .controlPanel
                 } label: {
@@ -68,13 +68,13 @@ struct DashboardSidebarView: View {
             accountPhoto = try? await userDomainService.currentUser.model.photoURL
         }
     }
-    
+
     @ViewBuilder
     private var userInfoView: some View {
         UserInfoView()
             .padding(.vertical, 24)
     }
-    
+
     @ViewBuilder
     private var compactSidebar: some View {
         compactLogo
@@ -100,8 +100,8 @@ struct DashboardSidebarView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .offset(x: 1, y: 1)
     }
-    
+
     private var chevronButton: some View {
         ChevronButton(isCollapsed: $dashboardState.isSideMenuCollapsed)
     }
-} 
+}

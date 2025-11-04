@@ -18,17 +18,17 @@ protocol WebBillingNetworkService: NetworkService {
 struct WebBillingNetworkServiceImpl: WebBillingNetworkService {
     @Inject
     private var networkManager: NetworkManager
-    
+
     @Inject
     private var keychainManager: KeychainManager
-    
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: WebBillingNetworkService.self)
     )
-    
+
     // MARK: - Customer Management
-    
+
 //    func createCustomer(userId: String, email: String?, name: String?) async throws -> WebBillingCustomer {
 //        let createCustomer = CreateCustomerRequest(
 //            userId: userId,
@@ -58,7 +58,7 @@ struct WebBillingNetworkServiceImpl: WebBillingNetworkService {
 //            throw WebBillingError.networkError(error)
 //        }
 //    }
-    
+
 //    func getCustomer(customerId: String) async throws -> WebBillingCustomer {
 //        do {
 //            let request = try RequestBuilder().request(

@@ -9,7 +9,7 @@ protocol TenantNetworkService: Sendable {
 struct TenantNetworkServiceImpl: TenantNetworkService {
     let networkManager: NetworkManager
     let keychainManager: KeychainManager
-    
+
     func read(tenantId: String) async throws -> TenantAPIResponse {
         let request = try RequestBuilder().request(
             url: "\(baseURL)/tenants/\(tenantId)",

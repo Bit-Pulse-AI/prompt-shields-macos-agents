@@ -5,12 +5,12 @@ struct SideBarContainerView<FullSideBarView: View,
                             CompactSideBarMakeView: View,
                             ChevronButtonMakeView: View>: View {
     @Binding private var sidebarWidth: CGFloat
-    
+
     private let fullSideBarMakeView: () -> FullSideBarView
     private let userDetailInfoMakeView: () -> ChannelDetailInfoView
     private let compactSideBarMakeView: () -> CompactSideBarMakeView
     private let chevronButtonMakeView: () -> ChevronButtonMakeView
-    
+
     init(sidebarWidth: Binding<CGFloat>,
          fullSideBarMakeView: @escaping () -> FullSideBarView,
          userDetailInfoMakeView: @escaping () -> ChannelDetailInfoView,
@@ -22,7 +22,7 @@ struct SideBarContainerView<FullSideBarView: View,
         self.compactSideBarMakeView = compactSideBarMakeView
         self.chevronButtonMakeView = chevronButtonMakeView
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: .zero) {
             if sidebarWidth > 110 {

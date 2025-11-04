@@ -35,18 +35,18 @@ struct TenantDomainServiceImpl: TenantDomainService {
     private var tenantNetworkService: TenantNetworkService
     @Inject
     private var profileDomainService: ProfileDomainService
-    
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: TenantDomainService.self)
     )
-    
+
     var currentTenant: Tenant {
         get async throws {
             try await currentTenant(refresh: false)
         }
     }
-    
+
     func currentTenant(refresh: Bool) async throws -> Tenant {
         let fetchRemote: () async throws -> Tenant = {
             try await getTenant(
@@ -69,7 +69,7 @@ struct TenantDomainServiceImpl: TenantDomainService {
             }
         }
     }
-    
+
     private func getTenant(tenantId: String) async throws -> Tenant {
         let result = try await tenantNetworkService.read(tenantId: tenantId)
         let domain = result.toDomain()

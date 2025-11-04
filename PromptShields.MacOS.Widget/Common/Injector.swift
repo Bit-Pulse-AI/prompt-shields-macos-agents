@@ -7,7 +7,7 @@ struct Inject<T>: Sendable {
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: Inject.self)
     )
-    
+
     var wrappedValue: T {
         if T.self == TeamDomainService.self {
             return TeamDomainServiceImpl() as! T

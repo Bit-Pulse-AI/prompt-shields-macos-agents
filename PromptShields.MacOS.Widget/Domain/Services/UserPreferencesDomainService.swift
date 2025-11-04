@@ -17,7 +17,7 @@ struct UserPreferencesDomainServiceKey: EnvironmentKey {
 
 protocol UserPreferencesDomainService: Sendable {
     var currentUserPreferences: UserPreferences { get async throws }
-    
+
     func getPreferences() async throws -> UserPreferences
     func currentUserPreferences(refresh: Bool) async throws -> UserPreferences
 }
@@ -29,18 +29,18 @@ struct UserPreferencesDomainServiceImpl: UserPreferencesDomainService {
     private var keychainManager: KeychainManager
     @Inject
     private var userDomainService: UserDomainService
-    
+
     private let logger: os.Logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: UserDomainServiceImpl.self)
     )
-    
+
     var currentUserPreferences: UserPreferences {
         get async throws {
             try await currentUserPreferences(refresh: false)
         }
     }
-    
+
     func currentUserPreferences(refresh: Bool) async throws -> UserPreferences {
         if refresh {
             return try await persistenceManager
@@ -64,11 +64,11 @@ struct UserPreferencesDomainServiceImpl: UserPreferencesDomainService {
             }
         }
     }
-    
+
     func savePreferences(preferences: UserPreferences) async throws {
         try await persistenceManager.update(domain: preferences)
     }
-    
+
     func getPreferences() async throws -> UserPreferences {
         let preference = UserPreferences(model: .init(uuid: UUID().uuidString,
                                                       isEnabled: true,

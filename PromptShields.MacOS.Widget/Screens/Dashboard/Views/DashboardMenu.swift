@@ -2,7 +2,7 @@ import SwiftUI
 
 struct DashboardMenuView: View {
     @EnvironmentObject private var dashboardState: DashboardStateModel
-    
+
     var body: some View {
         HStack(alignment: .center, spacing: .zero) {
             Button {

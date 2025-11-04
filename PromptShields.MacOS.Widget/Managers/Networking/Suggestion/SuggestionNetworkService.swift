@@ -12,10 +12,10 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
     private var networkManager: NetworkManager
     @Inject
     private var keychainManager: KeychainManager
-    
+
     private let suggestionPath = "suggestion"
     private let suggestionGroupPath = "suggestion_group"
-    
+
     func analyze(text: String,
                  llmProvider: String,
                  suggestionGroupId: String,
@@ -36,7 +36,7 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         )
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
-    
+
     func fetchSuggestionTypes() async throws -> ListResponse<SuggestionTypeAPIResponse> {
         let request = try RequestBuilder().request(
             url: "\(baseURL)/\(suggestionPath)/types",
@@ -45,7 +45,7 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         )
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
-    
+
     func list(suggestionGroupId: String, llmProvider: String, teamId: String, offset: Int, limit: Int) async throws -> PaginatedResponse<SuggestionAPIResponse> {
         let request = try RequestBuilder().request(
             url: "\(baseURL)/teams/\(teamId)/suggestion_group/\(suggestionGroupId)/suggestions",
@@ -55,7 +55,7 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         )
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
-    
+
     func fetchSuggestionGroup(suggestionGroupId: String, teamId: String) async throws -> SuggestionGroupAPIResponse {
         let request = try RequestBuilder().request(
             url: "\(baseURL)/teams/\(teamId)/suggestion_group/\(suggestionGroupId)",

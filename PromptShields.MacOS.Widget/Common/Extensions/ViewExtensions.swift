@@ -14,7 +14,7 @@ extension View {
     func navigationTitle(navigationTitle: String?) -> some View {
         modifier(NavigationTitleModifier(navigationTitle: navigationTitle))
     }
-    
+
     func border(width: CGFloat, edges: [Edge], color: Color) -> some View {
         overlay(EdgeBorder(width: width, edges: edges).foregroundColor(color))
     }

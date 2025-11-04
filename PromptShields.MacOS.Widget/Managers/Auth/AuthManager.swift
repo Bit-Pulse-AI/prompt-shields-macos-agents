@@ -18,7 +18,7 @@ enum AuthError: Error, LocalizedError {
     case noRefreshTokenAvailable
     case tokenExpired
     case unauthorizedAccess
-    
+
     var errorDescription: String? {
         switch self {
         case .missingLocalId:

@@ -28,7 +28,7 @@ struct LLMDomainServiceImpl: LLMDomainService {
     private var persistenceManager: PersistenceManager
     @Inject
     private var llmNetworkService: LLMNetworkService
-    
+
     func getAvailableLLMs() async throws {
         let result = try await llmNetworkService.getAvailableLLMs()
         let llms = result.toDomain()

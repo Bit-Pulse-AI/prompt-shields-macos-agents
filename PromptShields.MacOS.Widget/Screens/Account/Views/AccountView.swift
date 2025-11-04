@@ -4,7 +4,7 @@ import os
 
 struct AccountView: View {
     @EnvironmentObject private var mainState: MainStateModel
-    
+
     @State var offerings: Offerings?
     @State var customerInfo: CustomerInfo?
     @State var isLoading = false
@@ -16,19 +16,19 @@ struct AccountView: View {
     @State var accountFirstName = "n/a"
     @State var accountLastName = "n/a"
     @State var accountPhoto: URL?
-    
+
     @Environment(\.userDomainService) private var userDomainService
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: AccountView.self)
     )
-    
+
     private let accountButtonStyle = AccountButtonStyle(foregroundColor: Color.primary,
                                                         backgroundColor: .white,
                                                         borderColor: .border,
                                                         cornerRadius: 8)
-    
+
     private let accountDeleteButtonStyle = AccountButtonStyle(foregroundColor: .primary,
                                                               backgroundColor: .white,
                                                               borderColor: .border,
@@ -62,7 +62,7 @@ struct AccountView: View {
             await fetchUserDetails()
         }
     }
-    
+
     func fetchUserDetails() async {
         do {
             let currentUser = try await userDomainService.currentUser
@@ -74,29 +74,29 @@ struct AccountView: View {
             logger.error("Error fetching user details \(error)")
         }
     }
-    
+
     func titledTextField(title: String, placeholder: String, binding: Binding<String>) -> some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(NSFont.body4.swiftUIFont)
                 .foregroundStyle(Color.onSurface)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .multilineTextAlignment(.leading)
-            TextField(placeholder, text: binding)
-                .modifier(AccountTextFieldModifier(foregroundColor: .onSurface,
-                                                   backgroundColor: .white,
-                                                   borderColor: .border,
-                                                   cornerRadius: 8))
+            Text(binding.wrappedValue)
+//                .modifier(AccountTextFieldModifier(foregroundColor: .onSurface,
+//                                                   backgroundColor: .white,
+//                                                   borderColor: .border,
+//                                                   cornerRadius: 8))
         }.frame(alignment: .leading)
     }
-    
+
     var nameSection: some View {
         HStack(spacing: .zero) {
             titledTextField(title: "First name", placeholder: "First name", binding: $accountFirstName)
             titledTextField(title: "Last name", placeholder: "Last name", binding: $accountLastName)
         }
     }
-    
+
     var emailSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Email")
@@ -109,7 +109,7 @@ struct AccountView: View {
                alignment: .leading)
         .multilineTextAlignment(.leading)
     }
-    
+
     var photoSection: some View {
         HStack {
             RoundCirclePortraitView(url: $accountPhoto)
@@ -128,21 +128,21 @@ struct AccountView: View {
             .buttonStyle(accountDeleteButtonStyle)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
-    
+
     var subscriptionSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             SubscriptionIntegrationView()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-    
+
     var deleteAccount: some View {
         VStack(alignment: .leading, spacing: .zero) {
             Text("To delete your account, please contact support@promptshields.com")
         }.frame(maxWidth: .infinity,
                 alignment: .leading)
     }
-    
+
     var logoutView: some View {
         VStack(alignment: .leading, spacing: .zero) {
             Button {
@@ -154,7 +154,7 @@ struct AccountView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-    
+
     func planBox(title: String) -> some View {
         Text(title)
             .font(NSFont.body3.swiftUIFont)
@@ -168,19 +168,19 @@ struct AccountView: View {
                     .stroke(Color.additionalBlue, lineWidth: 1)
             )
     }
-    
+
     // Logic
-    
+
     private func logout() {
         Task {
             try await userDomainService.logout()
             mainState.authState = .loggedOut(nil)
         }
     }
-    
+
     private func changePhoto() {
     }
-    
+
     private func deletePhoto() {
     }
 }

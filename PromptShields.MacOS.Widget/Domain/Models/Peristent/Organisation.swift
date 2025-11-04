@@ -4,7 +4,7 @@ import SwiftData
 struct Organisation: Domain {
     typealias M = OrganisationModel
     typealias P = OrganisationPersistentModel
-    
+
     struct OrganisationModel: Model {
         var uuid: UID
         var name: String
@@ -14,22 +14,22 @@ struct Organisation: Domain {
         let createdAt: Date
         var modifiedAt: Date
     }
-    
+
     let identifier: ModelIdentifier?
     var model: Organisation.OrganisationModel
-    
+
     init(model: OrganisationModel) {
         self.model = model
         self.identifier = nil
     }
-    
+
     init(model: OrganisationModel, identifier: ModelIdentifier?) {
         self.model = model
         self.identifier = identifier
     }
-    
+
     // MARK: - Mapping Methods
-    
+
     func toPersistentModel(context: ModelContext?) -> OrganisationPersistentModel {
         let persistent = OrganisationPersistentModel()
         persistent.uuid = model.uuid.encrypt
@@ -41,7 +41,7 @@ struct Organisation: Domain {
         persistent.modifiedAt = model.modifiedAt
         return persistent
     }
-    
+
     static func fromPersistentModel(_ persistent: OrganisationPersistentModel) -> Organisation {
         let model = OrganisationModel(
             uuid: persistent.uuid.decrypt,
@@ -66,7 +66,7 @@ struct OrganisationAPIResponse: APIResponse {
     let tenantId: String
     let createdAt: String
     let updatedAt: String
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case name
@@ -76,7 +76,7 @@ struct OrganisationAPIResponse: APIResponse {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
-    
+
     func toDomain() -> Organisation {
         let dateFormatter = ISO8601DateFormatter()
         let model = Organisation.OrganisationModel(
@@ -95,12 +95,12 @@ struct OrganisationAPIResponse: APIResponse {
 struct OrganisationAPIRequest: Codable {
     let name: String
     let description: String?
-    
+
     init(from organisation: Organisation) {
         self.name = organisation.model.name
         self.description = organisation.model.description
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case name
         case description
@@ -121,11 +121,11 @@ final class OrganisationPersistentModel: UpdatablePersistentModel {
     var tenantUID: UID?
     var createdAt: Date = Date()
     var modifiedAt: Date = Date()
-    
+
     init() {
         // Default initializer for SwiftData
     }
-    
+
     func updateProperties(from other: OrganisationPersistentModel) {
         self.uuid = other.uuid
         self.name = other.name

@@ -4,7 +4,7 @@ struct MenuItemView: View {
     private let title: String
     private let imageName: String
     private let action: (() -> Void)?
-    
+
     init(imageName: String, title: String, action: (() -> Void)? = nil) {
         self.imageName = imageName
         self.title = title

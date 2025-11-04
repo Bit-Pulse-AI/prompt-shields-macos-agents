@@ -41,9 +41,9 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
     private var profileDomainService: ProfileDomainService
     @Inject
     private var userPreferenceDomainService: UserPreferencesDomainService
-    
+
     private let path = "suggestion"
-    
+
     @discardableResult
     func process(text: String,
                  llmProvider: String,
@@ -59,7 +59,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
                                                                           application: application)
         return suggestionResult.toDomain()
     }
-    
+
     func list(offset: Int,
               limit: Int) async throws {
         if offset == 0 {
@@ -79,12 +79,12 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         let suggestions = suggestionsResult.toDomain()
         try await persistenceManager.syncLocalWithRemote(domains: suggestions)
     }
-    
+
     func fetchSuggestionGroup(suggestionGroupId: String, teamId: String) async throws -> SuggestionGroup {
         let suggestionGroup = try await suggestionNetworkService.fetchSuggestionGroup(suggestionGroupId: suggestionGroupId, teamId: teamId)
         return try await persistenceManager.syncLocalWithRemote(domain: suggestionGroup.toDomain())
     }
-    
+
     func fetchCurrentSuggestionGroup() async throws -> SuggestionGroup {
         let currentProfile = try await profileDomainService.currentProfile.model
         let suggestionGroupId = currentProfile.defaultSuggestionGroupId
@@ -92,7 +92,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         let currentSuggestionGroup = try await fetchSuggestionGroup(suggestionGroupId: suggestionGroupId, teamId: teamId)
         return currentSuggestionGroup
     }
-    
+
     func fetchSuggestionTypes() async throws {
         let suggestionResult = try await suggestionNetworkService.fetchSuggestionTypes()
         let suggestion = suggestionResult.toDomain()

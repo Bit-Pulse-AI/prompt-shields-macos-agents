@@ -4,28 +4,28 @@ import SwiftData
 struct LLM: Domain {
     typealias M = LLMModel
     typealias P = LLMPersistentModel
-    
+
     struct LLMModel: Model {
         var uuid: UID
         var name: String
         var type: String
     }
-    
+
     let identifier: ModelIdentifier?
     var model: LLM.LLMModel
-    
+
     init(model: LLMModel) {
         self.model = model
         self.identifier = nil
     }
-    
+
     init(model: LLMModel, identifier: ModelIdentifier?) {
         self.model = model
         self.identifier = identifier
     }
-    
+
     // MARK: - Mapping Methods
-    
+
     func toPersistentModel(context: ModelContext?) -> LLMPersistentModel {
         let persistent = LLMPersistentModel()
         persistent.uuid = model.uuid.encrypt
@@ -33,7 +33,7 @@ struct LLM: Domain {
         persistent.type = model.type.encrypt
         return persistent
     }
-    
+
     static func fromPersistentModel(_ persistent: LLMPersistentModel) -> LLM {
         let model = LLMModel(
             uuid: persistent.uuid.decrypt,
@@ -48,12 +48,12 @@ struct LLM: Domain {
 struct LLMAPIResponse: APIResponse {
     let type: String
     let name: String
-    
+
     enum CodingKeys: String, CodingKey {
         case type
         case name
     }
-    
+
     func toDomain() -> LLM {
         let model = LLM.LLMModel(
             uuid: type,
@@ -73,11 +73,11 @@ final class LLMPersistentModel: UpdatablePersistentModel {
     var ik: String?
     var name: String = ""
     var type: String = ""
-    
+
     init() {
         // Default initializer for SwiftData
     }
-    
+
     func updateProperties(from other: LLMPersistentModel) {
         self.uuid = other.uuid
         self.name = other.name

@@ -4,7 +4,7 @@ import SwiftData
 struct Profile: Domain {
     typealias M = ProfileModel
     typealias P = ProfilePersistentModel
-    
+
     struct ProfileModel: Model {
         let uuid: UID
         let defaultTenantId: UID
@@ -14,22 +14,22 @@ struct Profile: Domain {
         let defaultTeamId: UID
         let defaultProjectId: UID
     }
-    
+
     let identifier: ModelIdentifier?
     var model: Profile.ProfileModel
-    
+
     init(model: ProfileModel) {
         self.model = model
         self.identifier = nil
     }
-    
+
     init(model: ProfileModel, identifier: ModelIdentifier?) {
         self.model = model
         self.identifier = identifier
     }
-    
+
     // MARK: - Mapping Methods
-    
+
     func toPersistentModel(context: ModelContext?) -> ProfilePersistentModel {
         let persistent = ProfilePersistentModel()
         persistent.uuid = model.uuid.encrypt
@@ -41,7 +41,7 @@ struct Profile: Domain {
         persistent.defaultProjectId = model.defaultProjectId.encrypt
         return persistent
     }
-    
+
     static func fromPersistentModel(_ persistent: ProfilePersistentModel) -> Profile {
         let model = ProfileModel(
             uuid: persistent.uuid.decrypt,
@@ -67,7 +67,7 @@ struct ProfileAPIResponse: APIResponse {
     let defaultSuggestionGroupId: UID
     let defaultTeamId: UID
     let defaultProjectId: UID
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case defaultTenantId = "default_tenant_id"
@@ -77,7 +77,7 @@ struct ProfileAPIResponse: APIResponse {
         case defaultTeamId = "default_team_id"
         case defaultProjectId = "default_project_id"
     }
-    
+
     func toDomain() -> Profile {
         let model = Profile.ProfileModel(
             uuid: id,
@@ -106,9 +106,9 @@ final class ProfilePersistentModel: UpdatablePersistentModel {
     var defaultSuggestionGroupId: UID = ""
     var defaultTeamId: UID = ""
     var defaultProjectId: UID = ""
-    
+
     init() {}
-    
+
     func updateProperties(from other: ProfilePersistentModel) {
         self.uuid = other.uuid
         self.userId = other.userId

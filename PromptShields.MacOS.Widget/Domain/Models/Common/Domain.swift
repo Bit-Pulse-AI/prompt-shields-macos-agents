@@ -21,14 +21,14 @@ protocol APIResponse: SendableDecodable {
 protocol Domain: Sendable, Equatable, Identifiable, Hashable {
     associatedtype M: Model
     associatedtype P: UpdatablePersistentModel
-    
+
     var identifier: ModelIdentifier? { get }
     var model: M { get }
     var id: String { get }
-    
+
     init(model: M)
     init(model: M, identifier: ModelIdentifier?)
-    
+
     // Mapping methods for API and persistence
     func toPersistentModel(context: ModelContext?) -> P
     static func fromPersistentModel(_ persistent: P) -> Self
@@ -46,7 +46,7 @@ struct ModelIdentifier: Sendable, Equatable, Identifiable, Hashable, Codable {
         "identifier_\(String(describing: persistentIdentifier.entityName))_\(String(describing: persistentIdentifier.hashValue))"
     }
     let persistentIdentifier: PersistentIdentifier
-    
+
     func domain<D: Domain>() async throws -> D {
         let persistenceManager = PersistenceManagerImpl.shared
         return try await persistenceManager.fetchItem(persistentIdentifier: persistentIdentifier)

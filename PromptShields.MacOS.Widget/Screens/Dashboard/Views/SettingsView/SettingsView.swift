@@ -16,12 +16,12 @@ struct SettingsView: View {
             a.model.suggestionName < b.model.suggestionName
         }
     }
-    
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: SettingsView.self)
     )
-    
+
     var body: some View {
         VStack(spacing: .zero) {
             if !isLoading, let preferences = preferences {
@@ -29,10 +29,10 @@ struct SettingsView: View {
                     VStack(spacing: 20) {
                         // Suggestion Types
                         suggestionTypesSection(preferences)
-                        
+
                         // Application Blocking
 //                        applicationBlockingSection(preferences)
-                        
+
                         // UI Settings
 //                        uiSettingsSection(preferences)
                     }
@@ -49,12 +49,12 @@ struct SettingsView: View {
             await loadData()
         }
     }
-    
+
     private func suggestionTypesSection(_ preferences: UserPreferences) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Suggestion Types")
                 .font(.headline)
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(suggestionTypes, id: \.model.uuid) { suggestionType in
                     HStack {
@@ -109,7 +109,7 @@ struct SettingsView: View {
             isLoading = false
         }
     }
-    
+
     @MainActor
     private func updatePreferences(_ newPreferences: UserPreferences) async throws {
         try await userPreferencesDomainService.savePreferences(preferences: newPreferences)

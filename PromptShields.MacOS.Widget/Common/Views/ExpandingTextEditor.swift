@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ExpandingTextEditor: View {
     @Binding var text: String
-    
+
     var body: some View {
         ResizableTextView(text: $text,
                           placeholderTextColor: Color.onSurfaceVariant.nsColor,

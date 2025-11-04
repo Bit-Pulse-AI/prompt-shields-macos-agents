@@ -2,27 +2,27 @@ import AppKit
 
 class PlaceholderTextView: NSTextView, Sendable {
     var action: (() -> Void)?
-    
+
     var placeholder: String = "Enter your text here..." {
         didSet {
             self.needsDisplay = true // Redraw when placeholder changes
         }
     }
-    
+
     // Placeholder text color
     var placeholderTextColor: NSColor = .placeholderTextColor {
         didSet {
             self.needsDisplay = true // Redraw when color changes
         }
     }
-    
+
     override func paste(_ sender: Any?) {
        guard let pasteboardString = NSPasteboard.general.string(forType: .string) else {
-           return 
+           return
        }
        self.insertText(pasteboardString, replacementRange: self.selectedRange())
    }
-    
+
     override func keyDown(with event: NSEvent) {
         // Check for the Command key and Enter key
         if event.keyCode == 36 { // 36 is the keycode for Enter
@@ -38,7 +38,7 @@ class PlaceholderTextView: NSTextView, Sendable {
             super.keyDown(with: event)
         }
     }
-    
+
     private func triggerAction() {
         self.action?()
     }

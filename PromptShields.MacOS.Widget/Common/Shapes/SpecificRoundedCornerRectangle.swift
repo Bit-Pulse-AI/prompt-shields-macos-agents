@@ -18,7 +18,7 @@ struct SpecificRoundedCornerRectangle: Shape, Sendable {
 
         let p7 = CGPoint(x: corners.contains(.bottomLeft) ? rect.minX + radius : rect.minX, y: rect.maxY )
         let p8 = CGPoint(x: rect.minX, y: corners.contains(.bottomLeft) ? rect.maxY - radius : rect.maxY )
-        
+
         path.move(to: p1)
         path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.minY),
                     tangent2End: p2,

@@ -6,7 +6,7 @@ extension URL {
             absoluteString.encrypt
         }
     }
-    
+
     init?(string: String?) {
         guard let string else {
              return nil

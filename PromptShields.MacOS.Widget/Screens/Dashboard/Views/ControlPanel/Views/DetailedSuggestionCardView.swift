@@ -4,7 +4,7 @@ struct DetailedSuggestionCard: View {
     let suggestion: Suggestion
     @EnvironmentObject var dashboardState: DashboardStateModel
     let suggestionName: (String) -> String
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
@@ -15,16 +15,16 @@ struct DetailedSuggestionCard: View {
                 Label(suggestion.model.application, systemImage: "apple.terminal")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 Spacer()
             }
-            
+
             // Original Text
             VStack(alignment: .leading, spacing: 4) {
                 Text("Original")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 Text(suggestion.model.originalText)
                     .font(.body)
                     .padding(.horizontal, 8)
@@ -32,13 +32,13 @@ struct DetailedSuggestionCard: View {
                     .background(Color.red.opacity(0.1))
                     .cornerRadius(4)
             }
-            
+
             // Suggestion
             VStack(alignment: .leading, spacing: 4) {
                 Text("Suggestion")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 Text(suggestion.model.suggestedText)
                     .font(.body)
                     .padding(.horizontal, 8)

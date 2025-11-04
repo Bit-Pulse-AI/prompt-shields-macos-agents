@@ -16,36 +16,36 @@ struct SuggestionsView: View {
     )
     @State private var isLoadingNextPage: Bool = false
     @State private var isLoading: Bool = false
-    
+
     @Environment(\.suggestionDomainService) private var suggestionDomainService
-    
+
     private var currentSuggestionGroup: SuggestionGroup? {
         return currentSuggestionGroupQueryable.wrappedValue.first
     }
-    
+
     private var suggestionsTypes: [SuggestionType] {
         return suggestionsTypeQueryable.wrappedValue
     }
-    
+
     private var currentSuggestions: [Suggestion] {
         return suggestionsQueryable.wrappedValue
     }
-    
+
     private var suggestionsCount: Int {
         currentSuggestionGroup?.model.suggestionCount ?? 0
     }
-    
+
     private var hasCurrentSuggestions: Bool {
         currentSuggestions.count > 0
     }
-    
+
     private let suggestionsPerPage: Int = 2
-    
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: SettingsView.self)
     )
-    
+
     var body: some View {
         VStack(spacing: 16) {
             if !hasCurrentSuggestions {
@@ -59,7 +59,7 @@ struct SuggestionsView: View {
             await loadInitialData()
         }
     }
-    
+
     private func loadInitialData() async {
         isLoading = true
         do {
@@ -79,7 +79,7 @@ struct SuggestionsView: View {
         try? await Task.sleep(for: .seconds(1))
         isLoading = false
     }
-    
+
     private func loadNextPageIfNeeded() async {
         do {
             isLoadingNextPage = true
@@ -98,17 +98,17 @@ struct SuggestionsView: View {
         try? await Task.sleep(for: .seconds(1))
         isLoadingNextPage = false
     }
-    
+
     private var emptyStateView: some View {
         VStack(spacing: 16) {
             Image(systemName: "textformat.abc.dottedunderline")
                 .font(.system(size: 48))
                 .foregroundColor(.secondary)
-            
+
             Text("No Suggestions")
                 .font(.title2)
                 .fontWeight(.medium)
-            
+
             Text("Start typing in any text field to see writing suggestions.")
                 .font(.body)
                 .foregroundColor(.secondary)
@@ -116,7 +116,7 @@ struct SuggestionsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    
+
     private var suggestionsList: some View {
         ScrollView {
             if isLoading {

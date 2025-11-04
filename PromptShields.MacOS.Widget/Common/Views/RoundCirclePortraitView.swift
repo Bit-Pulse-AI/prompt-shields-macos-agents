@@ -4,7 +4,7 @@ struct RoundCirclePortraitView: View {
     @Binding private var url: URL?
     private let lineWidth: CGFloat
     @State private var cachedImage: Image?
-    
+
     func photo(size: CGSize) -> some View {
         VStack(alignment: .center, spacing: .zero) {
             Image(systemName: "photo")
@@ -28,10 +28,10 @@ struct RoundCirclePortraitView: View {
                     case .success(let cgImage):
                         let imageAspectRatio = CGFloat(cgImage.width) / CGFloat(cgImage.height)
                         let containerAspectRatio = geometry.size.width / geometry.size.height
-                        
+
                         Canvas { context, size in
                             let drawRect: CGRect
-                            
+
                             if imageAspectRatio > containerAspectRatio {
                                 // Image is wider than the container
                                 let scaledHeight = size.width / imageAspectRatio
@@ -51,7 +51,7 @@ struct RoundCirclePortraitView: View {
                                     height: size.height
                                 )
                             }
-                            
+
                             context.draw(Image(decorative: cgImage, scale: 1.0), in: drawRect)
                         }
                         .frame(width: geometry.size.width, height: geometry.size.height)
@@ -74,11 +74,11 @@ struct RoundCirclePortraitView: View {
             }
         }
     }
-    
+
     private func cacheImage(image: Image) {
         cachedImage = image
     }
-    
+
     init(url: Binding<URL?>, lineWidth: CGFloat = 1) {
         self._url = url
         self.lineWidth = lineWidth

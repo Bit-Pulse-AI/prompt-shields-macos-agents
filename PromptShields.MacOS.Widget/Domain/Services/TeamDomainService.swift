@@ -28,17 +28,17 @@ struct TeamDomainServiceKey: EnvironmentKey {
 protocol TeamDomainService: Sendable {
     var currentTeam: Team { get async throws }
     func currentTeam(refresh: Bool) async throws -> Team
-    
+
     func createTeam(subscription: Subscription,
                     name: String) async throws
-    
+
     func getTeams(subscription: Subscription) async throws
-    
+
     func updateTeam(team: Team,
                     subscription: Subscription,
                     name: String?,
                     teamStatus: TeamStatus?) async throws
-    
+
     func deleteTeam(team: Team,
                     subscription: Subscription) async throws
 }
@@ -52,7 +52,7 @@ struct TeamDomainServiceImpl: TeamDomainService {
     private var profileDomainService: ProfileDomainService
     @Inject
     private var persistenceManager: PersistenceManager
-    
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: TeamDomainService.self)
@@ -63,7 +63,7 @@ struct TeamDomainServiceImpl: TeamDomainService {
             try await currentTeam(refresh: false)
         }
     }
-    
+
     func currentTeam(refresh: Bool) async throws -> Team {
         let fetchRemote: () async throws -> Team = {
             let currentProfile = try await profileDomainService.currentProfile
@@ -82,7 +82,7 @@ struct TeamDomainServiceImpl: TeamDomainService {
             }
         }
     }
-    
+
     func createTeam(subscription: Subscription,
                     name: String) async throws {
         do {
@@ -97,13 +97,13 @@ struct TeamDomainServiceImpl: TeamDomainService {
                 createdAt: Date(),
                 modifiedAt: Date()
             )
-            
+
             let team = try await persistenceManager.insert(domain: Team(model: teamModel))
-            
+
             // Sync with backend
             do {
                 let remoteTeam = try await teamNetworkService.create(subscriptionId: subscription.model.uuid, name: name)
-                
+
                 // Update team with remote data
                 var updatedTeam = team
                 updatedTeam.model.uuid = remoteTeam.id
@@ -117,11 +117,11 @@ struct TeamDomainServiceImpl: TeamDomainService {
             throw error
         }
     }
-    
+
     func getTeam(subscriptionId: String, teamId: String) async throws -> Team {
         try await teamNetworkService.read(subscriptionId: subscriptionId, teamId: teamId).toDomain()
     }
-    
+
     func getTeams(subscription: Subscription) async throws {
         // Get local teams first
 //        let localTeams: [Team] = try await persistenceManager.query(
@@ -153,14 +153,14 @@ struct TeamDomainServiceImpl: TeamDomainService {
 //            }
 //        }
     }
-    
+
     func updateTeam(team: Team,
                     subscription: Subscription,
                     name: String?,
                     teamStatus: TeamStatus?) async throws {
             do {
                 let originalName = team.model.name
-                
+
                 // Update locally first
                 var updatedTeam = team
                 if let name = name {
@@ -168,11 +168,11 @@ struct TeamDomainServiceImpl: TeamDomainService {
                     updatedTeam.model.modifiedAt = Date()
                 }
                 try await persistenceManager.update(domain: updatedTeam)
-                
+
                 // Sync with backend
                 do {
                     let remoteTeam = try await teamNetworkService.update(subscriptionId: subscription.model.uuid, teamId: team.model.uuid, name: name, teamStatus: teamStatus)
-                    
+
                     // Update with remote data
                     updatedTeam.model.uuid = remoteTeam.id
                     updatedTeam.model.name = remoteTeam.name
@@ -186,13 +186,13 @@ struct TeamDomainServiceImpl: TeamDomainService {
                 throw error
             }
     }
-    
+
     func deleteTeam(team: Team,
                     subscription: Subscription) async throws {
         do {
             // Delete locally first
             try await persistenceManager.delete(domain: team)
-            
+
             // Sync with backend
             do {
                 try await teamNetworkService.delete(subscriptionId: subscription.model.uuid, teamId: team.model.uuid)

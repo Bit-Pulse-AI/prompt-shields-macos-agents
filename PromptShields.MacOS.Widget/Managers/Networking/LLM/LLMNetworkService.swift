@@ -8,9 +8,9 @@ struct LLMNetworkServiceImpl: LLMNetworkService {
     private var networkManager: NetworkManager
     @Inject
     private var keychainManager: KeychainManager
-    
+
     private let path = "llm"
-    
+
     func getAvailableLLMs() async throws -> ListResponse<LLMAPIResponse> {
         let request = try RequestBuilder().request(
             url: "\(baseURL)/\(path)/",

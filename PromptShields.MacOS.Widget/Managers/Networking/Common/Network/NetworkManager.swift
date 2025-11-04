@@ -10,7 +10,7 @@ protocol NetworkManager: Sendable {
     func perform(
         request: URLRequest
     ) async throws -> Data
-    
+
     @discardableResult
     func performWithAutoRefresh(
         request: URLRequest
@@ -19,12 +19,12 @@ protocol NetworkManager: Sendable {
 
 actor NetworkManagerImpl: NetworkManager {
     // MARK: - Private Properties
-    
+
     private let session: URLSessionProtocol
     private let logger: Logger
-    
+
     static let shared = NetworkManagerImpl()
-    
+
     init(
         session: URLSessionProtocol = URLSession.shared,
         logger: Logger = Logger(
@@ -35,22 +35,22 @@ actor NetworkManagerImpl: NetworkManager {
         self.session = session
         self.logger = logger
     }
-    
+
     @discardableResult
     func perform(request: URLRequest) async throws -> Data {
         do {
             logger.debug("REQUEST: \(request.httpMethod ?? "") \n request \(request.url?.absoluteString ?? "")")
             let (data, response) = try await session.dataTask(with: request)
-            
+
             // Validate HTTP response
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw NetworkError(message: "Invalid response type")
             }
-            
+
             guard (200...299).contains(httpResponse.statusCode) else {
                 throw NetworkError(message: "HTTP \(httpResponse.statusCode): Invalid server response", statusCode: httpResponse.statusCode)
             }
-            
+
             // Log response for debugging
             logResponse(data: data)
             return data
@@ -60,22 +60,22 @@ actor NetworkManagerImpl: NetworkManager {
             throw NetworkError(message: "Request failed: \(error.localizedDescription)")
         }
     }
-    
+
     @discardableResult
     func performWithAutoRefresh(request: URLRequest) async throws -> Data {
         do {
             return try await perform(request: request)
         } catch let networkError as NetworkError where networkError.isUnauthorized {
             logger.info("Received 401/403 error, attempting token refresh...")
-            
+
             // Attempt to refresh the token
             do {
                 let refreshedCredentials = try await TokenRefreshManager.shared.refreshToken()
-                
+
                 // Save refreshed credentials
                 let keychainManager = KeychainManagerImpl.shared
                 try keychainManager.saveUserCredentials(userCredentials: refreshedCredentials)
-                
+
                 // Retry the original request with new token
                 var retryRequest = request
                 if let authHeader = try? keychainManager.authorizationHeader {
@@ -83,30 +83,30 @@ actor NetworkManagerImpl: NetworkManager {
                         retryRequest.setValue(value, forHTTPHeaderField: key)
                     }
                 }
-                
+
                 logger.info("Token refreshed successfully, retrying request...")
                 return try await perform(request: retryRequest)
             } catch {
                 logger.error("Token refresh failed: \(error.localizedDescription)")
-                
+
                 // If refresh fails, log out the user
                 Task { @MainActor in
                     await handleLogoutAfterFailedRefresh()
                 }
-                
+
                 throw networkError // Throw original error
             }
         }
     }
-    
+
     @MainActor
     private func handleLogoutAfterFailedRefresh() async {
         logger.error("Token refresh failed, posting notification for logout...")
-        
+
         // Post notification that token refresh failed - the UI layer will handle logout
         NotificationCenter.default.post(name: .tokenRefreshFailed, object: nil)
     }
-    
+
     private func logResponse(data: Data) {
         do {
             let json = try JSONSerialization.jsonObject(with: data, options: .mutableContainers)

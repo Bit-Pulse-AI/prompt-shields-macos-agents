@@ -5,7 +5,7 @@ struct UserInfoView: View {
     @Environment(\.userDomainService) private var userDomainService
     @State var name: String = "n/a"
     @State var photoURL: URL?
-    
+
     var body: some View {
         Button {
             dashboardState.contentState = .account

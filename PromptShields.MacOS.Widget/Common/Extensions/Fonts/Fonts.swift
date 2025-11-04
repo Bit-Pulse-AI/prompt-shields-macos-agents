@@ -21,15 +21,15 @@ extension NSFont {
     public static var body1: NSFont {
         return NSFont.systemFont(ofSize: 16, weight: .regular)
     }
-    
+
     public static var body2: NSFont {
         return NSFont.systemFont(ofSize: 14, weight: .regular)
     }
-    
+
     public static var body4: NSFont {
         return NSFont.systemFont(ofSize: 14, weight: .medium)
     }
-    
+
     public static var body3: NSFont {
         return NSFont.systemFont(ofSize: 12, weight: .regular)
     }

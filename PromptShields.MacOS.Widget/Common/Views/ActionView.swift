@@ -5,7 +5,7 @@ struct ActionView: View {
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
     @Environment(\.suggestionDomainService) private var suggestionDomainService
     @Environment(\.profileDomainService) private var profileDomainService
-    
+
     @StateObject private var suggestionTypesQueryable = ObservableQueryable(
         sortDescriptors: [SortDescriptor(\.suggestionName, order: .reverse)],
         mapping: DefaultMapping<SuggestionType>.self
@@ -16,23 +16,25 @@ struct ActionView: View {
     @State private var isProcessing = false
     @State private var isViewActive = true
     @State private var actionText: String = ""
-    
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: ActionView.self)
     )
-    
+
+    @MainActor
     private var suggestionTypes: [SuggestionType] {
         let enabledFilters = userPreferences?.model.enabledSuggestionTypes ?? []
         return suggestionTypesQueryable.wrappedValue.filter {
             enabledFilters.contains($0.model.suggestionType)
         }
     }
-    
+
+    @MainActor
     private var userPreferences: UserPreferences? {
         userPreferencesTypesQueryable.wrappedValue.first
     }
-    
+
     var body: some View {
         ZStack(alignment: .leading) {
             switch overlayStateModel.actionToolState {
@@ -94,7 +96,7 @@ struct ActionView: View {
                                     guard !isProcessing else { return }
                                     isProcessing = true
                                     overlayStateModel?.actionToolState = .loading
-                                    
+
                                     Task {
                                         do {
                                             let result = try await suggestionDomainService
@@ -110,7 +112,7 @@ struct ActionView: View {
                                                         application: overlayStateModel?.elementInfo?.applicationName ?? "n/a")
 
                                             try Task.checkCancellation()
-                                            
+
                                             if let axUIElement = overlayStateModel?.elementInfo?.element {
                                                 if await isValidAXUIElement(axUIElement) {
                                                     actionText = result.model.suggestedText
@@ -153,7 +155,7 @@ struct ActionView: View {
             isProcessing = false
         }
     }
-    
+
     func replaceText(axUIElement: AXUIElement) async {
         if await isValidAXUIElement(axUIElement) {
             Task {
@@ -169,7 +171,7 @@ struct ActionView: View {
             }
         }
     }
-    
+
     private func isValidAXUIElement(_ element: AXUIElement) async -> Bool {
         var pid: pid_t = 0
         let result = AXUIElementGetPid(element, &pid)

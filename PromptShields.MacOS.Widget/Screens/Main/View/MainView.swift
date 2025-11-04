@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 
+@MainActor
 final class MainStateModel: ObservableObject {
     @Published var isBusy: Bool = false
     @Published var authState: AuthState = .undetermined
@@ -10,7 +11,7 @@ final class MainStateModel: ObservableObject {
 struct MainView: View {
     @StateObject private var globalMainStateModel = MainStateModel()
     @Environment(\.userDomainService) private var userDomainService
-    
+
     var body: some View {
         VStack {
             contentView
@@ -22,7 +23,7 @@ struct MainView: View {
             handleTokenRefreshFailure()
         }
     }
-    
+
     @ViewBuilder
     var contentView: some View {
         switch globalMainStateModel.authState {
@@ -34,16 +35,16 @@ struct MainView: View {
             SplashView()
         }
     }
-    
+
     private func handleTokenRefreshFailure() {
         Task {
             do {
                 await MainActor.run {
                     globalMainStateModel.isBusy = true
                 }
-                
+
                 try await userDomainService.logout()
-                
+
                 await MainActor.run {
                     globalMainStateModel.authState = .loggedOut(AuthError.tokenRefreshFailed)
                     globalMainStateModel.isBusy = false

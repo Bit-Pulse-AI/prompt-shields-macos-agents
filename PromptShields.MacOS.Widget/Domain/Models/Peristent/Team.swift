@@ -4,7 +4,7 @@ import SwiftData
 struct Team: Domain {
     typealias M = TeamModel
     typealias P = TeamPersistentModel
-    
+
     struct TeamModel: Model {
         var uuid: UID
         var name: String
@@ -15,22 +15,22 @@ struct Team: Domain {
         var createdAt: Date
         var modifiedAt: Date
     }
-    
+
     let identifier: ModelIdentifier?
     var model: Team.TeamModel
-    
+
     init(model: TeamModel) {
         self.model = model
         self.identifier = nil
     }
-    
+
     init(model: TeamModel, identifier: ModelIdentifier?) {
         self.model = model
         self.identifier = identifier
     }
-    
+
     // MARK: - Mapping Methods
-    
+
     func toPersistentModel(context: ModelContext?) -> TeamPersistentModel {
         let persistent = TeamPersistentModel()
         persistent.uuid = model.uuid.encrypt
@@ -43,7 +43,7 @@ struct Team: Domain {
         persistent.modifiedAt = model.modifiedAt
         return persistent
     }
-    
+
     static func fromPersistentModel(_ persistent: TeamPersistentModel) -> Team {
         let model = TeamModel(
             uuid: persistent.uuid.decrypt,
@@ -69,7 +69,7 @@ struct TeamAPIResponse: APIResponse {
     let teamStatus: String
     let createdAt: String
     let updatedAt: String
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case name
@@ -79,7 +79,7 @@ struct TeamAPIResponse: APIResponse {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
-    
+
     func toDomain() -> Team {
         let dateFormatter = ISO8601DateFormatter()
         let model = Team.TeamModel(
@@ -99,12 +99,12 @@ struct TeamAPIResponse: APIResponse {
 struct TeamAPIRequest: Codable {
     let name: String
     let description: String?
-    
+
     init(from team: Team) {
         self.name = team.model.name
         self.description = team.model.description
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case name
         case description
@@ -126,11 +126,11 @@ final class TeamPersistentModel: UpdatablePersistentModel {
     var status: String = ""
     var createdAt: Date = Date()
     var modifiedAt: Date = Date()
-    
+
     init() {
         // Default initializer for SwiftData
     }
-    
+
     func updateProperties(from other: TeamPersistentModel) {
         self.uuid = other.uuid
         self.name = other.name
@@ -150,7 +150,7 @@ enum TeamStatus: String, CaseIterable, Codable {
     case active = "active"
     case archived = "archived"
     case deleted = "deleted"
-    
+
     var encrypt: String {
         rawValue.encrypt
     }

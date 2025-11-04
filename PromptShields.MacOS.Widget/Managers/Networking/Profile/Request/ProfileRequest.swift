@@ -4,4 +4,4 @@ struct CreateProfileRequest: SendableEncodable {
 }
 
 struct UpdateProfileRequest: SendableEncodable {
-} 
+}

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct TypingIndicatorView: View {
     @State private var animationOffset: CGFloat = 0
-    
+
     var body: some View {
         HStack(spacing: 4) {
             ForEach(0..<3) { index in

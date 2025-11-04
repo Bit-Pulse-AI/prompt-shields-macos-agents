@@ -12,7 +12,7 @@ struct SplashView: View {
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: SplashView.self)
     )
-    
+
     var body: some View {
         VStack(alignment: .center, spacing: 8) {
             Image(ImageResource(name: "logo", bundle: .main))
@@ -28,7 +28,7 @@ struct SplashView: View {
             checkAuth()
         }
     }
-    
+
     func checkAuth() {
         Task { @MainActor in
             do {

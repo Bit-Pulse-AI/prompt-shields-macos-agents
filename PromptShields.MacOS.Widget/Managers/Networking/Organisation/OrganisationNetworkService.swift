@@ -13,9 +13,9 @@ struct OrganisationNetworkServiceImpl: OrganisationNetworkService {
     private var networkManager: NetworkManager
     @Inject
     private var keychainManager: KeychainManager
-    
+
     private let path = "organisations"
-    
+
     func create(tenantId: String, name: String, description: String? = nil) async throws -> OrganisationAPIResponse {
         let payload = CreateOrganisationRequest(name: name, description: description)
         let request = try RequestBuilder().request(
@@ -26,7 +26,7 @@ struct OrganisationNetworkServiceImpl: OrganisationNetworkService {
         )
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
-    
+
     func read(tenantId: String, organisationId: String) async throws -> OrganisationAPIResponse {
         let request = try RequestBuilder().request(
             url: "\(baseURL)/tenants/\(tenantId)/\(path)/\(organisationId)",
@@ -35,7 +35,7 @@ struct OrganisationNetworkServiceImpl: OrganisationNetworkService {
         )
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
-    
+
     func update(tenantId: String, organisationId: String, name: String? = nil, description: String? = nil) async throws -> OrganisationAPIResponse {
         let payload = UpdateOrganisationRequest(name: name, description: description)
         let request = try RequestBuilder().request(
@@ -46,7 +46,7 @@ struct OrganisationNetworkServiceImpl: OrganisationNetworkService {
         )
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
-    
+
     func delete(tenantId: String, organisationId: String) async throws {
         let request = try RequestBuilder().request(
             url: "\(baseURL)/tenants/\(tenantId)/\(path)/\(organisationId)/",
@@ -55,11 +55,11 @@ struct OrganisationNetworkServiceImpl: OrganisationNetworkService {
         )
         try await networkManager.performWithAutoRefresh(request: request)
     }
-    
+
     func list(tenantId: String) async throws -> PaginatedResponse<OrganisationAPIResponse> {
         try await list(tenantId: tenantId, offset: 1, limit: 20)
     }
-    
+
     func list(tenantId: String, offset: Int, limit: Int) async throws -> PaginatedResponse<OrganisationAPIResponse> {
         let request = try RequestBuilder().request(
             url: "\(baseURL)/tenants/\(tenantId)/\(path)?offset=\(offset)&limit=\(limit)",
@@ -68,4 +68,4 @@ struct OrganisationNetworkServiceImpl: OrganisationNetworkService {
         )
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
-} 
+}

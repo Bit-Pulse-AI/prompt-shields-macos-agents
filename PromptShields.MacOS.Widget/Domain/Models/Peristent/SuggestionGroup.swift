@@ -4,7 +4,7 @@ import SwiftData
 struct SuggestionGroup: Domain {
     typealias M = SuggestionGroupModel
     typealias P = SuggestionGroupPersistentModel
-    
+
     struct SuggestionGroupModel: Model {
         let uuid: UID
         let title: String
@@ -13,22 +13,22 @@ struct SuggestionGroup: Domain {
         let suggestionCount: Int
         let createdAt: Date
     }
-    
+
     let identifier: ModelIdentifier?
     var model: SuggestionGroup.SuggestionGroupModel
-    
+
     init(model: SuggestionGroupModel) {
         self.model = model
         self.identifier = nil
     }
-    
+
     init(model: SuggestionGroupModel, identifier: ModelIdentifier?) {
         self.model = model
         self.identifier = identifier
     }
-    
+
     // MARK: - Mapping Methods
-    
+
     func toPersistentModel(context: ModelContext?) -> SuggestionGroupPersistentModel {
         let persistent = SuggestionGroupPersistentModel()
         persistent.uuid = model.uuid.encrypt
@@ -39,7 +39,7 @@ struct SuggestionGroup: Domain {
         persistent.createdAt = model.createdAt
         return persistent
     }
-    
+
     static func fromPersistentModel(_ persistent: SuggestionGroupPersistentModel) -> SuggestionGroup {
         let model = SuggestionGroupModel(
             uuid: persistent.uuid.decrypt,
@@ -60,7 +60,7 @@ struct SuggestionGroupAPIResponse: APIResponse {
     let teamId: String
     let suggestionCount: Int
     let createdAt: Date
-    
+
     enum CodingKeys: String, CodingKey {
         case uuid = "id"
         case title = "title"
@@ -69,7 +69,7 @@ struct SuggestionGroupAPIResponse: APIResponse {
         case suggestionCount = "suggestion_count"
         case createdAt = "created_at"
     }
-    
+
     func toDomain() -> SuggestionGroup {
         let model = SuggestionGroup.SuggestionGroupModel(uuid: uuid ?? UUID().uuidString,
                                                          title: title,
@@ -93,9 +93,9 @@ final class SuggestionGroupPersistentModel: UpdatablePersistentModel {
     var teamId: String = ""
     var suggestionCount: Int = 0
     var createdAt: Date = Date()
-    
+
     init() {}
-    
+
     func updateProperties(from suggestion: SuggestionGroupPersistentModel) {
         self.uuid = suggestion.uuid
         self.title = suggestion.title

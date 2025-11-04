@@ -19,7 +19,7 @@ struct RequestBuilder {
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: NetworkManagerImpl.self)
     )
-    
+
     @discardableResult
     func request<RQ: SendableEncodable>(
         url: String,
@@ -46,7 +46,7 @@ struct RequestBuilder {
 
         return request
     }
-    
+
     @discardableResult
     func request(
         url: String,
@@ -85,7 +85,7 @@ struct RequestBuilder {
 
         return request
     }
-    
+
 //    func uploadRequest(url: String) -> URLRequest {
 //        let boundary = UUID().uuidString
 //        var request = URLRequest(url: URL(string: "\(baseURL)/files/upload")!)
@@ -105,14 +105,14 @@ struct RequestBuilder {
 //        request.httpBody = body
 //        return request
 //    }
-    
+
     private func createMultipartBody(
             parameters: [RequestParameter]?,
             files: [RequestParameterFile]?,
             boundary: String
         ) -> Data {
             var body = Data()
-    
+
             // Add parameters
             if let parameters = parameters {
                 for parameter in parameters {
@@ -123,7 +123,7 @@ struct RequestBuilder {
                     }
                 }
             }
-    
+
             // Add files
             if let files = files {
                 for file in files {
@@ -134,11 +134,11 @@ struct RequestBuilder {
                     body.append("\r\n".data(using: .utf8)!)
                 }
             }
-    
+
             body.append("--\(boundary)--\r\n".data(using: .utf8)!)
             return body
         }
-    
+
     private func createFormDataBody(parameters: [RequestParameter]) -> Data? {
         let formString = parameters.compactMap { param -> String? in
             guard let value = param.value else { return nil }
@@ -147,7 +147,7 @@ struct RequestBuilder {
 
         return formString.data(using: .utf8)
     }
-    
+
     private func buildRequest(
            url: String,
            method: HTTPMethod,
@@ -157,30 +157,30 @@ struct RequestBuilder {
            guard var urlComponents = URLComponents(string: url) else {
                throw NetworkError(message: "Invalid URL: \(url)")
            }
-           
+
            if method == .GET, let queryParameters = queryParameters {
                urlComponents.queryItems = queryParameters.map {
                    URLQueryItem(name: $0.key, value: $0.value)
                }
            }
-           
+
            guard let finalURL = urlComponents.url else {
                throw NetworkError(message: "Failed to construct URL with query parameters")
            }
-           
+
            var request = URLRequest(url: finalURL)
            request.httpMethod = method.rawValue
-           
+
            // Set headers
            if let headers = headers {
                for (key, value) in headers {
                    request.setValue(value, forHTTPHeaderField: key)
                }
            }
-           
+
            return request
        }
-    
+
     private func logRequestDetails(request: URLRequest) {
         logger.debug("Request URL: \(request.url?.absoluteString ?? "nil")")
         logger.debug("Request Method: \(request.httpMethod ?? "nil")")

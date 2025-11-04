@@ -29,14 +29,14 @@ struct MainApp: App {
     @StateObject private var accessibilityManager: AccessibilityManagerImpl
     @StateObject private var overlayStateModel: OverlayStateModel
     @StateObject private var dashboardStateModel: DashboardStateModel
-    
+
     @Environment(\.openWindow) private var openWindow
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    
+
     static let overlayRender = "overlay-render"
     static let actionRender = "action-render"
     static let mainWindow = "main-window"
-    
+
     init() {
         let overlayStateModel = OverlayStateModel()
         let dashboardStateModel = DashboardStateModel()
@@ -68,7 +68,7 @@ struct MainApp: App {
         self._overlayStateModel = StateObject(wrappedValue: overlayStateModel)
         self._dashboardStateModel = StateObject(wrappedValue: dashboardStateModel)
     }
-    
+
     var body: some Scene {
         Window("Main", id: MainApp.mainWindow) {
             if $overlayStateModel.isMainConfigured.wrappedValue {
@@ -117,7 +117,7 @@ struct MainApp: App {
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
-        
+
         Window("Action", id: MainApp.actionRender) {
             if $overlayStateModel.isActionConfigured.wrappedValue {
                 ActionView()
@@ -141,10 +141,10 @@ struct MainApp: App {
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
     }
-     
+
     private func updateMainWindow(isInitial: Bool) {
         let targetFrame = overlayStateModel.elementInfo?.frame
-        
+
         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.mainWindow) ?? false }) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak window] in
                 configureMainWindow(isInitial: isInitial, window: window, targetRect: targetFrame)
@@ -152,7 +152,7 @@ struct MainApp: App {
             }
         }
     }
-    
+
     private func updateOverlayWindow(isInitial: Bool) {
         if overlayStateModel.elementInfo?.frame == nil {
             overlayStateModel.actionToolState = .idle
@@ -166,13 +166,13 @@ struct MainApp: App {
             }
         }
     }
-    
+
     private func updateActionWindow(isInitial: Bool) {
         let targetFrame = overlayStateModel.elementInfo?.frame
         let actionToolState = overlayStateModel.actionToolState
         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.actionRender) ?? false }) {
             var actionSize: CGSize
-            
+
             switch actionToolState {
             case .idle:
                 actionSize = CGSize(width: 50, height: 50)
@@ -189,7 +189,7 @@ struct MainApp: App {
             }
         }
     }
-     
+
     @MainActor
     private func configureMainWindow(isInitial: Bool, window: NSWindow?, targetRect: CGRect?) {
         guard let window else {
@@ -199,14 +199,14 @@ struct MainApp: App {
         window.setFrameAutosaveName("")
         window.isOpaque = true
         window.backgroundColor = .white
-         
+
         window.level = .modalPanel
         window.hasShadow = false
-         
+
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = false
     }
-     
+
     @MainActor
     private func configureActionWindow(isInitial: Bool, window: NSWindow?, targetRect: CGRect?, actionSize: CGSize) {
         guard let window else {
@@ -216,15 +216,15 @@ struct MainApp: App {
         window.setFrameAutosaveName("")
         window.isOpaque = false
         window.backgroundColor = .clear
-         
+
         window.level = .floating
         window.hasShadow = false
-         
+
         // Use .titled with .borderless to allow input while keeping borderless appearance
         window.styleMask.remove(.titled)
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = false
-         
+
         if let targetRect = targetRect {
             let targetTransform = CGRect(x: targetRect.origin.x, y: targetRect.origin.y + targetRect.size.height, width: actionSize.width, height: actionSize.height)
             window.setFrame(targetTransform, display: true, animate: false)
@@ -232,7 +232,7 @@ struct MainApp: App {
             window.setFrame(CGRect(x: 0, y: 0, width: 10, height: 10), display: false, animate: false)
         }
     }
-     
+
     @MainActor
     private func configureOverlayWindow(isInitial: Bool, window: NSWindow?, targetRect: CGRect?) {
         guard let window else {
@@ -242,16 +242,16 @@ struct MainApp: App {
         window.setFrameAutosaveName("")
         window.isOpaque = false
         window.backgroundColor = .clear
-         
+
         window.level = .floating
         window.hasShadow = false
-         
+
         // Use .titled with .borderless to allow input while keeping borderless appearance
         window.styleMask.remove(.titled)
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = false
         window.ignoresMouseEvents = true
-         
+
         if let targetRect = targetRect {
             let targetTransform = CGRect(x: targetRect.origin.x, y: targetRect.origin.y, width: 0, height: 0)
             window.setFrame(targetTransform, display: true, animate: false)
@@ -259,7 +259,7 @@ struct MainApp: App {
             window.setFrame(CGRect(x: 0, y: 0, width: 10, height: 10), display: false, animate: false)
         }
     }
-    
+
     /// Configures the application appearance settings
     private func configureAppAppearance() {
         openWindow(id: MainApp.mainWindow)
@@ -267,13 +267,13 @@ struct MainApp: App {
         openWindow(id: MainApp.actionRender)
         NSApp.appearance = NSAppearance(named: .aqua)
     }
-    
+
     /// Sets up the window delegate to handle window closing behavior
     ///
     private func setupWindowDelegate() {
         // Try to find the main window and set its delegate with a longer delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if let mainWindow = NSApp.windows.first(where: { 
+            if let mainWindow = NSApp.windows.first(where: {
                 $0.identifier?.rawValue.hasPrefix(MainApp.mainWindow) ?? false
             }) {
                 // Only set delegate if it's not already set

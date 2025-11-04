@@ -13,62 +13,62 @@ extension Color {
     static var lightGray: Color {
         Color(hex: "0F1115")
     }
-    
+
     static var onBackground: Color {
         Color(hex: "0F1115")
     }
-    
+
     static var someSurface: Color {
         Color(hex: "F2F3F5")
     }
-    
+
     static var surface: Color {
         Color(hex: "FFFFFF")
     }
-    
+
     static var additionalBlue100: Color {
         Color(hex: "D8EBFF")
     }
-    
+
     static var doubleChevron: Color {
         Color(hex: "374957")
     }
     static var background: Color {
         Color(hex: "F1F3F5")
     }
-    
+
     static var border: Color {
         Color(hex: "DBDFE6")
     }
-    
+
     static var primary: Color {
         Color(hex: "0F1115")
     }
-    
+
     static var onPrimary: Color {
         Color(hex: "FFFFFF")
     }
-    
+
     static var onSurface: Color {
         Color(hex: "3A4150")
     }
-    
+
     static var onSurfaceVariant: Color {
         Color(hex: "9AA3B7")
     }
-    
+
     static var grayScale200: Color {
         Color(hex: "EAECF0")
     }
-    
+
     static var primaryDisabled: Color {
         Color(hex: "C3C9D5")
     }
-    
+
     var nsColor: NSColor {
         NSColor(self)
     }
-    
+
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0

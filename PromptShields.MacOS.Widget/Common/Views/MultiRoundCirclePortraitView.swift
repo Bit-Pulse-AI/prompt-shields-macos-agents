@@ -9,7 +9,7 @@ struct MultiRoundCirclePortraitView: View {
     private let overlap: CGFloat = 5
     let items: [RoundCircleItem]
     let portraitSize: CGSize = .init(width: 20, height: 20)
-    
+
     var numberOfItems: Int {
         min(maxNumberOfItems, items.count)
     }

@@ -8,7 +8,7 @@ struct ElementInfo: Equatable, Hashable {
     var frame: CGRect
     let element: AXUIElement?
     let isSelectedText: Bool // Track if text came from user selection
-        
+
     init(text: String, applicationName: String, applicationBundleId: String, frame: CGRect, element: AXUIElement?, isSelectedText: Bool = false) {
         self.text = text
         self.applicationName = applicationName
@@ -17,7 +17,7 @@ struct ElementInfo: Equatable, Hashable {
         self.element = element
         self.isSelectedText = isSelectedText
     }
-        
+
     func hash(into hasher: inout Hasher) {
         hasher.combine(text)
         hasher.combine(applicationName)
@@ -25,7 +25,7 @@ struct ElementInfo: Equatable, Hashable {
         hasher.combine(frame)
         hasher.combine(isSelectedText)
     }
-    
+
     static func == (lhs: ElementInfo, rhs: ElementInfo) -> Bool {
         return
             lhs.applicationBundleId == rhs.applicationBundleId &&

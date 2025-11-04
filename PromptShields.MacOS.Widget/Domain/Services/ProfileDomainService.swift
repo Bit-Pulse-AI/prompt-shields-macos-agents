@@ -33,13 +33,13 @@ struct ProfileDomainServiceImpl: ProfileDomainService {
     private var profileNetworkService: ProfileNetworkService
     @Inject
     private var userDomainService: UserDomainService
-    
+
     var currentProfile: Profile {
         get async throws {
             try await currentProfile(refresh: false)
         }
     }
-    
+
     func currentProfile(refresh: Bool) async throws -> Profile {
         if refresh {
             return try await persistenceManager
@@ -62,7 +62,7 @@ struct ProfileDomainServiceImpl: ProfileDomainService {
             }
         }
     }
-    
+
     func getProfile() async throws -> Profile {
         let result = try await profileNetworkService.getProfile()
         return result.toDomain()

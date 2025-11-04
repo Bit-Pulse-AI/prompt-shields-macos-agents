@@ -4,7 +4,7 @@ struct ResizableTextView: NSViewRepresentable {
     @Binding var text: String
     let placeholderTextColor: NSColor
     let placeholderText: String
-    
+
     func makeNSView(context: Context) -> NSTextView {
         let textView = PlaceholderTextView()
         textView.delegate = context.coordinator

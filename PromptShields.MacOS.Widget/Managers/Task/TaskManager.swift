@@ -68,18 +68,18 @@ import SwiftData
 
 public actor TaskManager {
     // MARK: - Private Properties
-    
+
     private let taskActor: TaskManagerActor
     private var resultStreams: [UUID: Any] = [:]
-    
+
     // MARK: - Initialization
-    
+
     public init(maxConcurrentTasks: Int = 10) {
         self.taskActor = TaskManagerActor(maxConcurrentTasks: maxConcurrentTasks)
     }
-    
+
     // MARK: - Public Methods
-    
+
     /// Add a task to the manager and get an AsyncStream of results
     /// - Parameter task: The async task to execute
     /// - Returns: A tuple containing the task ID and an AsyncStream of results ordered by addition
@@ -87,22 +87,22 @@ public actor TaskManager {
         _ task: @escaping @Sendable () async throws -> any SafePersistentModel
     ) -> (id: UUID, results: AsyncStream<TaskResult>) {
         let (stream, continuation) = AsyncStream.makeStream(of: TaskResult.self)
-        
+
         Task {
             let taskId = await taskActor.addTask {
                 try await task()
             }
-            
+
             // Store the continuation for this task
             resultStreams[taskId] = continuation
-            
+
             // Listen for results from this specific task
             await listenForTaskResult(taskId: taskId, continuation: continuation)
         }
-        
+
         return (UUID(), stream) // Return a placeholder ID for now, actual ID will be handled internally
     }
-    
+
     /// Add multiple tasks and get a combined ordered stream
     /// - Parameter tasks: Array of async tasks to execute
     /// - Returns: AsyncStream of all task results in order of addition
@@ -110,10 +110,10 @@ public actor TaskManager {
         _ tasks: [@Sendable () async throws -> any PersistentModel]
     ) -> AsyncStream<TaskResult> {
         let (stream, continuation) = AsyncStream.makeStream(of: TaskResult.self)
-        
+
         Task {
             var taskIds: [UUID] = []
-            
+
             // Add all tasks
             for task in tasks {
                 let taskId = await taskActor.addTask {
@@ -121,32 +121,32 @@ public actor TaskManager {
                 }
                 taskIds.append(taskId)
             }
-            
+
             // Listen for all results in order
             await listenForOrderedResults(taskIds: taskIds, continuation: continuation)
         }
-        
+
         return stream
     }
-    
+
     /// Get current statistics about the task manager
     /// - Returns: TaskManagerStats with current state information
     public func getStats() async -> TaskManagerStats {
         return await taskActor.getStats()
     }
-    
+
     /// Cancel all pending tasks
     public func cancelAllTasks() async {
         await taskActor.cancelAllTasks()
     }
-    
+
     /// Wait for all current tasks to complete
     public func waitForAllTasks() async {
         await taskActor.waitForAllTasks()
     }
-    
+
     // MARK: - Private Methods
-    
+
     private func listenForTaskResult(
         taskId: UUID,
         continuation: AsyncStream<TaskResult>.Continuation
@@ -154,7 +154,7 @@ public actor TaskManager {
         // This would be implemented to listen for specific task completion
         // For now, we'll integrate this with the actor's result stream
     }
-    
+
     private func listenForOrderedResults(
         taskIds: [UUID],
         continuation: AsyncStream<TaskResult>.Continuation

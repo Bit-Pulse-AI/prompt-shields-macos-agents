@@ -4,7 +4,7 @@ import SwiftData
 struct Suggestion: Domain {
     typealias M = SuggestionModel
     typealias P = SuggestionPersistentModel
-    
+
     struct SuggestionModel: Model {
         var uuid: UID
         let originalText: String
@@ -13,22 +13,22 @@ struct Suggestion: Domain {
         let application: String
         let createdAt: Date
     }
-    
+
     let identifier: ModelIdentifier?
     var model: Suggestion.SuggestionModel
-    
+
     init(model: SuggestionModel) {
         self.model = model
         self.identifier = nil
     }
-    
+
     init(model: SuggestionModel, identifier: ModelIdentifier?) {
         self.model = model
         self.identifier = identifier
     }
-    
+
     // MARK: - Mapping Methods
-    
+
     func toPersistentModel(context: ModelContext?) -> SuggestionPersistentModel {
         let persistent = SuggestionPersistentModel()
         persistent.uuid = model.uuid.encrypt
@@ -39,7 +39,7 @@ struct Suggestion: Domain {
         persistent.createdAt = model.createdAt
         return persistent
     }
-    
+
     static func fromPersistentModel(_ persistent: SuggestionPersistentModel) -> Suggestion {
         let model = SuggestionModel(
             uuid: persistent.uuid.decrypt,
@@ -60,7 +60,7 @@ struct SuggestionAPIResponse: APIResponse {
     let suggestionType: String
     let application: String
     let createdAt: Date
-    
+
     enum CodingKeys: String, CodingKey {
         case uuid = "id"
         case originalText = "original_text"
@@ -69,7 +69,7 @@ struct SuggestionAPIResponse: APIResponse {
         case application
         case createdAt = "created_at"
     }
-    
+
     func toDomain() -> Suggestion {
         let model = Suggestion.SuggestionModel(uuid: uuid ?? UUID().uuidString,
                                                originalText: originalText,
@@ -93,9 +93,9 @@ final class SuggestionPersistentModel: UpdatablePersistentModel {
     var suggestionType: String = ""
     var application: String = ""
     var createdAt: Date = Date()
-    
+
     init() {}
-    
+
     func updateProperties(from suggestion: SuggestionPersistentModel) {
         self.uuid = suggestion.uuid
         self.originalText = suggestion.originalText

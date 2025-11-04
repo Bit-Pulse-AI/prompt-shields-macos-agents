@@ -2,7 +2,7 @@ import SwiftUI
 
 struct LoadingModifier: ViewModifier {
     let isLoading: Bool
-    
+
     func body(content: Content) -> some View {
         if isLoading {
             ZStack {

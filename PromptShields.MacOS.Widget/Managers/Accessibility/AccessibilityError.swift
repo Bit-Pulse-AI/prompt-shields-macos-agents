@@ -14,7 +14,7 @@ enum AccessibilityError: Error, LocalizedError {
     case failedToExtractText
     case failedToInjectText
     case timeout
-    
+
     var errorDescription: String? {
         switch self {
         case .noActiveTextField:

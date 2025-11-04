@@ -10,7 +10,7 @@ final class TextFieldDetector: Sendable {
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: TextFieldDetector.self)
     )
-    
+
     private func numberOfSelectedCharacters(from value: CFTypeRef?) -> Int {
         var range = CFRange()
         if AXValueGetValue(value as! AXValue, .cfRange, &range) {
@@ -18,33 +18,33 @@ final class TextFieldDetector: Sendable {
         }
         return -1
     }
-    
+
     func visibleTextRect(for element: AXUIElement) throws -> CGRect {
         var selectedRangeValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selectedRangeValue) == .success,
               let rangeValue = selectedRangeValue,
               AXValueGetType(rangeValue as! AXValue) == .cfRange
         else { throw AccessibilityError.failedToGetFrame }
-        
+
         var cfRange = CFRange()
         guard AXValueGetValue(rangeValue as! AXValue, .cfRange, &cfRange) else { throw AccessibilityError.failedToGetFrame }
-        
+
         // Get selected text
         var selectedTextValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute as CFString, &selectedTextValue) == .success,
               let selectedText = selectedTextValue as? String
         else { throw AccessibilityError.failedToGetFrame }
-        
+
         var visibleRects: [CGRect] = []
         var utf16Offset = cfRange.location
-        
+
         for line in selectedText.split(separator: "\n", omittingEmptySubsequences: false) {
             let trimmedLine = line.trimmingCharacters(in: .whitespaces)
             let trimmedLength = trimmedLine.utf16.count
-            
+
             if trimmedLength > 0 {
                 var subrange = CFRange(location: utf16Offset, length: trimmedLength)
-                
+
                 var boundsValue: CFTypeRef?
                 if AXUIElementCopyParameterizedAttributeValue(
                     element,
@@ -60,14 +60,14 @@ final class TextFieldDetector: Sendable {
                     }
                 }
             }
-            
+
             // Move offset forward: original line length + 1 for newline
             utf16Offset += line.utf16.count + 1
         }
-        
+
         return visibleRects.reduce(CGRect.null) { $0.union($1) }
     }
-    
+
     private func flipRect(_ rect: CGRect, screenHeight: CGFloat) -> CGRect {
         CGRect(
             x: rect.origin.x,
@@ -76,19 +76,19 @@ final class TextFieldDetector: Sendable {
             height: rect.height
         )
     }
-    
+
     private func getElementRect(_ element: AXUIElement) throws -> CGRect {
         guard let mainScreen = NSScreen.screens.first(where: { $0.frame.origin == .zero }) else {
             throw AccessibilityError.failedToGetFrame
         }
         let screenHeight = mainScreen.frame.height
         var rectangle: CGRect? = .zero
-        
+
         // Get window clip
         guard let windowClip = getWindowClipRect(for: element, screenHeight: screenHeight) else {
             throw AccessibilityError.failedToGetFrame
         }
-        
+
         var textValue: CFTypeRef?
         var selRangeValue: CFTypeRef?
         if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selRangeValue) == .success,
@@ -133,28 +133,28 @@ final class TextFieldDetector: Sendable {
                     }
                 }
             }
-            
+
             if let elemFrame = getElementFrameClippedToWindow(element, screenHeight: screenHeight) {
                 rectangle = elemFrame
             }
         }
-        
+
         guard let rectangle else {
             throw AccessibilityError.failedToGetFrame
         }
         return CGRect(x: rectangle.origin.x - padding, y: rectangle.origin.y - padding, width: rectangle.size.width + padding * 2, height: rectangle.size.height + padding * 2)
     }
-    
+
     private func getApplicationInfo(for element: AXUIElement) throws -> (name: String, bundleId: String) {
         var pid: pid_t = 0
         let result = AXUIElementGetPid(element, &pid)
-        
+
         guard result == .success else {
             throw AccessibilityError.failedToGetApplicationInfo
         }
-        
+
         let app = NSWorkspace.shared.runningApplications.first { $0.processIdentifier == pid }
-        
+
         return (
             name: app?.localizedName ?? "Unknown",
             bundleId: app?.bundleIdentifier ?? "unknown"
@@ -163,11 +163,11 @@ final class TextFieldDetector: Sendable {
 
     func getAXElementOrSelectionInfo(_ element: AXUIElement) throws -> ElementInfo {
         let applicationInfo = try getApplicationInfo(for: element)
-        
+
         // First check if there's selected text
         let selectedText = AXUIElementSafeWrapper.getSelectedText(from: element)
         let isFromSelection = selectedText != nil
-        
+
         let text: String
         if let selectedText = selectedText {
             // Use selected text directly
@@ -184,7 +184,7 @@ final class TextFieldDetector: Sendable {
                 text = ""
             }
         }
-        
+
         return ElementInfo(text: text,
                           applicationName: applicationInfo.name,
                           applicationBundleId: applicationInfo.bundleId,
@@ -201,7 +201,7 @@ final class TextFieldDetector: Sendable {
               let windowElement = windowRef else {
             return nil
         }
-        
+
         var winPosValue: CFTypeRef?
         var winSizeValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(windowElement as! AXUIElement, kAXPositionAttribute as CFString, &winPosValue) == .success,
@@ -210,12 +210,12 @@ final class TextFieldDetector: Sendable {
               let winSize = winSizeValue else {
             return nil
         }
-        
+
         var winOriginTopLeft = CGPoint.zero
         var winSizeCGSize = CGSize.zero
         AXValueGetValue(winPos as! AXValue, .cgPoint, &winOriginTopLeft)
         AXValueGetValue(winSize as! AXValue, .cgSize, &winSizeCGSize)
-        
+
         return CGRect(
             x: winOriginTopLeft.x,
             y: screenHeight - (winOriginTopLeft.y + winSizeCGSize.height),
@@ -233,19 +233,19 @@ final class TextFieldDetector: Sendable {
               let sz = sizeValue else {
             return nil
         }
-        
+
         var originTopLeft = CGPoint.zero
         var size = CGSize.zero
         AXValueGetValue(pos as! AXValue, .cgPoint, &originTopLeft)
         AXValueGetValue(sz as! AXValue, .cgSize, &size)
-        
+
         let elemBottomLeft = CGRect(
             x: originTopLeft.x,
             y: screenHeight - (originTopLeft.y + size.height),
             width: size.width,
             height: size.height
         )
-        
+
         if let windowClip = getWindowClipRect(for: element, screenHeight: screenHeight) {
             return elemBottomLeft.intersection(windowClip)
         } else {

@@ -23,15 +23,15 @@ struct UserNetworkServiceImpl: UserNetworkService {
     private var networkManager: NetworkManager
     @Inject
     private var keychainManager: KeychainManager
-    
+
     private let logger: os.Logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: UserNetworkServiceImpl.self)
     )
-    
+
     func getUser() async throws -> UserAPIResponse {
         let credentials = try keychainManager.loadUserCredentials()
-        
+
         return try await withCheckedThrowingContinuation { continuation in
             Auth0
                 .authentication()
@@ -51,12 +51,12 @@ struct UserNetworkServiceImpl: UserNetworkService {
                 }
         }
     }
-    
+
     func updateUser(firstName: String?,
                     lastName: String?) async throws -> UserAPIResponse {
         let credentials = try keychainManager.loadUserCredentials()
         let userId = credentials.id
-        
+
         return try await withCheckedThrowingContinuation { continuation in
             var metadata: [String: Any] = [:]
             if let firstName {
@@ -88,7 +88,7 @@ struct UserNetworkServiceImpl: UserNetworkService {
                 }
         }
     }
-    
+
     @MainActor
     func logout() async throws {
         return try await withCheckedThrowingContinuation { continuation in
@@ -108,7 +108,7 @@ struct UserNetworkServiceImpl: UserNetworkService {
                 }
         }
     }
-    
+
     @MainActor
     func login() async throws -> UserAPIResponse {
         return try await withCheckedThrowingContinuation { continuation in
@@ -127,21 +127,21 @@ struct UserNetworkServiceImpl: UserNetworkService {
                 }
         }
     }
-    
+
     func refreshToken() async throws -> UserAPIResponse {
         return try await TokenRefreshManager.shared.refreshToken()
     }
-    
+
     private func convertAuth0UserToAPIResponse(_ userInfo: UserInfo, accessToken: String) throws -> UserAPIResponse {
         let userId = userInfo.sub
         let email = userInfo.email
         let firstName = userInfo.givenName ?? "n/a"
         let lastName = userInfo.familyName ?? "n/a"
         let photoURL = userInfo.picture?.absoluteString
-        
+
         // Get existing refresh token from stored credentials if available
         let existingRefreshToken = try? keychainManager.loadUserCredentials().refreshToken
-        
+
         return UserAPIResponse(id: userId,
                                firstName: firstName,
                                lastName: lastName,
@@ -164,7 +164,7 @@ private extension Credentials {
         let firstName = decodedToken["given_name"].string ?? "n/a"
         let lastName = decodedToken["family_name"].string ?? "n/a"
         let photoURL = decodedToken["picture"].string
-        
+
         return UserAPIResponse(id: sub,
                                firstName: firstName,
                                lastName: lastName,

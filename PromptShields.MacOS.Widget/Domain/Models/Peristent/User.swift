@@ -4,7 +4,7 @@ import SwiftData
 struct User: Domain {
     typealias M = UserModel
     typealias P = UserPersistentModel
-    
+
     struct UserModel: Model {
         var uuid: UID
         var email: String
@@ -16,22 +16,22 @@ struct User: Domain {
         let createdAt: Date
         let modifiedAt: Date
     }
-    
+
     let identifier: ModelIdentifier?
     var model: User.UserModel
-    
+
     init(model: UserModel) {
         self.model = model
         self.identifier = nil
     }
-    
+
     init(model: UserModel, identifier: ModelIdentifier?) {
         self.model = model
         self.identifier = identifier
     }
-    
+
     // MARK: - Mapping Methods
-    
+
     func toPersistentModel(context: ModelContext?) -> UserPersistentModel {
         let persistent = UserPersistentModel()
         persistent.uuid = model.uuid.encrypt
@@ -45,7 +45,7 @@ struct User: Domain {
         persistent.modifiedAt = model.modifiedAt
         return persistent
     }
-    
+
     static func fromPersistentModel(_ persistent: UserPersistentModel) -> User {
         let model = UserModel(
             uuid: persistent.uuid.decrypt,
@@ -74,7 +74,7 @@ struct UserAPIResponse: APIResponse, Encodable {
     let photoURL: String?
     let createdAt: Date
     let updatedAt: Date
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case firstName
@@ -86,7 +86,7 @@ struct UserAPIResponse: APIResponse, Encodable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
-    
+
     func toDomain(profileId: UID?, preferenceId: UID?) -> User {
         let model = User.UserModel(
             uuid: id,
@@ -101,7 +101,7 @@ struct UserAPIResponse: APIResponse, Encodable {
         )
         return User(model: model)
     }
-    
+
     func toDomain() -> some Domain {
         toDomain(profileId: nil, preferenceId: nil)
     }
@@ -112,14 +112,14 @@ struct UserAPIRequest: Codable {
     let firstName: String?
     let lastName: String?
     let photoUrl: String?
-    
+
     init(from user: User) {
         self.email = user.model.email
         self.firstName = user.model.firstName
         self.lastName = user.model.lastName
         self.photoUrl = user.model.photoURL?.absoluteString
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case email
         case firstName = "first_name"
@@ -143,11 +143,11 @@ final class UserPersistentModel: UpdatablePersistentModel {
     var preferenceId: UID?
     var createdAt: Date = Date()
     var modifiedAt: Date = Date()
-    
+
     init() {
         // Default initializer for SwiftData
     }
-    
+
     func updateProperties(from other: UserPersistentModel) {
         self.uuid = other.uuid
         self.email = other.email

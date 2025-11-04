@@ -17,7 +17,7 @@ struct RoundBox<Content: View>: View {
     }
     private let title: String
     private let makeContent: () -> Content
-    
+
     init(title: String, makeContent: @escaping () -> Content) {
         self.makeContent = makeContent
         self.title = title

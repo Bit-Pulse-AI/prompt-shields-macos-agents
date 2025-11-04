@@ -7,31 +7,31 @@ struct ControlPanelView: View {
         sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)],
         mapping: DefaultMapping<Suggestion>.self
     )
-    
+
     private var currentSuggestions: [Suggestion] {
         return suggestionsQueryable.wrappedValue
     }
-    
+
     var hasCurrentApplication: Bool {
         return dashboardState.currentApplication != .empty
     }
-    
+
     var applicationStatusIndicator: String {
         dashboardState.currentApplication.name
     }
-    
+
     var suggestionStatusIndicator: Int {
         currentSuggestions.count
     }
-    
+
     var hasSuggestions: Bool {
         currentSuggestions.count > 0
     }
-    
+
     var topSuggestions: [Suggestion] {
         Array(currentSuggestions.prefix(5))
     }
-    
+
     @EnvironmentObject private var accessibilityManagerImpl: AccessibilityManagerImpl
     @EnvironmentObject private var overlayState: OverlayStateModel
     @EnvironmentObject private var dashboardState: DashboardStateModel
@@ -42,24 +42,24 @@ struct ControlPanelView: View {
                 if UserDefaults.standard.bool(forKey: "shouldHideWelcome") != true {
                     welcomeSection
                 }
-                
+
                 // Quick Stats
                 quickStatsSection
             }
             .padding()
         }
     }
-    
+
     private var welcomeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Welcome to PromptShields Assistant")
                 .font(.title2)
                 .fontWeight(.bold)
-            
+
             Text("Your AI-powered writing assistant that helps you write better across all applications.")
                 .font(.body)
                 .foregroundColor(.secondary)
-            
+
             if !dashboardState.isActive {
                 Button("Get Started") {
                     Task {
@@ -74,12 +74,12 @@ struct ControlPanelView: View {
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
     }
-    
+
     private var quickStatsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Quick Stats")
                 .font(.headline)
-            
+
             HStack(spacing: 16) {
                 StatCardView(
                     title: "Suggestions Today",
@@ -87,14 +87,14 @@ struct ControlPanelView: View {
                     icon: "textformat.abc.dottedunderline",
                     color: .blue
                 )
-                
+
                 StatCardView(
                     title: "Active Applications",
                     value: hasCurrentApplication ? "1" : "0",
                     icon: "app.badge",
                     color: .green
                 )
-                
+
                 StatCardView(
                     title: "Status",
                     value: dashboardState.isActive ? "Active" : "Inactive",
@@ -104,12 +104,12 @@ struct ControlPanelView: View {
             }
         }
     }
-    
+
     private var recentActivitySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recent Activity")
                 .font(.headline)
-            
+
             if !hasSuggestions {
                 Text("No recent suggestions")
                     .font(.body)

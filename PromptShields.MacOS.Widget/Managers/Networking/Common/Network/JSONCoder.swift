@@ -8,7 +8,7 @@ extension Data {
 //        TODO: Add mapping
         return map.content
     }
-    
+
     /// Creates a JSON decoder with custom date formatting
     /// - Returns: Configured JSONDecoder
     private func createJSONDecoder() -> JSONDecoder {

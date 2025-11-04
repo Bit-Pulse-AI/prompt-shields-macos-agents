@@ -27,7 +27,7 @@ struct SubscriptionDomainServiceKey: EnvironmentKey {
 protocol SubscriptionDomainService: Sendable {
     var currentSubscription: Subscription { get async throws }
     func currentSubscription(refresh: Bool) async throws -> Subscription
-    
+
     func getSubscriptions(organisation: Organisation) async throws -> [Subscription]
 }
 
@@ -40,18 +40,18 @@ struct SubscriptionDomainServiceImpl: SubscriptionDomainService {
     private var organisationDomainService: OrganisationDomainService
     @Inject
     private var profileDomainService: ProfileDomainService
-    
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: SubscriptionDomainService.self)
     )
-    
+
     var currentSubscription: Subscription {
         get async throws {
             try await currentSubscription(refresh: false)
         }
     }
-    
+
     func currentSubscription(refresh: Bool) async throws -> Subscription {
         let fetchRemote: () async throws -> Subscription = {
             let currentProfile = try await profileDomainService.currentProfile
@@ -72,22 +72,32 @@ struct SubscriptionDomainServiceImpl: SubscriptionDomainService {
             }
         }
     }
-    
+
+    func checkout(subscriptionTier: String,
+                  organisationId: String, tenantId: String, billingPeriod: String, successURL: String, cancelURL: String) async throws -> Checkout {
+        try await subscriptionNetworkService.checkout(subscriptionTier: subscriptionTier,
+                                                      tenantId: tenantId,
+                                                      organisationId: organisationId,
+                                                      billingPeriod: billingPeriod,
+                                                      successURL: successURL,
+                                                      cancelURL: cancelURL).toDomain()
+    }
+
     func getSubscription(organisationId: String, subscriptionId: String) async throws -> Subscription {
         try await subscriptionNetworkService.read(organisationId: organisationId, subscriptionId: subscriptionId).toDomain()
     }
-    
+
     func getSubscriptions(organisation: Organisation) async throws -> [Subscription] {
         do {
             // Get local subscriptions first
             let localSubscriptions: [Subscription] = try await persistenceManager.query(
                 sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)]
             )
-            
+
             // Sync with backend
             do {
                 let remoteSubscriptions = try await subscriptionNetworkService.list(organisationId: organisation.model.uuid)
-                
+
                 // Update local subscriptions with remote data
                 var updatedSubscriptions: [Subscription] = []
                 for remoteSubscription in remoteSubscriptions.items {
@@ -100,7 +110,7 @@ struct SubscriptionDomainServiceImpl: SubscriptionDomainService {
                         createdAt: dateFormatter.date(from: remoteSubscription.createdAt) ?? Date(),
                         modifiedAt: dateFormatter.date(from: remoteSubscription.updatedAt) ?? Date()
                     )
-                    
+
                     let subscription = try await persistenceManager.insert(domain: Subscription(model: subscriptionModel))
                     updatedSubscriptions.append(subscription)
                 }
@@ -116,4 +126,4 @@ struct SubscriptionDomainServiceImpl: SubscriptionDomainService {
             throw error
         }
     }
-} 
+}

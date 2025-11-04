@@ -5,9 +5,9 @@ struct SubscriptionPackageView: View {
    let package: Package
    let isCurrentPlan: Bool
    let onPurchase: () async -> Void
-   
+
    @State private var isPurchasing = false
-   
+
    var priceView: some View {
        if let introPrice = package.storeProduct.introductoryDiscount {
            Text("\(introPrice.localizedPriceString) for \(introPrice.numberOfPeriods) \(introPrice.subscriptionPeriod.unit.description)")
@@ -23,15 +23,15 @@ struct SubscriptionPackageView: View {
                Text(package.storeProduct.localizedTitle)
                    .font(NSFont.body1.swiftUIFont)
                    .foregroundStyle(Color.onSurface)
-               
+
                Text(package.storeProduct.localizedDescription)
                    .font(NSFont.body2.swiftUIFont)
                    .foregroundStyle(Color.onSurfaceVariant)
                    .lineLimit(2)
            }
-           
+
            Spacer()
-           
+
            VStack(alignment: .trailing, spacing: 4) {
                Text(package.localizedPriceString)
                    .font(NSFont.heading4.swiftUIFont)

@@ -8,17 +8,17 @@ final class AuthStateModel: ObservableObject {
 struct AuthView: View {
     @EnvironmentObject private var mainState: MainStateModel
     @Environment(\.userDomainService) private var userDomainService
-    
+
     private let loginButtonStyle = AccountButtonStyle(foregroundColor: Color.primary,
                                                       backgroundColor: .white,
                                                       borderColor: .border,
                                                       cornerRadius: 8)
-    
+
     private let logger: os.Logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: AuthView.self)
     )
-    
+
     var body: some View {
         VStack(alignment: .center, spacing: 8) {
             Image(ImageResource(name: "logo", bundle: .main))
@@ -42,7 +42,7 @@ struct AuthView: View {
                 maxHeight: .infinity,
                 alignment: .center)
     }
-    
+
     func authenticateRegisterUser() async {
         do {
             try await userDomainService.login()

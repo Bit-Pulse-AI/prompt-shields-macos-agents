@@ -21,7 +21,7 @@ enum PopupDeleteType: Identifiable {
     case channel
     case project
     case photo
-    
+
     var title: String {
         switch self {
         case .channel:
@@ -32,7 +32,7 @@ enum PopupDeleteType: Identifiable {
             "Delete photo"
         }
     }
-    
+
     func message(name: String) -> String {
         switch self {
         case .channel:
@@ -67,8 +67,8 @@ enum PopupType: Identifiable {
 enum DashboardViewParameters {
     private static let collapsedWidth: CGFloat = 64
     private static let expandedWidth: CGFloat = 240
-    
+
     static func sidebarWidth(isCollapsed: Bool) -> CGFloat {
         isCollapsed ? DashboardViewParameters.collapsedWidth : DashboardViewParameters.expandedWidth
     }
-} 
+}

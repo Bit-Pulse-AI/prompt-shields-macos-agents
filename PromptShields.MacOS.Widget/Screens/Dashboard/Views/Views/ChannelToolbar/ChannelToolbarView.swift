@@ -4,7 +4,7 @@ struct ChannelToolbarViewModel {
     let id: String = UUID().uuidString
     let title: String
     let icon: Image
-    
+
     let action: () -> Void
 }
 
@@ -28,7 +28,7 @@ struct LLMButtonStyle: ButtonStyle {
 struct ChannelToolbarView: View {
     let items: [ChannelToolbarViewModel]
     let addAction: () -> Void
-    
+
     var body: some View {
         HStack(spacing: 8) {
             ForEach(items, id: \.id) { item in

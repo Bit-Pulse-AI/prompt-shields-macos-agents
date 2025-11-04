@@ -27,20 +27,20 @@ struct OrganisationDomainServiceKey: EnvironmentKey {
 protocol OrganisationDomainService: Sendable {
     var currentOrganisation: Organisation { get async throws }
     func currentOrganisation(refresh: Bool) async throws -> Organisation
-    
+
     func createOrganisation(tenant: Tenant,
                             name: String,
                             description: String?) async throws -> Organisation
-    
+
     func getOrganisations(tenant: Tenant) async throws -> [Organisation]
-    
+
     func updateOrganisation(organisation: Organisation,
                             tenant: Tenant,
                             name: String,
                             description: String?,
                             localData: @Sendable @escaping (Organisation) -> Void,
                             remoteData: @Sendable @escaping (Result<Organisation, Error>) -> Void)
-    
+
     func deleteOrganisation(organisation: Organisation,
                             tenant: Tenant,
                             localData: @Sendable @escaping () -> Void,
@@ -56,7 +56,7 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
     private var tenantDomainService: TenantDomainService
     @Inject
     private var profileDomainService: ProfileDomainService
-    
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: OrganisationDomainService.self)
@@ -66,7 +66,7 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
             try await currentOrganisation(refresh: false)
         }
     }
-    
+
     func currentOrganisation(refresh: Bool) async throws -> Organisation {
         let fetchRemote: () async throws -> Organisation = {
             let currentProfile = try await profileDomainService.currentProfile
@@ -87,7 +87,7 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
             }
         }
     }
-    
+
     func createOrganisation(tenant: Tenant,
                             name: String,
                             description: String?) async throws -> Organisation {
@@ -102,18 +102,18 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
                 createdAt: Date(),
                 modifiedAt: Date()
             )
-            
+
             let organisation = try await persistenceManager.insert(domain: Organisation(model: organisationModel))
-            
+
             // Sync with backend
             do {
                 let remoteOrganisation = try await organisationNetworkService.create(tenantId: tenant.model.uuid, name: name, description: description)
-                
+
                 // Update organisation with remote data
                 var updatedOrganisation = organisation
                 updatedOrganisation.model.uuid = remoteOrganisation.id
                 try await persistenceManager.update(domain: updatedOrganisation)
-                
+
                 return updatedOrganisation
             } catch {
                 // Rollback on network failure
@@ -124,22 +124,22 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
             throw error
         }
     }
-    
+
     func getOrganisation(tenantId: String, organisationId: String) async throws -> Organisation {
         try await organisationNetworkService.read(tenantId: tenantId, organisationId: organisationId).toDomain()
     }
-    
+
     func getOrganisations(tenant: Tenant) async throws -> [Organisation] {
         do {
             // Get local organisations first
             let localOrganisations: [Organisation] = try await persistenceManager.query(
                 sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)]
             )
-            
+
             // Sync with backend
             do {
                 let remoteOrganisations = try await organisationNetworkService.list(tenantId: tenant.model.uuid)
-                
+
                 // Update local organisations with remote data
                 var updatedOrganisations: [Organisation] = []
                 for remoteOrganisation in remoteOrganisations.items {
@@ -153,11 +153,11 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
                         createdAt: dateFormatter.date(from: remoteOrganisation.createdAt) ?? Date(),
                         modifiedAt: dateFormatter.date(from: remoteOrganisation.updatedAt) ?? Date()
                     )
-                    
+
                     let organisation = try await persistenceManager.insert(domain: Organisation(model: organisationModel))
                     updatedOrganisations.append(organisation)
                 }
-                
+
                 return updatedOrganisations
             } catch {
                 if !localOrganisations.isEmpty {
@@ -170,7 +170,7 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
             throw error
         }
     }
-    
+
     func updateOrganisation(organisation: Organisation,
                             tenant: Tenant,
                             name: String,
@@ -181,7 +181,7 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
             do {
                 let originalName = organisation.model.name
                 let originalDescription = organisation.model.description
-                
+
                 // Update locally first
                 var updatedOrganisation = organisation
                 updatedOrganisation.model.name = name
@@ -189,16 +189,16 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
                 updatedOrganisation.model.modifiedAt = Date()
                 try await persistenceManager.update(domain: updatedOrganisation)
                 localData(updatedOrganisation)
-                
+
                 // Sync with backend
                 do {
                     let remoteOrganisation = try await organisationNetworkService.update(tenantId: tenant.model.uuid, organisationId: organisation.model.uuid, name: name, description: description)
-                    
+
                     // Update with remote data
                     updatedOrganisation.model.uuid = remoteOrganisation.id
                     updatedOrganisation.model.name = remoteOrganisation.name
                     try await persistenceManager.update(domain: updatedOrganisation)
-                    
+
                     remoteData(.success(updatedOrganisation))
                 } catch {
                     // Rollback on network failure
@@ -212,7 +212,7 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
             }
         }
     }
-    
+
     func deleteOrganisation(organisation: Organisation,
                             tenant: Tenant,
                             localData: @Sendable @escaping () -> Void,
@@ -222,7 +222,7 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
                 // Delete locally first
                 try await persistenceManager.delete(domain: organisation)
                 localData()
-                
+
                 // Sync with backend
                 do {
                     try await organisationNetworkService.delete(tenantId: tenant.model.uuid, organisationId: organisation.model.uuid)
@@ -237,4 +237,4 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
             }
         }
     }
-} 
+}
