@@ -40,7 +40,9 @@ actor AccessibilityManagerImpl: ObservableObject {
 
     func startTimer() {
         UserDefaults.standard.setValue(true, forKey: "shouldHideWelcome")
-        isActive.wrappedValue = true
+        Task { @MainActor [weak self] in
+            self?.isActive.wrappedValue = true
+        }
         Task {
             await timer.start { [weak self] in
                 await self?.timerTick()
@@ -185,9 +187,13 @@ actor AccessibilityManagerImpl: ObservableObject {
 
     func updateElementInfo(elementInfo: ElementInfo? = nil) async {
         if let appName = elementInfo?.applicationName {
-            applicationInfo.wrappedValue = .init(name: appName)
+            await MainActor.run { [weak self] in
+                self?.applicationInfo.wrappedValue = .init(name: appName)
+            }
         } else {
-            applicationInfo.wrappedValue = .empty
+            await MainActor.run { [weak self] in
+                self?.applicationInfo.wrappedValue = .empty
+            }
         }
         let isSelf = elementInfo?.applicationBundleId == Bundle.main.bundleIdentifier
         guard let frame = elementInfo?.frame, frame.isValid else {

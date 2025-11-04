@@ -22,17 +22,17 @@ struct ActionView: View {
         category: String(describing: ActionView.self)
     )
 
-    @MainActor
     private var suggestionTypes: [SuggestionType] {
-        let enabledFilters = userPreferences?.model.enabledSuggestionTypes ?? []
-        return suggestionTypesQueryable.wrappedValue.filter {
-            enabledFilters.contains($0.model.suggestionType)
-        }
+//        let enabledFilters = userPreferences?.model.enabledSuggestionTypes ?? []
+//        return suggestionTypesQueryable.wrappedValue.filter {
+//            enabledFilters.contains($0.model.suggestionType)
+//        }
+        []
     }
 
-    @MainActor
     private var userPreferences: UserPreferences? {
-        userPreferencesTypesQueryable.wrappedValue.first
+//        userPreferencesTypesQueryable.wrappedValue.first
+        nil
     }
 
     var body: some View {
@@ -115,21 +115,31 @@ struct ActionView: View {
 
                                             if let axUIElement = overlayStateModel?.elementInfo?.element {
                                                 if await isValidAXUIElement(axUIElement) {
-                                                    actionText = result.model.suggestedText
-                                                    overlayStateModel?.actionToolState = .action
+                                                    await MainActor.run {
+                                                        actionText = result.model.suggestedText
+                                                        overlayStateModel?.actionToolState = .action
+                                                    }
                                                 } else {
                                                     logger.error("AXUIElement is no longer valid")
-                                                    overlayStateModel?.actionToolState = .idle
+                                                    await MainActor.run {
+                                                        overlayStateModel?.actionToolState = .idle
+                                                    }
                                                 }
                                             }
                                         } catch is CancellationError {
                                             logger.warning("LLM processing was cancelled")
-                                            overlayStateModel?.actionToolState = .idle
+                                            await MainActor.run {
+                                                overlayStateModel?.actionToolState = .idle
+                                            }
                                         } catch {
                                             logger.error("Error processing LLM request: \(error)")
-                                            overlayStateModel?.actionToolState = .idle
+                                            await MainActor.run {
+                                                overlayStateModel?.actionToolState = .idle
+                                            }
                                         }
-                                        isProcessing = false
+                                        await MainActor.run {
+                                            isProcessing = false
+                                        }
                                     }
                                 } label: {
                                     Text(suggestionType.model.suggestionName)
@@ -163,10 +173,14 @@ struct ActionView: View {
                     // Use the isSelectedText information from the element info
                     let isSelectedText = overlayStateModel.elementInfo?.isSelectedText ?? false
                     try await TextInjector.shared.injectText(actionText, into: axUIElement, isSelectedText: isSelectedText)
-                    self.overlayStateModel.actionToolState = .idle
+                    await MainActor.run {
+                        self.overlayStateModel.actionToolState = .idle
+                    }
                 } catch {
                     logger.error("Error injecting text: \(error)")
-                    self.overlayStateModel.actionToolState = .idle
+                    await MainActor.run {
+                        self.overlayStateModel.actionToolState = .idle
+                    }
                 }
             }
         }

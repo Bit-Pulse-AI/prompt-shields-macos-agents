@@ -30,9 +30,13 @@ struct AuthView: View {
             } else {
                 Button {
                     Task {
-                        mainState.isBusy = true
+                        await MainActor.run {
+                            mainState.isBusy = true
+                        }
                         await authenticateRegisterUser()
-                        mainState.isBusy = false
+                        await MainActor.run {
+                            mainState.isBusy = false
+                        }
                     }
                 } label: {
                     Text("Log me in")
@@ -46,7 +50,9 @@ struct AuthView: View {
     func authenticateRegisterUser() async {
         do {
             try await userDomainService.login()
-            mainState.authState = .loggedIn
+            await MainActor.run {
+                mainState.authState = .loggedIn
+            }
         } catch {
             logger.error("Error encountered \(error)")
         }

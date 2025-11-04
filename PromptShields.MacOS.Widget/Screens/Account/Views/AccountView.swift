@@ -174,7 +174,9 @@ struct AccountView: View {
     private func logout() {
         Task {
             try await userDomainService.logout()
-            mainState.authState = .loggedOut(nil)
+            await MainActor.run {
+                mainState.authState = .loggedOut(nil)
+            }
         }
     }
 

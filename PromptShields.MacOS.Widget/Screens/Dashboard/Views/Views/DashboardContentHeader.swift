@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct DashboardContentHeaderView: View {
     @EnvironmentObject private var overlayState: OverlayStateModel
     @EnvironmentObject private var dashboardState: DashboardStateModel
@@ -49,8 +50,10 @@ struct DashboardContentHeaderView: View {
                         }
                     } else {
                         Task {
-                            overlayState.elementInfo = nil
-                            overlayState.actionToolState = .idle
+                            await MainActor.run {
+                                overlayState.elementInfo = nil
+                                overlayState.actionToolState = .idle
+                            }
                             await accessibilityManager.startTimer()
                         }
                     }
