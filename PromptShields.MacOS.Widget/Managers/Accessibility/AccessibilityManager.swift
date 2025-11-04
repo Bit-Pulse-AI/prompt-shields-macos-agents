@@ -40,8 +40,8 @@ actor AccessibilityManagerImpl: ObservableObject {
 
     func startTimer() {
         UserDefaults.standard.setValue(true, forKey: "shouldHideWelcome")
-        Task { @MainActor [weak self] in
-            self?.isActive.wrappedValue = true
+        Task { [weak self] in
+            await self?.setIsActiveOnMain(true)
         }
         Task {
             await timer.start { [weak self] in
@@ -51,10 +51,10 @@ actor AccessibilityManagerImpl: ObservableObject {
     }
 
     func stopTimer() {
-        Task {
-            isActive.wrappedValue = false
-            await timer.stop()
-            elementInfo.wrappedValue = nil
+        Task { [weak self] in
+            await self?.setIsActiveOnMain(false)
+            await self?.timer.stop()
+            await self?.setElementInfoOnMain(nil)
         }
     }
 
@@ -187,18 +187,14 @@ actor AccessibilityManagerImpl: ObservableObject {
 
     func updateElementInfo(elementInfo: ElementInfo? = nil) async {
         if let appName = elementInfo?.applicationName {
-            await MainActor.run { [weak self] in
-                self?.applicationInfo.wrappedValue = .init(name: appName)
-            }
+            await setApplicationInfoOnMain(.init(name: appName))
         } else {
-            await MainActor.run { [weak self] in
-                self?.applicationInfo.wrappedValue = .empty
-            }
+            await setApplicationInfoOnMain(.empty)
         }
         let isSelf = elementInfo?.applicationBundleId == Bundle.main.bundleIdentifier
         guard let frame = elementInfo?.frame, frame.isValid else {
             if elementInfo?.applicationBundleId != nil && !isSelf {
-                self.elementInfo.wrappedValue = nil
+                await setElementInfoOnMain(nil)
             }
             return
         }
@@ -210,23 +206,23 @@ actor AccessibilityManagerImpl: ObservableObject {
         }
         if shouldUpdateFrame && previousRect == frame {
             if elementInfo?.applicationBundleId != nil && !isSelf {
-                self.elementInfo.wrappedValue = elementInfo?.withFrame(frame: frame)
+                await setElementInfoOnMain(elementInfo?.withFrame(frame: frame))
                 shouldUpdateFrame = false
             }
         } else if previousRect != elementInfo?.frame {
             if elementInfo?.applicationBundleId != nil && !isSelf {
-                self.elementInfo.wrappedValue = nil
+                await setElementInfoOnMain(nil)
             }
         }
         let text = elementInfo?.text
         if shouldUpdateText && previousText == text {
             if elementInfo?.applicationBundleId != nil && !isSelf {
-                self.elementInfo.wrappedValue = elementInfo?.withText(text: elementInfo?.text ?? "")
+                await setElementInfoOnMain(elementInfo?.withText(text: elementInfo?.text ?? ""))
                 shouldUpdateText = false
             }
         } else if previousText != elementInfo?.text {
             if elementInfo?.applicationBundleId != nil && !isSelf {
-                self.elementInfo.wrappedValue = nil
+                await setElementInfoOnMain(nil)
             }
         }
 
@@ -268,120 +264,57 @@ actor AccessibilityManagerImpl: ObservableObject {
     }
 
     func getRobustFocusedElement() async throws -> AXUIElement {
-        let element: AXUIElement? = AXUIElementSafeWrapper.withMemoryCleanup {
-            guard let frontApp = NSWorkspace.shared.frontmostApplication else {
+        let element: AXUIElement? = await MainActor.run {
+            func localFindFocusedInTree(_ element: AXUIElement, depth: Int, maxDepth: Int, visited: Set<AXElementID>) -> AXUIElement? {
+                guard depth < maxDepth else { return nil }
+                let elementID = AXElementID(element)
+                guard !visited.contains(elementID) else { return nil }
+                if AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXValueAttribute) != nil ||
+                    AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) != nil {
+                    if let frontApp = NSWorkspace.shared.frontmostApplication,
+                       let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier),
+                       let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) {
+                        let focusedElement = focusedRef as! AXUIElement
+                        if Unmanaged.passUnretained(element).toOpaque() == Unmanaged.passUnretained(focusedElement).toOpaque() {
+                            return element
+                        }
+                    }
+                }
+                let children = AXUIElementSafeWrapper.getChildren(from: element)
+                var newVisited = visited
+                newVisited.insert(elementID)
+                for child in children {
+                    if let found = localFindFocusedInTree(child, depth: depth + 1, maxDepth: maxDepth, visited: newVisited) {
+                        return found
+                    }
+                }
                 return nil
             }
 
-            guard let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier) else {
+            return AXUIElementSafeWrapper.withMemoryCleanup {
+                guard let frontApp = NSWorkspace.shared.frontmostApplication else {
+                    return nil
+                }
+                guard let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier) else {
+                    return nil
+                }
+                if let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) {
+                    let focusedElement = focusedRef as! AXUIElement
+                    guard AXUIElementSafeWrapper.isValidElement(focusedElement) else { return nil }
+                    return focusedElement
+                }
+                if let windowRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedWindowAttribute) {
+                    let windowElement = windowRef as! AXUIElement
+                    guard AXUIElementSafeWrapper.isValidElement(windowElement) else { return nil }
+                    return localFindFocusedInTree(windowElement, depth: 0, maxDepth: 20, visited: Set<AXElementID>())
+                }
                 return nil
             }
-
-            // Try to get focused element directly first
-            if let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) {
-                let focusedElement = focusedRef as! AXUIElement
-                // Validate the element is still valid
-                guard AXUIElementSafeWrapper.isValidElement(focusedElement) else {
-                    return nil
-                }
-                return focusedElement
-            }
-
-            // Fallback to window-based search with timeout protection
-            if let windowRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedWindowAttribute) {
-                let windowElement = windowRef as! AXUIElement
-                // Validate the element is still valid
-                guard AXUIElementSafeWrapper.isValidElement(windowElement) else {
-                    return nil
-                }
-
-                if let found = findFocusedInTree(windowElement) {
-                    return found
-                }
-            }
-
-            return nil
         }
         guard let element else {
             throw AccessibilityError.failedToGetFrame
         }
         return element
-    }
-
-    private func findFocusedInTree(_ element: AXUIElement) -> AXUIElement? {
-        return findFocusedInTree(element, depth: 0, maxDepth: 20, visitedElements: Set<AXElementID>())
-    }
-
-    private func findFocusedInTree(_ element: AXUIElement, depth: Int, maxDepth: Int, visitedElements: Set<AXElementID>) -> AXUIElement? {
-        // Prevent infinite recursion
-        guard depth < maxDepth else {
-            logger.warning("Maximum depth reached in findFocusedInTree at depth \(depth)")
-            return nil
-        }
-
-        let elementID = AXElementID(element)
-
-        // Prevent cycles by tracking visited elements
-        guard !visitedElements.contains(elementID) else {
-            logger.warning("Cycle detected in accessibility tree at depth \(depth)")
-            return nil
-        }
-
-        // Log progress for debugging (only at certain depths to avoid spam)
-        if depth % 5 == 0 {
-            logger.debug("Searching accessibility tree at depth \(depth)")
-        }
-
-        return AXUIElementSafeWrapper.withMemoryCleanup {
-            // Check if this element has text content (indicating it might be focused)
-            // Work directly with the original element to avoid reconstruction issues
-            let hasValue = AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXValueAttribute) != nil
-            let hasSelectedText = AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) != nil
-
-            if hasValue || hasSelectedText {
-                // This element has text content, check if it's the focused element
-                guard let frontApp = NSWorkspace.shared.frontmostApplication,
-                      let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier),
-                      let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) else {
-                    return nil
-                }
-
-                let focusedElement = focusedRef as! AXUIElement
-
-                // Compare the current element with the focused element
-                if Unmanaged.passUnretained(element).toOpaque() == Unmanaged.passUnretained(focusedElement).toOpaque() {
-                    return element
-                }
-            }
-
-            // Get children safely with a limit to prevent excessive recursion
-            let children = AXUIElementSafeWrapper.getChildren(from: element)
-            let maxChildren = 50 // Limit to prevent excessive recursion
-
-            // Create new set with current element added
-            var newVisitedElements = visitedElements
-            newVisitedElements.insert(elementID)
-
-            for (index, child) in children.enumerated() {
-                // Limit the number of children we process
-                if index >= maxChildren {
-                    logger.warning("Too many children in accessibility tree, stopping search")
-                    break
-                }
-
-                // Skip invalid children
-                guard AXUIElementSafeWrapper.isValidElement(child) else {
-                    logger.debug("Skipping invalid child element at depth \(depth)")
-                    continue
-                }
-
-                if let found = findFocusedInTree(child, depth: depth + 1, maxDepth: maxDepth, visitedElements: newVisitedElements) {
-                    return found
-                }
-            }
-
-            return nil
-        }
     }
 
     @MainActor
@@ -397,6 +330,21 @@ actor AccessibilityManagerImpl: ObservableObject {
 
         // Terminate current app
         NSApp.terminate(nil)
+    }
+
+    @MainActor
+    private func setIsActiveOnMain(_ value: Bool) {
+        isActive.wrappedValue = value
+    }
+
+    @MainActor
+    private func setApplicationInfoOnMain(_ value: ApplicationInfo) {
+        applicationInfo.wrappedValue = value
+    }
+
+    @MainActor
+    private func setElementInfoOnMain(_ value: ElementInfo?) {
+        elementInfo.wrappedValue = value
     }
 }
 

@@ -14,7 +14,6 @@ struct SubscriptionIntegrationView: View {
     private let availableSubscriptionTiers = [SubscriptionTier.tin, SubscriptionTier.bronze]
     private let pricingPlans = [PricingPlan]()
 
-    @State private var checkout: Checkout?
     @State private var currentSubscription: Subscription?
     @State private var isLoading = false
     @State private var showingSubscriptionDetail = false
@@ -31,7 +30,6 @@ struct SubscriptionIntegrationView: View {
         .sheet(isPresented: $showingSubscriptionDetail) {
 
         }
-//        .billingResultOverlay(overlayStateModel: overlayStateModel)
         .frame(alignment: .leading)
         .task {
             do {
@@ -98,7 +96,7 @@ struct SubscriptionIntegrationView: View {
             let organisationId = profile.defaultOrganisationId
             let tenantId = profile.defaultTenantId
 
-            checkout = try await subscriptionDomainService.checkout(
+            let checkout = try await subscriptionDomainService.checkout(
                 subscriptionTier: SubscriptionTier.bronze.rawValue,
                 organisationId: organisationId,
                 tenantId: tenantId,
@@ -108,7 +106,6 @@ struct SubscriptionIntegrationView: View {
             )
         } catch {
             logger.error("error \(error)")
-            checkout = nil
         }
 
         isLoading = false

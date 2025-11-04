@@ -42,20 +42,28 @@ extension AXUIElement: @retroactive Hashable {
 final class AXUIElementSafeWrapper {
     // MARK: - Safe Attribute Access
 
+    private static func onMainSync<T>(_ work: () -> T) -> T {
+        if Thread.isMainThread {
+            return work()
+        } else {
+            return DispatchQueue.main.sync { work() }
+        }
+    }
+
     /// Safely get an attribute value from an AXUIElement
     /// - Parameters:
     ///   - element: The AXUIElement to query
     ///   - attribute: The attribute to get
     /// - Returns: The attribute value or nil if failed
     static func getAttributeValue(from element: AXUIElement, attribute: String) -> CFTypeRef? {
-        var value: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
-
-        guard result == .success else {
-            return nil
+        return onMainSync {
+            var value: CFTypeRef?
+            let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+            guard result == .success else {
+                return nil
+            }
+            return value
         }
-
-        return value
     }
 
     /// Safely get children from an AXUIElement with validation
@@ -87,19 +95,19 @@ final class AXUIElementSafeWrapper {
         attribute: String,
         parameter: CFTypeRef
     ) -> CFTypeRef? {
-        var value: CFTypeRef?
-        let result = AXUIElementCopyParameterizedAttributeValue(
-            element,
-            attribute as CFString,
-            parameter,
-            &value
-        )
-
-        guard result == .success else {
-            return nil
+        return onMainSync {
+            var value: CFTypeRef?
+            let result = AXUIElementCopyParameterizedAttributeValue(
+                element,
+                attribute as CFString,
+                parameter,
+                &value
+            )
+            guard result == .success else {
+                return nil
+            }
+            return value
         }
-
-        return value
     }
 
     // MARK: - Safe Element Creation
@@ -108,23 +116,23 @@ final class AXUIElementSafeWrapper {
     /// - Parameter processIdentifier: The process ID of the application
     /// - Returns: The AXUIElement or nil if failed
     static func createApplicationElement(processIdentifier: pid_t) -> AXUIElement? {
-        let element = AXUIElementCreateApplication(processIdentifier)
-
-        // Validate the element
-        var pid: pid_t = 0
-        let result = AXUIElementGetPid(element, &pid)
-
-        guard result == .success && pid == processIdentifier else {
-            return nil
+        return onMainSync {
+            let element = AXUIElementCreateApplication(processIdentifier)
+            var pid: pid_t = 0
+            let result = AXUIElementGetPid(element, &pid)
+            guard result == .success && pid == processIdentifier else {
+                return nil
+            }
+            return element
         }
-
-        return element
     }
 
     /// Safely create a system-wide AXUIElement
     /// - Returns: The system-wide AXUIElement
     static func createSystemWideElement() -> AXUIElement {
-        return AXUIElementCreateSystemWide()
+        return onMainSync {
+            AXUIElementCreateSystemWide()
+        }
     }
 
     // MARK: - Safe Element Validation
@@ -133,9 +141,11 @@ final class AXUIElementSafeWrapper {
     /// - Parameter element: The AXUIElement to validate
     /// - Returns: True if the element is valid
     static func isValidElement(_ element: AXUIElement) -> Bool {
-        var pid: pid_t = 0
-        let result = AXUIElementGetPid(element, &pid)
-        return result == .success && pid > 0
+        return onMainSync {
+            var pid: pid_t = 0
+            let result = AXUIElementGetPid(element, &pid)
+            return result == .success && pid > 0
+        }
     }
 
     /// Check if an AXUIElement belongs to a specific application
@@ -144,9 +154,11 @@ final class AXUIElementSafeWrapper {
     ///   - processIdentifier: The expected process ID
     /// - Returns: True if the element belongs to the specified application
     static func elementBelongsToApplication(_ element: AXUIElement, processIdentifier: pid_t) -> Bool {
-        var pid: pid_t = 0
-        let result = AXUIElementGetPid(element, &pid)
-        return result == .success && pid == processIdentifier
+        return onMainSync {
+            var pid: pid_t = 0
+            let result = AXUIElementGetPid(element, &pid)
+            return result == .success && pid == processIdentifier
+        }
     }
 
     // MARK: - Safe Element Traversal
