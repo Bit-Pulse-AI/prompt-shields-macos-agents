@@ -226,7 +226,7 @@ struct MainApp: App {
         window.isMovableByWindowBackground = false
 
         if let targetRect = targetRect {
-            let targetTransform = CGRect(x: targetRect.origin.x, y: targetRect.origin.y + targetRect.size.height, width: actionSize.width, height: actionSize.height)
+            let targetTransform = CGRect(x: targetRect.origin.x, y: targetRect.origin.y, width: actionSize.width, height: actionSize.height)
             window.setFrame(targetTransform, display: true, animate: false)
         } else {
             window.setFrame(CGRect(x: 0, y: 0, width: 10, height: 10), display: false, animate: false)

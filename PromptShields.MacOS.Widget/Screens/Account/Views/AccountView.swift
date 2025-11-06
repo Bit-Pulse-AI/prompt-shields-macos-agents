@@ -50,8 +50,14 @@ struct AccountView: View {
                         .frame(maxWidth: .infinity)
                 }
                 RoundBox(title: "Logout") {
-                    logoutView
-                        .frame(maxWidth: .infinity)
+                    HStack(alignment: .center) {
+                        if isLoading {
+                            ProgressView()
+                        } else {
+                            logoutView
+                                .frame(maxWidth: .infinity)
+                        }
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 RoundBox(title: "Delete account") {
                     deleteAccount
@@ -114,18 +120,18 @@ struct AccountView: View {
         HStack {
             RoundCirclePortraitView(url: $accountPhoto)
                 .frame(width: 80, height: 80)
-            Button {
-                changePhoto()
-            } label: {
-                Text("Change photo")
-            }
-            .buttonStyle(accountButtonStyle)
-            Button {
-                deletePhoto()
-            } label: {
-                Text("Delete photo")
-            }
-            .buttonStyle(accountDeleteButtonStyle)
+//            Button {
+//                changePhoto()
+//            } label: {
+//                Text("Change photo")
+//            }
+//            .buttonStyle(accountButtonStyle)
+//            Button {
+//                deletePhoto()
+//            } label: {
+//                Text("Delete photo")
+//            }
+//            .buttonStyle(accountDeleteButtonStyle)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -173,10 +179,13 @@ struct AccountView: View {
 
     private func logout() {
         Task {
+            isLoading = true
             try await userDomainService.logout()
             await MainActor.run {
                 mainState.authState = .loggedOut(nil)
+                isLoading = false
             }
+            isLoading = false
         }
     }
 

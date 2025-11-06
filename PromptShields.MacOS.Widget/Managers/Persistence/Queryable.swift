@@ -62,46 +62,46 @@ final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObjec
         self.persistenceManager = persistenceManager
         self.mapping = mapping
 
-//        setupObservers()
+        setupObservers()
     }
 
     private func setupObservers() {
         // Observe model context saves off the main actor and reload
-//        observerTask = Task { @MainActor [weak self] in
-//            for await _ in NotificationCenter.default.notifications(named: ModelContext.didSave) {
-//                try? Task.checkCancellation()
-//                await self?.loadData()
-//            }
-//        }
+        observerTask = Task { @MainActor [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: ModelContext.didSave) {
+                try? Task.checkCancellation()
+                await self?.loadData()
+            }
+        }
 
         // Initial load
-//        initialLoadTask = Task { [weak self] in
-//            await self?.loadData()
-//        }
+        initialLoadTask = Task { [weak self] in
+            await self?.loadData()
+        }
     }
 
     @MainActor
     private func loadData() async {
-//        let results: [D]
-//        do {
-//            let raw: [D] = try await self.persistenceManager.query(
-//                predicate: self.predicate,
-//                sortDescriptors: self.sortDescriptors,
-//                limit: limit
-//            )
-//            results = raw.compactMap { domain in
-//                M.canMap(domain) ? M.map(domain) : nil
-//            }
-//        } catch {
-//            results = []
-//        }
-//        self.wrappedValue = results
+        let results: [D]
+        do {
+            let raw: [D] = try await self.persistenceManager.query(
+                predicate: self.predicate,
+                sortDescriptors: self.sortDescriptors,
+                limit: limit
+            )
+            results = raw.compactMap { domain in
+                M.canMap(domain) ? M.map(domain) : nil
+            }
+        } catch {
+            results = []
+        }
+        self.wrappedValue = results
     }
 
-//    deinit {
-//        observerTask?.cancel()
-//        initialLoadTask?.cancel()
-//    }
+    deinit {
+        observerTask?.cancel()
+        initialLoadTask?.cancel()
+    }
 }
 
 extension ObservableQueryable where M == DefaultMapping<D> {

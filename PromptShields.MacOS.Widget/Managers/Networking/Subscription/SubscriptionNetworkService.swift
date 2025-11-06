@@ -7,9 +7,12 @@ protocol SubscriptionNetworkService: NetworkService {
     func checkout(subscriptionTier: String,
                   tenantId: String,
                   organisationId: String,
+                  subscriptionId: String,
                   billingPeriod: String,
                   successURL: String,
                   cancelURL: String) async throws -> CheckoutAPIResponse
+    func cancel(organisationId: String,
+                subscriptionId: String) async throws
 }
 struct SubscriptionNetworkServiceImpl: SubscriptionNetworkService {
     @Inject
@@ -44,12 +47,14 @@ struct SubscriptionNetworkServiceImpl: SubscriptionNetworkService {
     func checkout(subscriptionTier: String,
                   tenantId: String,
                   organisationId: String,
+                  subscriptionId: String,
                   billingPeriod: String,
                   successURL: String,
                   cancelURL: String) async throws -> CheckoutAPIResponse {
         let payload = CheckoutRequest(subscriptionTier: subscriptionTier,
                                       tenantId: tenantId,
                                       organisationId: organisationId,
+                                      subscriptionId: subscriptionId,
                                       billingPeriod: billingPeriod,
                                       successURL: successURL,
                                       cancelURL: cancelURL)
@@ -60,5 +65,18 @@ struct SubscriptionNetworkServiceImpl: SubscriptionNetworkService {
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
         return try await networkManager.performWithAutoRefresh(request: request).decode()
+    }
+
+    func cancel(organisationId: String,
+                subscriptionId: String) async throws {
+        let payload = CancelSubscriptionRequest(organisationId: organisationId,
+                                                subscriptionId: subscriptionId)
+        let request = try RequestBuilder().request(
+            url: "\(baseURL)/payment/cancel",
+            method: .POST,
+            body: payload,
+            headers: keychainManager.applicationJSONAuthorizedHeader
+        )
+        try await networkManager.performWithAutoRefresh(request: request)
     }
 }

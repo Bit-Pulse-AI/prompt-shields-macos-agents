@@ -6,6 +6,14 @@ enum BillingPeriod: String {
     case monthly
 }
 
+private extension Date {
+    var formattedDate: String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MMM d, yyyy"
+        return dateFormatter.string(from: self)
+    }
+}
+
 struct SubscriptionIntegrationView: View {
     @Environment(\.subscriptionDomainService) private var subscriptionDomainService
     @Environment(\.profileDomainService) private var profileDomainService
@@ -16,7 +24,17 @@ struct SubscriptionIntegrationView: View {
 
     @State private var currentSubscription: Subscription?
     @State private var isLoading = false
+    @State private var showCancelDialog = false
     @State private var showingSubscriptionDetail = false
+    @State private var checkoutURL: URL?
+
+    private var showCancelButton: Bool {
+        currentSubscription?.model.cancelledAt != nil
+    }
+
+    private var membershipEndDate: String {
+        currentSubscription?.model.stripePeriodEnd?.formattedDate ?? ""
+    }
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
@@ -28,7 +46,29 @@ struct SubscriptionIntegrationView: View {
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(8)
         .sheet(isPresented: $showingSubscriptionDetail) {
-
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button {
+                        showingSubscriptionDetail = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .padding(8)
+                }
+                if let checkoutURL {
+                    CheckoutWebView(url: checkoutURL) { _ in
+                        Task {
+                            await refreshAfterCheckout()
+                        }
+                    }
+                } else {
+                    VStack { ProgressView() }
+                        .frame(width: 300, height: 200)
+                }
+            }
+            .frame(width: 900, height: 700)
         }
         .frame(alignment: .leading)
         .task {
@@ -38,6 +78,27 @@ struct SubscriptionIntegrationView: View {
                 print("Error \(error)")
                 // TBD: Add toast
             }
+        }.alert("Notice", isPresented: $showCancelDialog) {
+            Button("OK", role: .destructive) {
+                Task {
+                    isLoading = true
+                    do {
+                        let profile = try await profileDomainService.currentProfile.model
+                        let organisationId = profile.defaultOrganisationId
+                        let subscriptionId = profile.defaultSubscriptionId
+                        try await subscriptionDomainService.cancel(organisationId: organisationId, subscriptionId: subscriptionId)
+                        try await loadCurrentSubscription()
+                        isLoading = false
+                    } catch {
+                        isLoading = false
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                showCancelDialog = false
+            }
+        } message: {
+            Text("Are you sure you want to cancel your current subscription ?")
         }
     }
 
@@ -65,18 +126,17 @@ struct SubscriptionIntegrationView: View {
                     }
                 }
             case SubscriptionTier.bronze.rawValue:
-                Text("You're already a premium user - thinking about an upgrade ?")
-                if currentSubscription.model.stripeBillingPeriod == BillingPeriod.monthly.rawValue {
-                    let yearlyPlan = PricingPlan(subscriptionTier: .bronze, billingPeriod: .yearly, features: ["Upgrade now for a better deal!"])
-                    PricingPlanCard(plan: yearlyPlan) {
+                Text("Premium user subscription active")
+                if showCancelButton {
+                    Text("Membership will end on \(membershipEndDate)")
+                } else {
+                    Button("Cancel subscription") {
                         Task {
-                            await subscribeUser(subscriptionTier: yearlyPlan.subscriptionTier, billingPeriod: yearlyPlan.billingPeriod)
+                            showCancelDialog = true
                         }
                     }
                 }
-                Button("Cancel subscription") {
-                    print("Cancel sub")
-                }
+
             default:
                 Image(systemName: "crown.fill")
                     .foregroundColor(.orange)
@@ -94,16 +154,22 @@ struct SubscriptionIntegrationView: View {
         do {
             let profile = try await profileDomainService.currentProfile.model
             let organisationId = profile.defaultOrganisationId
+            let subscriptionId = profile.defaultSubscriptionId
             let tenantId = profile.defaultTenantId
 
             let checkout = try await subscriptionDomainService.checkout(
                 subscriptionTier: SubscriptionTier.bronze.rawValue,
                 organisationId: organisationId,
+                subscriptionId: subscriptionId,
                 tenantId: tenantId,
                 billingPeriod: billingPeriod.rawValue,
-                successURL: "https://www.google.com",
-                cancelURL: "https://www.google.com"
+                successURL: webBillingSuccessURL,
+                cancelURL: webBillingCancelURL
             )
+            await MainActor.run {
+                self.checkoutURL = checkout.url
+                self.showingSubscriptionDetail = true
+            }
         } catch {
             logger.error("error \(error)")
         }
@@ -114,8 +180,18 @@ struct SubscriptionIntegrationView: View {
     @MainActor
     private func loadCurrentSubscription() async throws {
         isLoading = true
-        currentSubscription = try await subscriptionDomainService.currentSubscription
+        currentSubscription = try await subscriptionDomainService.currentSubscription(refresh: true)
         isLoading = false
+    }
+
+    @MainActor
+    private func refreshAfterCheckout() async {
+        showingSubscriptionDetail = false
+        do {
+            try await loadCurrentSubscription()
+        } catch {
+            logger.error("Failed to refresh subscription after checkout: \(error)")
+        }
     }
 }
 

@@ -23,16 +23,14 @@ struct ActionView: View {
     )
 
     private var suggestionTypes: [SuggestionType] {
-//        let enabledFilters = userPreferences?.model.enabledSuggestionTypes ?? []
-//        return suggestionTypesQueryable.wrappedValue.filter {
-//            enabledFilters.contains($0.model.suggestionType)
-//        }
-        []
+        let enabledFilters = userPreferences?.model.enabledSuggestionTypes ?? []
+        return suggestionTypesQueryable.wrappedValue.filter {
+            enabledFilters.contains($0.model.suggestionType)
+        }
     }
 
     private var userPreferences: UserPreferences? {
-//        userPreferencesTypesQueryable.wrappedValue.first
-        nil
+        userPreferencesTypesQueryable.wrappedValue.first
     }
 
     var body: some View {

@@ -28,6 +28,8 @@ protocol SubscriptionDomainService: Sendable {
     var currentSubscription: Subscription { get async throws }
     func currentSubscription(refresh: Bool) async throws -> Subscription
 
+    func cancel(organisationId: String,
+                subscriptionId: String) async throws
     func getSubscriptions(organisation: Organisation) async throws -> [Subscription]
 }
 
@@ -73,11 +75,18 @@ struct SubscriptionDomainServiceImpl: SubscriptionDomainService {
         }
     }
 
+    func cancel(organisationId: String,
+                subscriptionId: String) async throws {
+        try await subscriptionNetworkService.cancel(organisationId: organisationId,
+                                                    subscriptionId: subscriptionId)
+    }
+
     func checkout(subscriptionTier: String,
-                  organisationId: String, tenantId: String, billingPeriod: String, successURL: String, cancelURL: String) async throws -> Checkout {
+                  organisationId: String, subscriptionId: String, tenantId: String, billingPeriod: String, successURL: String, cancelURL: String) async throws -> Checkout {
         try await subscriptionNetworkService.checkout(subscriptionTier: subscriptionTier,
                                                       tenantId: tenantId,
                                                       organisationId: organisationId,
+                                                      subscriptionId: subscriptionId,
                                                       billingPeriod: billingPeriod,
                                                       successURL: successURL,
                                                       cancelURL: cancelURL).toDomain()

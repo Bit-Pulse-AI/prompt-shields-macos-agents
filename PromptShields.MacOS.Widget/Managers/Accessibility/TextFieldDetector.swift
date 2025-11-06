@@ -142,7 +142,7 @@ final class TextFieldDetector: Sendable {
         guard let rectangle else {
             throw AccessibilityError.failedToGetFrame
         }
-        return CGRect(x: rectangle.origin.x - padding, y: rectangle.origin.y - padding, width: rectangle.size.width + padding * 2, height: rectangle.size.height + padding * 2)
+        return CGRect(x: rectangle.origin.x - padding, y: rectangle.origin.y + rectangle.size.height + padding, width: rectangle.size.width + padding * 2, height: rectangle.size.height + padding * 2)
     }
 
     private func getApplicationInfo(for element: AXUIElement) throws -> (name: String, bundleId: String) {

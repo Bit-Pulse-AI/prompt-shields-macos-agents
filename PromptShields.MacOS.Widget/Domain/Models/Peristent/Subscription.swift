@@ -17,9 +17,9 @@ struct Subscription: Domain {
         var stripeSubscriptionId: String?
         var stripeCustomerId: String?
         var stripeBillingPeriod: String?
-        var stripePeriodStart: String?
-        var stripePeriodEnd: String?
-        var cancelAtPeriodEnd: String?
+        var stripePeriodStart: Date?
+        var stripePeriodEnd: Date?
+        var cancelAtPeriodEnd: Bool?
         var cancelledAt: Date?
         var stripeStatus: String?
     }
@@ -38,8 +38,8 @@ struct Subscription: Domain {
     }
 
     // MARK: - Mapping Methods
-
     func toPersistentModel(context: ModelContext?) -> SubscriptionPersistentModel {
+
         let persistent = SubscriptionPersistentModel()
         persistent.uuid = model.uuid.encrypt
         persistent.name = model.name.encrypt
@@ -49,8 +49,8 @@ struct Subscription: Domain {
         persistent.stripeSubscriptionId = model.stripeSubscriptionId
         persistent.stripeCustomerId = model.stripeCustomerId
         persistent.stripeBillingPeriod = model.stripeBillingPeriod
-        persistent.stripePeriodStart = model.stripePeriodStart
-        persistent.stripePeriodEnd = model.stripePeriodEnd
+        persistent.stripePeriodStart = model.stripePeriodStart?.string
+        persistent.stripePeriodEnd = model.stripePeriodEnd?.string
         persistent.cancelAtPeriodEnd = model.cancelAtPeriodEnd
         persistent.cancelledAt = model.cancelledAt
         persistent.stripeStatus = model.stripeStatus
@@ -64,7 +64,15 @@ struct Subscription: Domain {
             tier: persistent.tier.decrypt,
             organisationUID: persistent.organisationUID,
             createdAt: persistent.createdAt,
-            modifiedAt: persistent.modifiedAt
+            modifiedAt: persistent.modifiedAt,
+            stripeSubscriptionId: persistent.stripeSubscriptionId,
+            stripeCustomerId: persistent.stripeCustomerId,
+            stripeBillingPeriod: persistent.stripeBillingPeriod,
+            stripePeriodStart: persistent.stripePeriodStart?.date,
+            stripePeriodEnd: persistent.stripePeriodEnd?.date,
+            cancelAtPeriodEnd: persistent.cancelAtPeriodEnd,
+            cancelledAt: persistent.cancelledAt,
+            stripeStatus: persistent.stripeStatus
         )
         return Subscription(model: model, identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
     }
@@ -107,13 +115,25 @@ struct SubscriptionAPIResponse: APIResponse {
 
     func toDomain() -> Subscription {
         let dateFormatter = ISO8601DateFormatter()
+        var cancelledAt: Date?
+        if let safe_cancelledAt = self.cancelledAt {
+            cancelledAt = dateFormatter.date(from: safe_cancelledAt)
+        }
         let model = Subscription.SubscriptionModel(
             uuid: id,
             name: name,
             tier: tier,
             organisationUID: origanisationUID,
             createdAt: dateFormatter.date(from: createdAt) ?? Date(),
-            modifiedAt: dateFormatter.date(from: updatedAt) ?? Date()
+            modifiedAt: dateFormatter.date(from: updatedAt) ?? Date(),
+            stripeSubscriptionId: stripeSubscriptionId,
+            stripeCustomerId: stripeCustomerId,
+            stripeBillingPeriod: stripeBillingPeriod,
+            stripePeriodStart: stripePeriodStart?.date,
+            stripePeriodEnd: stripePeriodEnd?.date,
+            cancelAtPeriodEnd: cancelAtPeriodEnd,
+            cancelledAt: cancelledAt,
+            stripeStatus: stripeStatus
         )
         return Subscription(model: model)
     }
@@ -153,7 +173,7 @@ final class SubscriptionPersistentModel: UpdatablePersistentModel {
     var stripeBillingPeriod: String?
     var stripePeriodStart: String?
     var stripePeriodEnd: String?
-    var cancelAtPeriodEnd: String?
+    var cancelAtPeriodEnd: Bool?
     var cancelledAt: Date?
     var stripeStatus: String?
 
@@ -202,5 +222,19 @@ extension Subscription {
                                       modifiedAt: model.modifiedAt)
         return Subscription(model: model,
                             identifier: identifier)
+    }
+}
+
+private extension Date {
+    var string: String {
+        let dateFormatter = ISO8601DateFormatter()
+        return dateFormatter.string(from: self)
+    }
+}
+
+private extension String {
+    var date: Date? {
+        let dateFormatter = ISO8601DateFormatter()
+        return dateFormatter.date(from: self)
     }
 }
