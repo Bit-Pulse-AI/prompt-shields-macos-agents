@@ -9,6 +9,7 @@ struct SuggestionType: Domain {
         var uuid: UID
         let suggestionType: String
         let suggestionName: String
+        let suggestionTypeCategory: String
     }
 
     let identifier: ModelIdentifier?
@@ -31,6 +32,7 @@ struct SuggestionType: Domain {
         persistent.uuid = model.uuid.encrypt
         persistent.suggestionType = model.suggestionType.encrypt
         persistent.suggestionName = model.suggestionName.encrypt
+        persistent.suggestionTypeCategory = model.suggestionTypeCategory.encrypt
         return persistent
     }
 
@@ -38,7 +40,8 @@ struct SuggestionType: Domain {
         let model = SuggestionTypeModel(
             uuid: persistent.uuid.decrypt,
             suggestionType: persistent.suggestionType.decrypt,
-            suggestionName: persistent.suggestionName.decrypt
+            suggestionName: persistent.suggestionName.decrypt,
+            suggestionTypeCategory: persistent.suggestionTypeCategory.decrypt
         )
         return SuggestionType(model: model, identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
     }
@@ -47,17 +50,20 @@ struct SuggestionType: Domain {
 struct SuggestionTypeAPIResponse: APIResponse {
     let suggestionType: String
     let suggestionName: String
+    let suggestionTypeCategory: String
 
     enum CodingKeys: String, CodingKey {
         case suggestionType = "type"
         case suggestionName = "name"
+        case suggestionTypeCategory = "category"
     }
 
     func toDomain() -> SuggestionType {
         let model = SuggestionType.SuggestionTypeModel(
             uuid: suggestionType,
             suggestionType: suggestionType,
-            suggestionName: suggestionName
+            suggestionName: suggestionName,
+            suggestionTypeCategory: suggestionTypeCategory
         )
         return SuggestionType(model: model)
     }
@@ -72,6 +78,7 @@ final class SuggestionTypePersistentModel: UpdatablePersistentModel {
     var uuid: String = ""
     var suggestionType: String = ""
     var suggestionName: String = ""
+    var suggestionTypeCategory: String = ""
 
     init() {}
 
@@ -79,5 +86,6 @@ final class SuggestionTypePersistentModel: UpdatablePersistentModel {
         self.uuid = suggestion.uuid
         self.suggestionType = suggestion.suggestionType
         self.suggestionName = suggestion.suggestionName
+        self.suggestionTypeCategory = suggestion.suggestionTypeCategory
     }
 }

@@ -4,11 +4,12 @@ import SwiftData
 import AppKit
 import os
 
-enum ActionToolState {
+enum ActionToolState: Equatable {
     case idle
     case loading
     case action
-    case options
+    case options(String)
+    case category
 }
 
 enum ResultAction {
@@ -178,7 +179,7 @@ struct MainApp: App {
                 actionSize = CGSize(width: 50, height: 50)
             case .loading:
                 actionSize = CGSize(width: 50, height: 50)
-            case .options:
+            case .options, .category:
                 actionSize = CGSize(width: 200, height: 100)
             case .action:
                 actionSize = CGSize(width: 200, height: 200)

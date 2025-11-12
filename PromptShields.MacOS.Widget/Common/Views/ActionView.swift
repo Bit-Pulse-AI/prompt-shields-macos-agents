@@ -26,7 +26,18 @@ struct ActionView: View {
         let enabledFilters = userPreferences?.model.enabledSuggestionTypes ?? []
         return suggestionTypesQueryable.wrappedValue.filter {
             enabledFilters.contains($0.model.suggestionType)
+        }.sorted(by: {
+            $0.model.suggestionName < $1.model.suggestionName
+        })
+    }
+
+    private var suggestionCategories: [String] {
+        let set = suggestionTypes.compactMap {
+            $0.model.suggestionTypeCategory
         }
+        return Array(Set(set)).sorted(by: {
+            $0 < $1
+        })
     }
 
     private var userPreferences: UserPreferences? {
@@ -38,7 +49,7 @@ struct ActionView: View {
             switch overlayStateModel.actionToolState {
             case .idle:
                 Button {
-                    overlayStateModel.actionToolState = .options
+                    overlayStateModel.actionToolState = .category
                 } label: {
                     Image(ImageResource(name: "logo_mid", bundle: .main))
                         .resizable()
@@ -85,11 +96,21 @@ struct ActionView: View {
                 .background(.white)
                 .cornerRadius(8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .options:
+            case .options(let category):
                 VStack {
+                    HStack(spacing: .zero) {
+                        Button { [weak overlayStateModel] in
+                            overlayStateModel?.actionToolState = .category
+                        } label: {
+                            Image(systemName: "arrow.backward")
+                                .frame(width: 12, height: 12)
+                        }.buttonStyle(.plain)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                     VStack(alignment: .leading) {
                         if suggestionTypes.count > 0 {
-                            ForEach(suggestionTypes, id: \.model.suggestionType) { suggestionType in
+                            ForEach(suggestionTypes.filter { $0.model.suggestionTypeCategory == category }, id: \.model.suggestionType) { suggestionType in
                                 Button { [weak overlayStateModel] in
                                     guard !isProcessing else { return }
                                     isProcessing = true
@@ -141,6 +162,28 @@ struct ActionView: View {
                                     }
                                 } label: {
                                     Text(suggestionType.model.suggestionName)
+                                }
+                                .disabled(isProcessing)
+                            }
+                        } else {
+                            Text("No suggestions enabled")
+                        }
+                    }
+                }
+                .padding()
+                .background(.white)
+                .cornerRadius(8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            case .category:
+                VStack {
+                    VStack(alignment: .leading) {
+                        if suggestionCategories.count > 0 {
+                            ForEach(suggestionCategories, id: \.self) { suggestionCategoryName in
+                                Button { [weak overlayStateModel] in
+                                    overlayStateModel?.actionToolState = .options(suggestionCategoryName)
+                                } label: {
+                                    Text(suggestionCategoryName)
                                 }
                                 .disabled(isProcessing)
                             }
