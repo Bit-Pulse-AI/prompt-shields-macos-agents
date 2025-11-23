@@ -184,9 +184,9 @@ struct MainApp: App {
             case .action:
                 actionSize = CGSize(width: 200, height: 200)
             }
-//                configureActionWindow(isInitial: isInitial, window: window, targetRect: targetFrame, actionSize: actionSize)
-//                overlayStateModel.isActionConfigured = true
 
+            configureActionWindow(isInitial: isInitial, window: window, targetRect: targetFrame, actionSize: actionSize)
+            overlayStateModel.isActionConfigured = true
         }
     }
 
