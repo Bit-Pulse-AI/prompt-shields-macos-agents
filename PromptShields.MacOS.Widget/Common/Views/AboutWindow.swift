@@ -91,7 +91,7 @@ struct AboutView: View {
             .controlSize(.large)
         }
         .padding(30)
-        .frame(width: 400, height: 300)
+        .frame(width: 400, height: 400)
     }
 
     /// Gets the app version from the bundle

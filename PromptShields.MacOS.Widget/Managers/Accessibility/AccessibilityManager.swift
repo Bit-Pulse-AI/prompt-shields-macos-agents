@@ -21,6 +21,8 @@ actor AccessibilityManagerImpl: ObservableObject {
     private var shouldUpdateText = true
     private var isProcessing = false // Prevent concurrent processing
 
+    private var saveIsActiveState: Bool?
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: AccessibilityManagerImpl.self)
@@ -34,7 +36,38 @@ actor AccessibilityManagerImpl: ObservableObject {
         self.isActive = isActive
         self.timer = PausableTimer(interval: .seconds(pollInterval))
         Task { [weak self] in
+            await self?.listenForSystemLock()
             await self?.startTimer()
+        }
+    }
+
+    func updateSavedActiveState(saveIsActiveState: Bool?) {
+        self.saveIsActiveState = saveIsActiveState
+    }
+
+    func updateIsActiveState(isActiveState: Bool) {
+        self.isActive.wrappedValue = isActiveState
+    }
+
+    func listenForSystemLock() {
+        let dnc = DistributedNotificationCenter.default()
+
+        dnc.addObserver(forName: .init("com.apple.screenIsLocked"),
+                                       object: nil, queue: .main) { _ in
+            Task {
+                await self.updateSavedActiveState(saveIsActiveState: self.isActive.wrappedValue)
+            }
+            self.isActive.wrappedValue = false
+        }
+
+        dnc.addObserver(forName: .init("com.apple.screenIsUnlocked"),
+                                         object: nil, queue: .main) { _ in
+            Task {
+                if let saveIsActiveState = await self.saveIsActiveState {
+                    await self.updateIsActiveState(isActiveState: saveIsActiveState)
+                    await self.updateSavedActiveState(saveIsActiveState: nil)
+                }
+            }
         }
     }
 
@@ -152,36 +185,30 @@ actor AccessibilityManagerImpl: ObservableObject {
     }
 
     private func onAXAccessGranted() async {
-        if let focusedElement = try? await getRobustFocusedElement() {
-            await analyzeTextIfPossible(element: focusedElement)
-        } else {
-            displayRestartIfNeeded()
-            await updateElementInfo()
-        }
-        isProcessing = false
-    }
+        Task {
+            if let focusedElement = try? await getFocusedElementWithRetry() {
+                do {
+                    try Task.checkCancellation()
 
-    private func analyzeTextIfPossible(element: CFTypeRef) async {
-        do {
-            try Task.checkCancellation()
+                    let isValidElement = await self.isValidElement(focusedElement)
 
-            // Use a simple timeout approach without complex concurrency
-            let focusedElement = try await getFocusedElementWithRetry()
+                    guard isValidElement else {
+                        self.logger.warning("Focused element is no longer valid")
+                        await updateElementInfo()
+                        return
+                    }
 
-            let isValidElement = await self.isValidElement(focusedElement)
-
-            guard isValidElement else {
-                self.logger.warning("Focused element is no longer valid")
+                    let elementInfo = try await textFieldDetector.getAXElementOrSelectionInfo(focusedElement)
+                    await self.updateElementInfo(elementInfo: elementInfo)
+                } catch {
+                    logger.error("Error received analyzing textfield \(error)")
+                    await updateElementInfo()
+                }
+            } else {
+                displayRestartIfNeeded()
                 await updateElementInfo()
-                return
             }
-
-            let elementInfo = try self.textFieldDetector.getAXElementOrSelectionInfo(focusedElement)
-            await self.updateElementInfo(elementInfo: elementInfo)
-//            print("Element info \(elementInfo)")
-        } catch {
-            logger.error("Error received analyzing textfield \(error)")
-            await updateElementInfo()
+            isProcessing = false
         }
     }
 
@@ -194,7 +221,7 @@ actor AccessibilityManagerImpl: ObservableObject {
         let isSelf = elementInfo?.applicationBundleId == Bundle.main.bundleIdentifier
         guard let frame = elementInfo?.frame, frame.isValid else {
             if elementInfo?.applicationBundleId != nil && !isSelf {
-                await setElementInfoOnMain(nil)
+                setElementInfoOnMain(nil)
             }
             return
         }
@@ -206,23 +233,23 @@ actor AccessibilityManagerImpl: ObservableObject {
         }
         if shouldUpdateFrame && previousRect == frame {
             if elementInfo?.applicationBundleId != nil && !isSelf {
-                await setElementInfoOnMain(elementInfo?.withFrame(frame: frame))
+                setElementInfoOnMain(elementInfo?.withFrame(frame: frame))
                 shouldUpdateFrame = false
             }
         } else if previousRect != elementInfo?.frame {
             if elementInfo?.applicationBundleId != nil && !isSelf {
-                await setElementInfoOnMain(nil)
+                setElementInfoOnMain(nil)
             }
         }
         let text = elementInfo?.text
         if shouldUpdateText && previousText == text {
             if elementInfo?.applicationBundleId != nil && !isSelf {
-                await setElementInfoOnMain(elementInfo?.withText(text: elementInfo?.text ?? ""))
+                setElementInfoOnMain(elementInfo?.withText(text: elementInfo?.text ?? ""))
                 shouldUpdateText = false
             }
         } else if previousText != elementInfo?.text {
             if elementInfo?.applicationBundleId != nil && !isSelf {
-                await setElementInfoOnMain(nil)
+                setElementInfoOnMain(nil)
             }
         }
 
@@ -263,53 +290,53 @@ actor AccessibilityManagerImpl: ObservableObject {
         return AXUIElementSafeWrapper.isValidElement(element)
     }
 
-    func getRobustFocusedElement() async throws -> AXUIElement {
-        let element: AXUIElement? = await MainActor.run {
-            func localFindFocusedInTree(_ element: AXUIElement, depth: Int, maxDepth: Int, visited: Set<AXElementID>) -> AXUIElement? {
-                guard depth < maxDepth else { return nil }
-                let elementID = AXElementID(element)
-                guard !visited.contains(elementID) else { return nil }
-                if AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXValueAttribute) != nil ||
-                    AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) != nil {
-                    if let frontApp = NSWorkspace.shared.frontmostApplication,
-                       let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier),
-                       let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) {
-                        let focusedElement = focusedRef as! AXUIElement
-                        if Unmanaged.passUnretained(element).toOpaque() == Unmanaged.passUnretained(focusedElement).toOpaque() {
-                            return element
-                        }
-                    }
+    @MainActor
+    func localFindFocusedInTree(_ element: AXUIElement, depth: Int, maxDepth: Int, visited: Set<AXElementID>) -> AXUIElement? {
+        guard depth < maxDepth else { return nil }
+        let elementID = AXElementID(element)
+        guard !visited.contains(elementID) else { return nil }
+        if AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXValueAttribute) != nil ||
+            AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) != nil {
+            if let frontApp = NSWorkspace.shared.frontmostApplication,
+               let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier),
+               let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) {
+                let focusedElement = focusedRef as! AXUIElement
+                if Unmanaged.passUnretained(element).toOpaque() == Unmanaged.passUnretained(focusedElement).toOpaque() {
+                    return element
                 }
-                let children = AXUIElementSafeWrapper.getChildren(from: element)
-                var newVisited = visited
-                newVisited.insert(elementID)
-                for child in children {
-                    if let found = localFindFocusedInTree(child, depth: depth + 1, maxDepth: maxDepth, visited: newVisited) {
-                        return found
-                    }
-                }
-                return nil
             }
+        }
+        let children = AXUIElementSafeWrapper.getChildren(from: element)
+        var newVisited = visited
+        newVisited.insert(elementID)
+        for child in children {
+            if let found = localFindFocusedInTree(child, depth: depth + 1, maxDepth: maxDepth, visited: newVisited) {
+                return found
+            }
+        }
+        return nil
+    }
 
-            return AXUIElementSafeWrapper.withMemoryCleanup {
-                guard let frontApp = NSWorkspace.shared.frontmostApplication else {
-                    return nil
-                }
-                guard let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier) else {
-                    return nil
-                }
-                if let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) {
-                    let focusedElement = focusedRef as! AXUIElement
-                    guard AXUIElementSafeWrapper.isValidElement(focusedElement) else { return nil }
-                    return focusedElement
-                }
-                if let windowRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedWindowAttribute) {
-                    let windowElement = windowRef as! AXUIElement
-                    guard AXUIElementSafeWrapper.isValidElement(windowElement) else { return nil }
-                    return localFindFocusedInTree(windowElement, depth: 0, maxDepth: 20, visited: Set<AXElementID>())
-                }
+    @MainActor
+    func getRobustFocusedElement() async throws -> AXUIElement {
+        let element: AXUIElement? = AXUIElementSafeWrapper.withMemoryCleanup {
+            guard let frontApp = NSWorkspace.shared.frontmostApplication else {
                 return nil
             }
+            guard let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier) else {
+                return nil
+            }
+            if let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) {
+                let focusedElement = focusedRef as! AXUIElement
+                guard AXUIElementSafeWrapper.isValidElement(focusedElement) else { return nil }
+                return focusedElement
+            }
+            if let windowRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedWindowAttribute) {
+                let windowElement = windowRef as! AXUIElement
+                guard AXUIElementSafeWrapper.isValidElement(windowElement) else { return nil }
+                return localFindFocusedInTree(windowElement, depth: 0, maxDepth: 20, visited: Set<AXElementID>())
+            }
+            return nil
         }
         guard let element else {
             throw AccessibilityError.failedToGetFrame
@@ -342,9 +369,10 @@ actor AccessibilityManagerImpl: ObservableObject {
         applicationInfo.wrappedValue = value
     }
 
-    @MainActor
     private func setElementInfoOnMain(_ value: ElementInfo?) {
-        elementInfo.wrappedValue = value
+        Task {
+            elementInfo.wrappedValue = value
+        }
     }
 }
 

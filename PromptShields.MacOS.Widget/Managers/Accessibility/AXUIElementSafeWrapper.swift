@@ -40,35 +40,20 @@ extension AXUIElement: @retroactive Hashable {
 
 /// Safe wrapper for AXUIElement operations to prevent memory leaks
 final class AXUIElementSafeWrapper {
-    // MARK: - Safe Attribute Access
-
-    private static func onMainSync<T>(_ work: () -> T) -> T {
-        if Thread.isMainThread {
-            return work()
-        } else {
-            return DispatchQueue.main.sync { work() }
-        }
-    }
-
-    /// Safely get an attribute value from an AXUIElement
-    /// - Parameters:
-    ///   - element: The AXUIElement to query
-    ///   - attribute: The attribute to get
-    /// - Returns: The attribute value or nil if failed
+    @MainActor
     static func getAttributeValue(from element: AXUIElement, attribute: String) -> CFTypeRef? {
-        return onMainSync {
-            var value: CFTypeRef?
-            let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
-            guard result == .success else {
-                return nil
-            }
-            return value
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+        guard result == .success else {
+            return nil
         }
+        return value
     }
 
     /// Safely get children from an AXUIElement with validation
     /// - Parameter element: The AXUIElement to get children from
     /// - Returns: Array of child AXUIElements or empty array if failed
+    @MainActor
     static func getChildren(from element: AXUIElement) -> [AXUIElement] {
         // First validate the element is still valid
         guard isValidElement(element) else {
@@ -95,19 +80,17 @@ final class AXUIElementSafeWrapper {
         attribute: String,
         parameter: CFTypeRef
     ) -> CFTypeRef? {
-        return onMainSync {
-            var value: CFTypeRef?
-            let result = AXUIElementCopyParameterizedAttributeValue(
-                element,
-                attribute as CFString,
-                parameter,
-                &value
-            )
-            guard result == .success else {
-                return nil
-            }
-            return value
+        var value: CFTypeRef?
+        let result = AXUIElementCopyParameterizedAttributeValue(
+            element,
+            attribute as CFString,
+            parameter,
+            &value
+        )
+        guard result == .success else {
+            return nil
         }
+        return value
     }
 
     // MARK: - Safe Element Creation
@@ -116,23 +99,19 @@ final class AXUIElementSafeWrapper {
     /// - Parameter processIdentifier: The process ID of the application
     /// - Returns: The AXUIElement or nil if failed
     static func createApplicationElement(processIdentifier: pid_t) -> AXUIElement? {
-        return onMainSync {
-            let element = AXUIElementCreateApplication(processIdentifier)
-            var pid: pid_t = 0
-            let result = AXUIElementGetPid(element, &pid)
-            guard result == .success && pid == processIdentifier else {
-                return nil
-            }
-            return element
+        let element = AXUIElementCreateApplication(processIdentifier)
+        var pid: pid_t = 0
+        let result = AXUIElementGetPid(element, &pid)
+        guard result == .success && pid == processIdentifier else {
+            return nil
         }
+        return element
     }
 
     /// Safely create a system-wide AXUIElement
     /// - Returns: The system-wide AXUIElement
     static func createSystemWideElement() -> AXUIElement {
-        return onMainSync {
-            AXUIElementCreateSystemWide()
-        }
+        AXUIElementCreateSystemWide()
     }
 
     // MARK: - Safe Element Validation
@@ -141,11 +120,9 @@ final class AXUIElementSafeWrapper {
     /// - Parameter element: The AXUIElement to validate
     /// - Returns: True if the element is valid
     static func isValidElement(_ element: AXUIElement) -> Bool {
-        return onMainSync {
-            var pid: pid_t = 0
-            let result = AXUIElementGetPid(element, &pid)
-            return result == .success && pid > 0
-        }
+        var pid: pid_t = 0
+        let result = AXUIElementGetPid(element, &pid)
+        return result == .success && pid > 0
     }
 
     /// Check if an AXUIElement belongs to a specific application
@@ -154,20 +131,14 @@ final class AXUIElementSafeWrapper {
     ///   - processIdentifier: The expected process ID
     /// - Returns: True if the element belongs to the specified application
     static func elementBelongsToApplication(_ element: AXUIElement, processIdentifier: pid_t) -> Bool {
-        return onMainSync {
-            var pid: pid_t = 0
-            let result = AXUIElementGetPid(element, &pid)
-            return result == .success && pid == processIdentifier
-        }
+        var pid: pid_t = 0
+        let result = AXUIElementGetPid(element, &pid)
+        return result == .success && pid == processIdentifier
     }
 
     // MARK: - Safe Element Traversal
 
-    /// Safely traverse an AXUIElement tree with memory management
-    /// - Parameters:
-    ///   - element: The root AXUIElement
-    ///   - maxDepth: Maximum depth to traverse
-    ///   - visitor: Closure called for each element
+    @MainActor
     static func traverseElementTree(
         _ element: AXUIElement,
         maxDepth: Int = 10,
@@ -176,6 +147,7 @@ final class AXUIElementSafeWrapper {
         traverseElementRecursive(element, depth: 0, maxDepth: maxDepth, visitor: visitor)
     }
 
+    @MainActor
     private static func traverseElementRecursive(
         _ element: AXUIElement,
         depth: Int,
@@ -188,7 +160,6 @@ final class AXUIElementSafeWrapper {
             return
         }
 
-        // Get children safely
         let children = getChildren(from: element)
 
         for child in children {
@@ -201,6 +172,7 @@ final class AXUIElementSafeWrapper {
     /// Safely get selected text from an AXUIElement
     /// - Parameter element: The AXUIElement to get selected text from
     /// - Returns: The selected text or nil if no text is selected
+    @MainActor
     static func getSelectedText(from element: AXUIElement) -> String? {
         guard isValidElement(element) else {
             return nil
@@ -231,6 +203,7 @@ final class AXUIElementSafeWrapper {
     /// Safely extract text from an AXUIElement
     /// - Parameter element: The AXUIElement to extract text from
     /// - Returns: The extracted text or empty string (prioritizes selected text if available)
+    @MainActor
     static func extractText(from element: AXUIElement) -> String {
         guard isValidElement(element) else {
             return ""

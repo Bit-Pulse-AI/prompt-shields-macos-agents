@@ -33,6 +33,7 @@ actor TextInjector {
     /// - Parameters:
     ///   - text: The replacement text
     ///   - element: The AXUIElement containing the selection
+    @MainActor
     private func replaceSelectedText(with text: String, in element: AXUIElement) async throws {
         // Get the current selection range
         guard let selectedRangeValue = AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) else {

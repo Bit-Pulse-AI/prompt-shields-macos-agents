@@ -1,6 +1,7 @@
 import AppKit
 
 final class TextExtractor: Sendable {
+    @MainActor
     func getAllText(from element: AXUIElement) -> String {
         return AXUIElementSafeWrapper.withMemoryCleanup {
             // Validate the element first
@@ -41,6 +42,7 @@ final class TextExtractor: Sendable {
     }
 
     /// Safe version of getAllText with error handling
+    @MainActor
     func getAllTextSafely(from element: AXUIElement) -> Result<String, AccessibilityError> {
         let text: String? = AXUIElementSafeWrapper.withMemoryCleanup {
             // Validate the element first

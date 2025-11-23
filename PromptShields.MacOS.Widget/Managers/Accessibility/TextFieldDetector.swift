@@ -161,6 +161,7 @@ final class TextFieldDetector: Sendable {
         )
     }
 
+    @MainActor
     func getAXElementOrSelectionInfo(_ element: AXUIElement) throws -> ElementInfo {
         let applicationInfo = try getApplicationInfo(for: element)
 
