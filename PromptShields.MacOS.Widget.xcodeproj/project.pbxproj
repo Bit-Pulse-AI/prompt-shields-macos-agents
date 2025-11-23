@@ -38,9 +38,22 @@
 		72FC8E7D2D3D5D6500BCB9CA /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.2.sdk/System/Library/Frameworks/Security.framework; sourceTree = DEVELOPER_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7276F6D52ED2C3C400763921 /* Exceptions for "PromptShields.MacOS.Widget" folder in "PromptShields.MacOS.Widget" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Resources/Info.plist,
+			);
+			target = 729CD45D2D2C614D00D55B7C /* PromptShields.MacOS.Widget */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		729CD4602D2C614D00D55B7C /* PromptShields.MacOS.Widget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7276F6D52ED2C3C400763921 /* Exceptions for "PromptShields.MacOS.Widget" folder in "PromptShields.MacOS.Widget" target */,
+			);
 			path = PromptShields.MacOS.Widget;
 			sourceTree = "<group>";
 		};

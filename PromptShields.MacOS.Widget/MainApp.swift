@@ -184,10 +184,9 @@ struct MainApp: App {
             case .action:
                 actionSize = CGSize(width: 200, height: 200)
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak window] in
-                configureActionWindow(isInitial: isInitial, window: window, targetRect: targetFrame, actionSize: actionSize)
-                overlayStateModel.isActionConfigured = true
-            }
+//                configureActionWindow(isInitial: isInitial, window: window, targetRect: targetFrame, actionSize: actionSize)
+//                overlayStateModel.isActionConfigured = true
+
         }
     }
 

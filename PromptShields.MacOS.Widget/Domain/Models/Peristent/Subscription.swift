@@ -39,7 +39,6 @@ struct Subscription: Domain {
 
     // MARK: - Mapping Methods
     func toPersistentModel(context: ModelContext?) -> SubscriptionPersistentModel {
-
         let persistent = SubscriptionPersistentModel()
         persistent.uuid = model.uuid.encrypt
         persistent.name = model.name.encrypt
