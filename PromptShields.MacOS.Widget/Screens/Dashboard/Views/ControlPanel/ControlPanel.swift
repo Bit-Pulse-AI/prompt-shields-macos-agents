@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Suggestion Row
+// MARK: - Control Panel View
 
 struct ControlPanelView: View {
     @StateObject private var suggestionsQueryable = ObservableQueryable(
@@ -8,36 +8,68 @@ struct ControlPanelView: View {
         mapping: DefaultMapping<Suggestion>.self
     )
 
+    @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
+    @EnvironmentObject private var overlayState: OverlayStateModel
+    @EnvironmentObject private var dashboardState: DashboardStateModel
+
     private var currentSuggestions: [Suggestion] {
         return suggestionsQueryable.wrappedValue
     }
 
-    var hasCurrentApplication: Bool {
+    private var hasCurrentApplication: Bool {
         return dashboardState.currentApplication != .empty
     }
 
-    var applicationStatusIndicator: String {
+    private var applicationStatusIndicator: String {
         dashboardState.currentApplication.name
     }
 
-    var suggestionStatusIndicator: Int {
+    private var suggestionStatusIndicator: Int {
         currentSuggestions.count
     }
 
-    var hasSuggestions: Bool {
+    private var hasSuggestions: Bool {
         currentSuggestions.count > 0
     }
 
-    var topSuggestions: [Suggestion] {
+    private var topSuggestions: [Suggestion] {
         Array(currentSuggestions.prefix(5))
     }
 
-    @EnvironmentObject private var accessibilityManagerImpl: AccessibilityManagerImpl
-    @EnvironmentObject private var overlayState: OverlayStateModel
-    @EnvironmentObject private var dashboardState: DashboardStateModel
+    private var monitoringStatusText: String {
+        switch accessibilityManager.monitoringState {
+        case .disabled:
+            return "Disabled"
+        case .enabled:
+            return "Active"
+        case .paused:
+            return "Paused"
+        case .awaitingPermissions:
+            return "Awaiting Permissions"
+        }
+    }
+
+    private var monitoringStatusColor: Color {
+        switch accessibilityManager.monitoringState {
+        case .disabled:
+            return .secondary
+        case .enabled:
+            return .green
+        case .paused:
+            return .orange
+        case .awaitingPermissions:
+            return .yellow
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
+                // Permission Banner (if needed)
+                if accessibilityManager.monitoringState == .awaitingPermissions {
+                    permissionBanner
+                }
+
                 // Welcome Section
                 if UserDefaults.standard.bool(forKey: "shouldHideWelcome") != true {
                     welcomeSection
@@ -45,10 +77,51 @@ struct ControlPanelView: View {
 
                 // Quick Stats
                 quickStatsSection
+
+                // Monitoring Control
+                monitoringControlSection
             }
             .padding()
         }
     }
+
+    // MARK: - Permission Banner
+
+    private var permissionBanner: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                Text("Accessibility Permission Required")
+                    .font(.headline)
+            }
+
+            Text("PromptShields needs accessibility permission to detect text fields and provide suggestions. Please grant permission in System Settings.")
+                .font(.body)
+                .foregroundColor(.secondary)
+
+            HStack {
+                Button("Open System Settings") {
+                    openAccessibilitySettings()
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button("Check Again") {
+                    accessibilityManager.refreshPermissionState()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding()
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Welcome Section
 
     private var welcomeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -60,11 +133,9 @@ struct ControlPanelView: View {
                 .font(.body)
                 .foregroundColor(.secondary)
 
-            if !dashboardState.isActive {
-                Button("Get Started") {
-                    Task {
-                        accessibilityManagerImpl.startTimer()
-                    }
+            if accessibilityManager.monitoringState == .disabled {
+                Button("Enable Monitoring") {
+                    accessibilityManager.enableMonitoring()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -74,6 +145,8 @@ struct ControlPanelView: View {
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
     }
+
+    // MARK: - Quick Stats Section
 
     private var quickStatsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -97,13 +170,75 @@ struct ControlPanelView: View {
 
                 StatCardView(
                     title: "Status",
-                    value: dashboardState.isActive ? "Active" : "Inactive",
-                    icon: dashboardState.isActive ? "checkmark.circle.fill" : "xmark.circle.fill",
-                    color: dashboardState.isActive ? .green : .red
+                    value: monitoringStatusText,
+                    icon: accessibilityManager.monitoringState == .enabled ? "checkmark.circle.fill" : "xmark.circle.fill",
+                    color: monitoringStatusColor
                 )
             }
         }
     }
+
+    // MARK: - Monitoring Control Section
+
+    private var monitoringControlSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Monitoring Control")
+                .font(.headline)
+
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Text Field Monitoring")
+                        .font(.body)
+                    Text(monitoringStateDescription)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: Binding(
+                    get: { accessibilityManager.monitoringState == .enabled },
+                    set: { newValue in
+                        if newValue {
+                            accessibilityManager.enableMonitoring()
+                        } else {
+                            accessibilityManager.disableMonitoring()
+                        }
+                    }
+                ))
+                .toggleStyle(.switch)
+                .disabled(accessibilityManager.monitoringState == .awaitingPermissions)
+            }
+            .padding()
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
+
+            if !accessibilityManager.hasAccessibilityPermission {
+                HStack {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(.blue)
+                    Text("Accessibility permission is required to enable monitoring.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    private var monitoringStateDescription: String {
+        switch accessibilityManager.monitoringState {
+        case .disabled:
+            return "Monitoring is turned off. Enable to detect text fields."
+        case .enabled:
+            return "Actively monitoring text fields across applications."
+        case .paused:
+            return "Monitoring paused (screen locked)."
+        case .awaitingPermissions:
+            return "Waiting for accessibility permissions to be granted."
+        }
+    }
+
+    // MARK: - Recent Activity Section
 
     private var recentActivitySection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -122,6 +257,14 @@ struct ControlPanelView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func openAccessibilitySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
         }
     }
 }

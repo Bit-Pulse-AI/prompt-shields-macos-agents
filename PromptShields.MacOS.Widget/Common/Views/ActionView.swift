@@ -3,6 +3,7 @@ import os
 
 struct ActionView: View {
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
+    @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
     @Environment(\.suggestionDomainService) private var suggestionDomainService
     @Environment(\.profileDomainService) private var profileDomainService
 
@@ -16,11 +17,25 @@ struct ActionView: View {
     @State private var isProcessing = false
     @State private var isViewActive = true
     @State private var actionText: String = ""
+    @State private var injectionError: String?
+
+    /// Text injection service - created once and reused
+    private let textInjectionService: TextInjectionService = DefaultTextInjectionService()
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: ActionView.self)
     )
+
+    /// Returns true if the action tool is in an interactive state (not idle)
+    private var isInteractive: Bool {
+        switch overlayStateModel.actionToolState {
+        case .idle:
+            return false
+        case .loading, .action, .options, .category:
+            return true
+        }
+    }
 
     private var suggestionTypes: [SuggestionType] {
         let enabledFilters = userPreferences?.model.enabledSuggestionTypes ?? []
@@ -73,6 +88,14 @@ struct ActionView: View {
                             .multilineTextAlignment(.leading)
                             .lineLimit(nil)
                     }
+
+                    if let error = injectionError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .padding(.vertical, 4)
+                    }
+
                     HStack {
                         Button {
                             Task {
@@ -83,7 +106,7 @@ struct ActionView: View {
                         }
                         .buttonStyle(ButtonStyleGreen())
                         Button {
-                            overlayStateModel.actionToolState = .idle
+                            resetState()
                         } label: {
                             Text("Keep Original")
                         }
@@ -159,15 +182,51 @@ struct ActionView: View {
         }
         .onDisappear {
             isViewActive = false
-            // Cancel any ongoing processing
             isProcessing = false
+            accessibilityManager.resumeFromInteraction()
+        }
+        .onChange(of: overlayStateModel.actionToolState) { oldState, newState in
+            handleStateChange(from: oldState, to: newState)
         }
     }
 
-    // MARK: - Private Methods
+    // MARK: - State Management
+
+    private func handleStateChange(from oldState: ActionToolState, to newState: ActionToolState) {
+        let wasInteractive = isInteractiveState(oldState)
+        let isNowInteractive = isInteractiveState(newState)
+
+        if !wasInteractive && isNowInteractive {
+            // Entering interactive state - pause monitoring to preserve element info
+            accessibilityManager.pauseForInteraction()
+            injectionError = nil
+        } else if wasInteractive && !isNowInteractive {
+            // Leaving interactive state - resume monitoring
+            accessibilityManager.resumeFromInteraction()
+        }
+    }
+
+    private func isInteractiveState(_ state: ActionToolState) -> Bool {
+        switch state {
+        case .idle:
+            return false
+        case .loading, .action, .options, .category:
+            return true
+        }
+    }
+
+    private func resetState() {
+        injectionError = nil
+        accessibilityManager.resumeFromInteraction()
+        overlayStateModel.actionToolState = .idle
+    }
+
+    // MARK: - Suggestion Processing
 
     @MainActor
     private func processSuggestion(suggestionType: SuggestionType) async {
+        defer { isProcessing = false }
+
         do {
             let result = try await suggestionDomainService
                 .process(
@@ -181,53 +240,44 @@ struct ActionView: View {
 
             try Task.checkCancellation()
 
-            // Check if the element is still valid using the registry
-            guard let elementId = overlayStateModel.elementInfo?.elementIdentifier,
-                  AXElementRegistry.shared.isValid(elementId) else {
-                logger.error("AXUIElement is no longer valid")
-                overlayStateModel.actionToolState = .idle
-                isProcessing = false
-                return
-            }
-
             actionText = result.model.suggestedText
             overlayStateModel.actionToolState = .action
         } catch is CancellationError {
             logger.warning("LLM processing was cancelled")
-            overlayStateModel.actionToolState = .idle
+            resetState()
         } catch {
             logger.error("Error processing LLM request: \(error)")
-            overlayStateModel.actionToolState = .idle
+            resetState()
         }
-
-        isProcessing = false
     }
+
+    // MARK: - Text Injection
 
     @MainActor
     private func replaceText() async {
-        guard let elementId = overlayStateModel.elementInfo?.elementIdentifier else {
-            logger.error("No element identifier available")
-            overlayStateModel.actionToolState = .idle
+        logger.info("Starting text replacement")
+        injectionError = nil
+
+        // Get the preserved element info
+        let targetInfo = overlayStateModel.elementInfo
+
+        guard targetInfo != nil else {
+            logger.error("No element info available")
+            injectionError = "Target field not found"
             return
         }
 
-        // Look up the actual AXUIElement from the registry
-        guard let element = AXElementRegistry.shared.lookup(elementId) else {
-            logger.error("Element not found in registry or no longer valid")
-            overlayStateModel.actionToolState = .idle
-            return
-        }
-
-        Task {
-            do {
-                // Use the isSelectedText information from the element info
-                let isSelectedText = overlayStateModel.elementInfo?.isSelectedText ?? false
-                try await TextInjector.shared.injectText(actionText, into: element, isSelectedText: isSelectedText)
-                overlayStateModel.actionToolState = .idle
-            } catch {
-                logger.error("Error injecting text: \(error)")
-                overlayStateModel.actionToolState = .idle
-            }
+        do {
+            // Use the new injection service which gets a fresh element reference
+            try textInjectionService.injectText(actionText, targetInfo: targetInfo)
+            logger.info("Text injection successful")
+            resetState()
+        } catch let error as AccessibilityError {
+            logger.error("Accessibility error: \(error.localizedDescription)")
+            injectionError = error.localizedDescription
+        } catch {
+            logger.error("Unexpected error: \(error.localizedDescription)")
+            injectionError = "Failed to update text"
         }
     }
 }

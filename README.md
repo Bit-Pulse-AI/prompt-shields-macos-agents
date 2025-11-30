@@ -131,11 +131,33 @@ let baseURL = "https://your-api-endpoint.com/api/v1"
 
 ## Accessibility Permissions
 
-The app requires Accessibility permissions to detect focused text fields:
+The app requires Accessibility permissions to detect focused text fields. The permission flow is designed to be non-intrusive:
 
-1. Open **System Preferences** → **Privacy & Security** → **Accessibility**
-2. Add PromptShields to the allowed applications
-3. Restart the app if prompted
+### Permission Flow
+
+1. **App starts with monitoring OFF** by default
+2. User must be **logged in** to enable monitoring
+3. When user enables monitoring via the Control Panel toggle:
+   - If permissions are granted → monitoring starts immediately
+   - If permissions are not granted → system permission prompt appears
+4. User grants permission in **System Settings** → **Privacy & Security** → **Accessibility**
+5. App detects permission grant and starts monitoring automatically
+
+### Monitoring States
+
+| State | Description |
+|-------|-------------|
+| `disabled` | Monitoring is off (default) |
+| `enabled` | Actively monitoring text fields |
+| `paused` | Temporarily paused (e.g., screen locked) |
+| `awaitingPermissions` | Waiting for user to grant accessibility permission |
+
+### Granting Permissions
+
+1. Enable monitoring in the Control Panel
+2. Click "Open System Settings" in the permission banner
+3. Add PromptShields to the Accessibility list
+4. The app will automatically detect the permission and start monitoring
 
 ## Dependency Injection
 

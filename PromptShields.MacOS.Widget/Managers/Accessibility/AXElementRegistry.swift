@@ -3,13 +3,11 @@ import os
 
 // MARK: - AXElement Registry
 
-/// MainActor-isolated registry that maintains references to AXUIElements
-/// and allows lookup by AXElementID.
+/// MainActor-isolated registry for tracking interaction state.
+/// Simplified to focus on locking/unlocking during user interactions.
 ///
-/// This solves the problem of AXUIElement not being Sendable:
-/// - ElementInfo stores only the Sendable AXElementID
-/// - When you need the actual element, look it up in this registry
-/// - The registry is MainActor-isolated, ensuring thread safety
+/// Note: The actual AXUIElement is now acquired fresh at injection time
+/// via TextInjectionService, so we no longer need to store element references.
 @MainActor
 final class AXElementRegistry {
     // MARK: - Singleton
@@ -18,17 +16,16 @@ final class AXElementRegistry {
 
     // MARK: - Properties
 
-    /// Maps element IDs to their AXUIElements
-    private var elements: [AXElementID: AXUIElement] = [:]
-
-    /// Logger for registry operations
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "ai.promptshields.widget",
         category: "AXElementRegistry"
     )
 
-    /// Maximum number of elements to keep in registry
-    private let maxElements = 10
+    /// When true, indicates user is interacting with action menu
+    private var isLocked = false
+
+    /// The current element ID (for backward compatibility)
+    private var currentElementId: AXElementID?
 
     // MARK: - Initialization
 
@@ -36,126 +33,78 @@ final class AXElementRegistry {
 
     // MARK: - Public Methods
 
-    /// Registers an element and returns its ID
-    /// - Parameter element: The AXUIElement to register
-    /// - Returns: The AXElementID for the registered element
+    /// Updates the current element ID
+    /// - Parameter element: The AXUIElement to track
+    /// - Returns: The AXElementID for the element
     @discardableResult
-    func register(_ element: AXUIElement) -> AXElementID {
+    func updateCurrent(_ element: AXUIElement) -> AXElementID {
         let elementId = AXElementID(element)
 
-        // Clean up if we have too many elements
-        if elements.count >= maxElements {
-            cleanupInvalidElements()
+        // If locked, preserve the existing ID
+        if isLocked {
+            logger.debug("Registry locked, preserving current element ID")
+            return currentElementId ?? elementId
         }
 
-        elements[elementId] = element
-        logger.debug("Registered element: \(elementId.debugPointerValue)")
+        currentElementId = elementId
+        logger.debug("Updated current element ID: \(elementId.debugPointerValue)")
 
         return elementId
     }
 
-    /// Looks up an element by its ID
-    /// - Parameter id: The AXElementID to look up
-    /// - Returns: The AXUIElement if found and still valid, nil otherwise
-    func lookup(_ id: AXElementID) -> AXUIElement? {
-        guard let element = elements[id] else {
-            logger.debug("Element not found in registry: \(id.debugPointerValue)")
-            return nil
-        }
-
-        // Verify the element is still valid
-        guard AXUIElementSafeWrapper.isValidElement(element) else {
-            logger.debug("Element is no longer valid, removing: \(id.debugPointerValue)")
-            elements.removeValue(forKey: id)
-            return nil
-        }
-
-        return element
-    }
-
-    /// Looks up an element by its ID, throwing if not found
-    /// - Parameter id: The AXElementID to look up
-    /// - Returns: The AXUIElement
-    /// - Throws: AccessibilityError.invalidUIElement if not found or invalid
-    func lookupOrThrow(_ id: AXElementID) throws -> AXUIElement {
-        guard let element = lookup(id) else {
-            throw AccessibilityError.invalidUIElement
-        }
-        return element
-    }
-
-    /// Removes an element from the registry
-    /// - Parameter id: The AXElementID to remove
-    func unregister(_ id: AXElementID) {
-        elements.removeValue(forKey: id)
-        logger.debug("Unregistered element: \(id.debugPointerValue)")
-    }
-
-    /// Removes all elements from the registry
-    func clear() {
-        elements.removeAll()
-        logger.debug("Cleared all elements from registry")
-    }
-
-    /// Updates the current element, replacing any existing one
-    /// - Parameter element: The new current AXUIElement
-    /// - Returns: The AXElementID for the element
-    @discardableResult
-    func updateCurrent(_ element: AXUIElement) -> AXElementID {
-        // Remove all existing elements (we only track the current one)
-        elements.removeAll()
-        return register(element)
-    }
-
-    /// Checks if an element ID is registered and valid
+    /// Checks if an element ID matches the current one
     /// - Parameter id: The AXElementID to check
-    /// - Returns: true if the element is registered and valid
+    /// - Returns: true if it matches the current element
     func isValid(_ id: AXElementID) -> Bool {
-        lookup(id) != nil
+        currentElementId == id
     }
 
-    // MARK: - Private Methods
+    /// Locks the registry during user interaction
+    func lock() {
+        isLocked = true
+        logger.info("Registry locked for user interaction")
+    }
 
-    /// Removes invalid elements from the registry
-    private func cleanupInvalidElements() {
-        let invalidIds = elements.keys.filter { id in
-            guard let element = elements[id] else { return true }
-            return !AXUIElementSafeWrapper.isValidElement(element)
-        }
+    /// Unlocks the registry after user interaction
+    func unlock() {
+        isLocked = false
+        logger.info("Registry unlocked")
+    }
 
-        for id in invalidIds {
-            elements.removeValue(forKey: id)
-        }
+    /// Returns whether the registry is currently locked
+    var locked: Bool {
+        isLocked
+    }
 
-        logger.debug("Cleaned up \(invalidIds.count) invalid elements")
+    /// Clears the current element ID
+    func clear() {
+        currentElementId = nil
+        logger.debug("Cleared current element ID")
+    }
+
+    // MARK: - Deprecated Methods (for backward compatibility)
+
+    /// Deprecated: Use TextInjectionService instead
+    @available(*, deprecated, message: "Use TextInjectionService to get fresh element references")
+    func lookup(_ id: AXElementID) -> AXUIElement? {
+        logger.warning("lookup() is deprecated - elements should be acquired fresh at injection time")
+        return nil
+    }
+
+    /// Deprecated: Use TextInjectionService instead
+    @available(*, deprecated, message: "Use TextInjectionService to get fresh element references")
+    func getCurrentElement() -> AXUIElement? {
+        logger.warning("getCurrentElement() is deprecated - elements should be acquired fresh at injection time")
+        return nil
     }
 }
 
-// MARK: - Convenience Extensions
+// MARK: - AXElementID Extensions
 
 extension AXElementID {
-    /// Looks up the AXUIElement for this ID in the shared registry
-    /// Must be called on MainActor
+    /// Checks if this ID is the current one in the registry
     @MainActor
-    var element: AXUIElement? {
-        AXElementRegistry.shared.lookup(self)
-    }
-
-    /// Looks up the AXUIElement for this ID, throwing if not found
-    /// Must be called on MainActor
-    @MainActor
-    func getElement() throws -> AXUIElement {
-        try AXElementRegistry.shared.lookupOrThrow(self)
-    }
-}
-
-// MARK: - Optional AXElementID Extension
-
-extension Optional where Wrapped == AXElementID {
-    /// Looks up the AXUIElement for this optional ID
-    /// Must be called on MainActor
-    @MainActor
-    var element: AXUIElement? {
-        self?.element
+    var isCurrent: Bool {
+        AXElementRegistry.shared.isValid(self)
     }
 }

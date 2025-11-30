@@ -4,17 +4,47 @@ import Foundation
 import ApplicationServices
 import AppKit
 
+// MARK: - Monitoring State
+
+/// Represents the current state of accessibility monitoring
+enum MonitoringState: Equatable, Sendable {
+    /// Monitoring is disabled (default state)
+    case disabled
+    /// Monitoring is enabled and running
+    case enabled
+    /// Monitoring is paused (e.g., screen locked)
+    case paused
+    /// Waiting for accessibility permissions
+    case awaitingPermissions
+}
+
 // MARK: - Accessibility Manager
 
 /// Manages accessibility operations for detecting and interacting with focused text fields.
 /// Uses MainActor isolation for all AXUIElement operations to ensure Swift 6 compliance.
+///
+/// **Permission Flow:**
+/// 1. App starts with monitoring OFF by default
+/// 2. User must be logged in to enable monitoring
+/// 3. When user enables monitoring, we check for accessibility permissions
+/// 4. If permissions not granted, we prompt and wait
+/// 5. Only after permissions are granted does monitoring actually start
 @MainActor
 final class AccessibilityManagerImpl: ObservableObject {
     // MARK: - Published Properties
 
     @Published var elementInfo: ElementInfo?
     @Published var applicationInfo: ApplicationInfo = .empty
-    @Published var isActive: Bool = false
+    @Published private(set) var monitoringState: MonitoringState = .disabled
+    @Published private(set) var hasAccessibilityPermission: Bool = false
+
+    /// When true, element info updates are paused (e.g., when action menu is open)
+    @Published var isInteractionActive: Bool = false
+
+    /// Convenience property for backward compatibility
+    var isActive: Bool {
+        monitoringState == .enabled
+    }
 
     // MARK: - Private Properties
 
@@ -23,13 +53,13 @@ final class AccessibilityManagerImpl: ObservableObject {
     private let textFieldDetector = TextFieldDetector()
     private var previousText: String?
     private var previousRect: CGRect?
-    private var lastIsProcessTrusted: Bool?
-    private var shouldDisplayPermissionPrompt = true
-    private var shouldDisplayRestartPrompt = true
-    private var shouldUpdateFrame = true
-    private var shouldUpdateText = true
     private var isProcessing = false
-    private var savedIsActiveState: Bool?
+    private var savedMonitoringState: MonitoringState?
+    private var hasPromptedForPermissions = false
+    private var permissionCheckCount = 0
+    private let maxPermissionChecks = 3
+    /// Preserved element info while interaction is active
+    private var preservedElementInfo: ElementInfo?
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
@@ -39,34 +69,159 @@ final class AccessibilityManagerImpl: ObservableObject {
     // MARK: - Initialization
 
     init() {
+        // Check initial permission state without prompting
+        hasAccessibilityPermission = AXIsProcessTrusted()
         setupSystemLockObservers()
-        startTimer()
+
+        logger.info("AccessibilityManager initialized. Permissions: \(self.hasAccessibilityPermission)")
     }
 
     deinit {
         timerTask?.cancel()
     }
 
-    // MARK: - Timer Control
+    // MARK: - Public API
 
-    func startTimer() {
-        UserDefaults.standard.setValue(true, forKey: "shouldHideWelcome")
-        isActive = true
+    /// Enables monitoring if permissions are granted, otherwise requests them
+    /// Should only be called when user is logged in
+    func enableMonitoring() {
+        logger.info("Enable monitoring requested")
 
+        // Check current permission state
+        hasAccessibilityPermission = AXIsProcessTrusted()
+
+        if hasAccessibilityPermission {
+            startMonitoring()
+        } else {
+            requestAccessibilityPermissions()
+        }
+    }
+
+    /// Disables monitoring and clears any detected elements
+    func disableMonitoring() {
+        logger.info("Disable monitoring requested")
+        stopMonitoring()
+        monitoringState = .disabled
+    }
+
+    /// Toggles monitoring state
+    func toggleMonitoring() {
+        if monitoringState == .enabled {
+            disableMonitoring()
+        } else {
+            enableMonitoring()
+        }
+    }
+
+    /// Pauses element info updates while user is interacting with action menu
+    /// The current element info is preserved and will be used until interaction ends
+    func pauseForInteraction() {
+        guard !isInteractionActive else { return }
+        isInteractionActive = true
+        preservedElementInfo = elementInfo
+        // Lock the registry to prevent clearing the current element
+        AXElementRegistry.shared.lock()
+        logger.info("Pausing monitoring for user interaction")
+    }
+
+    /// Resumes element info updates after user finishes interacting with action menu
+    func resumeFromInteraction() {
+        guard isInteractionActive else { return }
+        isInteractionActive = false
+        preservedElementInfo = nil
+        // Unlock the registry to allow normal operation
+        AXElementRegistry.shared.unlock()
+        logger.info("Resuming monitoring after user interaction")
+    }
+
+    /// Refreshes the permission state without prompting
+    func refreshPermissionState() {
+        let wasGranted = hasAccessibilityPermission
+        hasAccessibilityPermission = AXIsProcessTrusted()
+
+        // If permissions were just granted and we're waiting, start monitoring
+        if !wasGranted && hasAccessibilityPermission && monitoringState == .awaitingPermissions {
+            logger.info("Permissions granted, starting monitoring")
+            startMonitoring()
+        }
+    }
+
+    // MARK: - Permission Handling
+
+    private func requestAccessibilityPermissions() {
+        logger.info("Requesting accessibility permissions")
+        monitoringState = .awaitingPermissions
+        permissionCheckCount = 0
+
+        // Show the system permission prompt
+        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+        let options = [key: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
+        hasPromptedForPermissions = true
+
+        // Start polling for permission grant
+        startPermissionPolling()
+    }
+
+    private func startPermissionPolling() {
         timerTask?.cancel()
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.timerTick()
-                try? await Task.sleep(for: .seconds(self?.pollInterval ?? 0.5))
+                guard let self = self else { break }
+
+                // Check if permissions were granted
+                let granted = AXIsProcessTrusted()
+                self.hasAccessibilityPermission = granted
+
+                if granted {
+                    self.logger.info("Accessibility permissions granted")
+                    self.startMonitoring()
+                    return
+                }
+
+                self.permissionCheckCount += 1
+
+                // After several checks, stop polling and wait for user action
+                if self.permissionCheckCount > 30 { // ~15 seconds
+                    self.logger.info("Permission polling timeout, waiting for user action")
+                    return
+                }
+
+                try? await Task.sleep(for: .milliseconds(500))
             }
         }
     }
 
-    func stopTimer() {
-        isActive = false
+    // MARK: - Monitoring Control
+
+    private func startMonitoring() {
+        guard hasAccessibilityPermission else {
+            logger.warning("Cannot start monitoring without permissions")
+            return
+        }
+
+        monitoringState = .enabled
+        logger.info("Starting accessibility monitoring")
+
+        timerTask?.cancel()
+        timerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self = self else { break }
+
+                if self.monitoringState == .enabled {
+                    await self.timerTick()
+                }
+
+                try? await Task.sleep(for: .seconds(self.pollInterval))
+            }
+        }
+    }
+
+    private func stopMonitoring() {
         timerTask?.cancel()
         timerTask = nil
-        elementInfo = nil
+        clearElementInfo()
+        logger.info("Stopped accessibility monitoring")
     }
 
     // MARK: - System Lock Observers
@@ -78,10 +233,15 @@ final class AccessibilityManagerImpl: ObservableObject {
             forName: .init("com.apple.screenIsLocked"),
             object: nil,
             queue: .main
-        ) {_ in
+        ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.savedIsActiveState = self?.isActive
-                self?.isActive = false
+                guard let self = self else { return }
+                if self.monitoringState == .enabled {
+                    self.savedMonitoringState = .enabled
+                    self.monitoringState = .paused
+                    self.clearElementInfo()
+                    self.logger.info("Screen locked, pausing monitoring")
+                }
             }
         }
 
@@ -91,9 +251,11 @@ final class AccessibilityManagerImpl: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                if let savedState = self?.savedIsActiveState {
-                    self?.isActive = savedState
-                    self?.savedIsActiveState = nil
+                guard let self = self else { return }
+                if self.savedMonitoringState == .enabled {
+                    self.monitoringState = .enabled
+                    self.savedMonitoringState = nil
+                    self.logger.info("Screen unlocked, resuming monitoring")
                 }
             }
         }
@@ -102,35 +264,29 @@ final class AccessibilityManagerImpl: ObservableObject {
     // MARK: - Timer Tick
 
     private func timerTick() async {
-        let trusted = isProcessTrusted
+        // Double-check we should be monitoring
+        guard monitoringState == .enabled else { return }
 
-        if lastIsProcessTrusted == nil && trusted {
-            logger.log("App has accessibility permissions")
-        } else if lastIsProcessTrusted == nil && !trusted {
-            logger.log("App does not have accessibility permissions")
-            showPromptIfNeeded()
-            clearElementInfo()
-        } else if lastIsProcessTrusted != trusted && trusted {
-            logger.log("User enabled accessibility permissions")
-        } else if lastIsProcessTrusted != trusted && !trusted {
-            logger.log("User disabled accessibility permissions")
-            clearElementInfo()
-        } else if lastIsProcessTrusted == trusted && trusted {
-            // Prevent concurrent processing
-            guard !isProcessing else {
-                logger.debug("Skipping tick - already processing")
-                return
-            }
+        // Skip updates while user is interacting with action menu
+        guard !isInteractionActive else { return }
 
-            isProcessing = true
-            await processAccessibility()
-            isProcessing = false
-        } else if lastIsProcessTrusted == trusted && !trusted {
-            logger.log("Ticking on untrusted process")
+        // Verify permissions are still valid
+        guard AXIsProcessTrusted() else {
+            logger.warning("Lost accessibility permissions")
+            hasAccessibilityPermission = false
+            monitoringState = .awaitingPermissions
             clearElementInfo()
+            return
         }
 
-        lastIsProcessTrusted = trusted
+        // Prevent concurrent processing
+        guard !isProcessing else {
+            return
+        }
+
+        isProcessing = true
+        await processAccessibility()
+        isProcessing = false
     }
 
     // MARK: - Accessibility Processing
@@ -138,7 +294,6 @@ final class AccessibilityManagerImpl: ObservableObject {
     private func processAccessibility() async {
         do {
             guard let focusedElement = try getFocusedElementWithRetry() else {
-                displayRestartIfNeeded()
                 clearElementInfo()
                 return
             }
@@ -158,15 +313,12 @@ final class AccessibilityManagerImpl: ObservableObject {
     }
 
     /// Gets the focused element with retry logic
-    /// All operations stay on MainActor - no Sendable boundary crossing
     private func getFocusedElementWithRetry() throws -> AXUIElement? {
         let maxRetries = 3
         let startTime = Date()
 
         for attempt in 1...maxRetries {
-            // Check timeout
             if Date().timeIntervalSince(startTime) > 2.0 {
-                logger.warning("Total timeout reached while getting focused element")
                 throw AccessibilityError.timeout
             }
 
@@ -174,10 +326,7 @@ final class AccessibilityManagerImpl: ObservableObject {
                 return element
             }
 
-            logger.warning("Attempt \(attempt) failed to get focused element")
-
             if attempt < maxRetries {
-                // Brief synchronous wait (we're on MainActor, can't use async sleep here)
                 Thread.sleep(forTimeInterval: 0.1)
             }
         }
@@ -186,7 +335,6 @@ final class AccessibilityManagerImpl: ObservableObject {
     }
 
     /// Gets the focused element using robust detection
-    /// Entirely MainActor-isolated - no crossing to other actors
     private func getRobustFocusedElement() -> AXUIElement? {
         AXUIElementSafeWrapper.withMemoryCleanup {
             guard let frontApp = NSWorkspace.shared.frontmostApplication else {
@@ -277,30 +425,9 @@ final class AccessibilityManagerImpl: ObservableObject {
             return
         }
 
-        // Check if we should update frame
-        if !shouldUpdateFrame {
-            shouldUpdateFrame = previousRect != info.frame
-        }
-
-        // Check if we should update text
-        if !shouldUpdateText {
-            shouldUpdateText = previousText != info.text
-        }
-
-        // Update based on frame changes
-        if shouldUpdateFrame && previousRect == info.frame {
-            elementInfo = info.withFrame(frame: info.frame)
-            shouldUpdateFrame = false
-        } else if previousRect != info.frame {
-            elementInfo = nil
-        }
-
-        // Update based on text changes
-        if shouldUpdateText && previousText == info.text {
-            elementInfo = info.withText(text: info.text)
-            shouldUpdateText = false
-        } else if previousText != info.text {
-            elementInfo = nil
+        // Simple update - just set the new info
+        if previousRect != info.frame || previousText != info.text {
+            elementInfo = info
         }
 
         previousRect = info.frame
@@ -310,52 +437,20 @@ final class AccessibilityManagerImpl: ObservableObject {
     private func clearElementInfo() {
         elementInfo = nil
         applicationInfo = .empty
+        previousRect = nil
+        previousText = nil
     }
 
-    // MARK: - Permissions
+    // MARK: - Legacy API (for backward compatibility)
 
-    private var isProcessTrusted: Bool {
-        AXIsProcessTrusted()
+    /// Legacy method - use enableMonitoring() instead
+    func startTimer() {
+        enableMonitoring()
     }
 
-    private func showPromptIfNeeded() {
-        guard shouldDisplayPermissionPrompt else { return }
-
-        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        let options = [key: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
-        shouldDisplayPermissionPrompt = false
-    }
-
-    private func displayRestartIfNeeded() {
-        guard shouldDisplayRestartPrompt else { return }
-        shouldDisplayRestartPrompt = false
-        displayRestart()
-    }
-
-    private func displayRestart() {
-        let alert = NSAlert()
-        alert.messageText = "Restart Required"
-        alert.informativeText = """
-        Accessibility permissions have been updated, and a restart is required \
-        for them to fully take effect. Please quit and reopen the app.
-        """
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
-        restartApp()
-    }
-
-    private func restartApp() {
-        guard let bundlePath = Bundle.main.bundlePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
-            return
-        }
-
-        let script = """
-        sleep 0.5
-        open "\(bundlePath)"
-        """
-        _ = Process.launchedProcess(launchPath: "/bin/sh", arguments: ["-c", script])
-        NSApp.terminate(nil)
+    /// Legacy method - use disableMonitoring() instead
+    func stopTimer() {
+        disableMonitoring()
     }
 }
 

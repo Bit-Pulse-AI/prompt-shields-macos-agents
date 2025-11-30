@@ -5,8 +5,8 @@ import AppKit
 /// Information about a focused UI element for accessibility operations
 /// Conforms to Sendable for safe concurrent access in Swift 6
 ///
-/// Note: The actual AXUIElement is stored in AXElementRegistry and can be
-/// looked up using the elementIdentifier when needed (on MainActor).
+/// Note: This struct stores metadata about the element. The actual AXUIElement
+/// is acquired fresh at injection time via TextInjectionService for reliability.
 struct ElementInfo: Equatable, Hashable, Sendable {
     // MARK: - Properties
 
@@ -22,8 +22,7 @@ struct ElementInfo: Equatable, Hashable, Sendable {
     /// The frame of the element in screen coordinates
     var frame: CGRect
 
-    /// Identifier for looking up the actual AXUIElement in AXElementRegistry
-    /// Use `elementIdentifier.element` on MainActor to get the actual element
+    /// Identifier for the element (used for tracking, not for element lookup)
     let elementIdentifier: AXElementID?
 
     /// Whether the text came from a user selection
@@ -72,19 +71,11 @@ struct ElementInfo: Equatable, Hashable, Sendable {
         lhs.isSelectedText == rhs.isSelectedText
     }
 
-    // MARK: - Element Access
+    // MARK: - Validation
 
-    /// Gets the actual AXUIElement from the registry
-    /// Must be called on MainActor
+    /// Checks if the element identifier matches the current one in the registry
     @MainActor
-    var element: AXUIElement? {
-        elementIdentifier?.element
-    }
-
-    /// Checks if the element is still valid
-    /// Must be called on MainActor
-    @MainActor
-    var isElementValid: Bool {
+    var isCurrentElement: Bool {
         guard let id = elementIdentifier else { return false }
         return AXElementRegistry.shared.isValid(id)
     }

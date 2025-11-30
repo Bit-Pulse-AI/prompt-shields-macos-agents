@@ -43,8 +43,8 @@ struct MainApp: App {
         Window("Main", id: MainApp.mainWindow) {
             if $overlayStateModel.isMainConfigured.wrappedValue {
                 MainView()
-                    .onChange(of: accessibilityManager.elementInfo?.frame) { _, _ in
-                        syncElementInfo()
+                    .onReceive(accessibilityManager.$elementInfo) { newValue in
+                        overlayStateModel.elementInfo = newValue
                         updateMainWindow(isInitial: false)
                     }
                     .onChange(of: overlayStateModel.actionToolState) { _, _ in
@@ -54,12 +54,11 @@ struct MainApp: App {
                 VStack {
                 }
                 .frame(width: 1, height: 1)
-                    .onAppear {
-                        configureAppAppearance()
-                        setupWindowDelegate()
-                        setupBindings()
-                        updateMainWindow(isInitial: true)
-                    }
+                .onAppear {
+                    configureAppAppearance()
+                    setupWindowDelegate()
+                    updateMainWindow(isInitial: true)
+                }
             }
         }
         .defaultSize(.zero)
@@ -71,8 +70,8 @@ struct MainApp: App {
         Window("Overlay Render", id: MainApp.overlayRender) {
             if $overlayStateModel.isOverlayConfigured.wrappedValue {
                 OverlayView()
-                    .onChange(of: accessibilityManager.elementInfo?.frame) { _, _ in
-                        syncElementInfo()
+                    .onReceive(accessibilityManager.$elementInfo) { newValue in
+                        overlayStateModel.elementInfo = newValue
                         updateOverlayWindow(isInitial: false)
                     }
                     .onChange(of: overlayStateModel.actionToolState) { _, _ in
@@ -95,8 +94,8 @@ struct MainApp: App {
         Window("Action", id: MainApp.actionRender) {
             if $overlayStateModel.isActionConfigured.wrappedValue {
                 ActionView()
-                    .onChange(of: accessibilityManager.elementInfo?.frame) { _, _ in
-                        syncElementInfo()
+                    .onReceive(accessibilityManager.$elementInfo) { newValue in
+                        overlayStateModel.elementInfo = newValue
                         updateActionWindow(isInitial: false)
                     }
                     .onChange(of: overlayStateModel.actionToolState) { _, _ in
@@ -115,44 +114,6 @@ struct MainApp: App {
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
-    }
-
-    // MARK: - Bindings Setup
-
-    /// Sets up Combine bindings to sync AccessibilityManager state to other models
-    private func setupBindings() {
-        // Sync elementInfo from AccessibilityManager to OverlayStateModel
-        accessibilityManager.$elementInfo
-            .receive(on: DispatchQueue.main)
-            .sink { [weak overlayStateModel] newValue in
-                overlayStateModel?.elementInfo = newValue
-            }
-            .store(in: &cancellables)
-
-        // Sync applicationInfo from AccessibilityManager to DashboardStateModel
-        accessibilityManager.$applicationInfo
-            .receive(on: DispatchQueue.main)
-            .sink { [weak dashboardStateModel] newValue in
-                dashboardStateModel?.currentApplication = newValue
-            }
-            .store(in: &cancellables)
-
-        // Sync isActive from AccessibilityManager to DashboardStateModel
-        accessibilityManager.$isActive
-            .receive(on: DispatchQueue.main)
-            .sink { [weak dashboardStateModel] newValue in
-                dashboardStateModel?.isActive = newValue
-            }
-            .store(in: &cancellables)
-    }
-
-    @State private var cancellables = Set<AnyCancellable>()
-
-    /// Syncs element info from accessibility manager to overlay state model
-    private func syncElementInfo() {
-        overlayStateModel.elementInfo = accessibilityManager.elementInfo
-        dashboardStateModel.currentApplication = accessibilityManager.applicationInfo
-        dashboardStateModel.isActive = accessibilityManager.isActive
     }
 
     private func updateMainWindow(isInitial: Bool) {
@@ -232,7 +193,6 @@ struct MainApp: App {
         window.level = .floating
         window.hasShadow = false
 
-        // Use .titled with .borderless to allow input while keeping borderless appearance
         window.styleMask.remove(.titled)
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = false
@@ -258,7 +218,6 @@ struct MainApp: App {
         window.level = .floating
         window.hasShadow = false
 
-        // Use .titled with .borderless to allow input while keeping borderless appearance
         window.styleMask.remove(.titled)
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = false
@@ -272,7 +231,6 @@ struct MainApp: App {
         }
     }
 
-    /// Configures the application appearance settings
     private func configureAppAppearance() {
         openWindow(id: MainApp.mainWindow)
         openWindow(id: MainApp.overlayRender)
@@ -280,15 +238,11 @@ struct MainApp: App {
         NSApp.appearance = NSAppearance(named: .aqua)
     }
 
-    /// Sets up the window delegate to handle window closing behavior
-    ///
     private func setupWindowDelegate() {
-        // Try to find the main window and set its delegate with a longer delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             if let mainWindow = NSApp.windows.first(where: {
                 $0.identifier?.rawValue.hasPrefix(MainApp.mainWindow) ?? false
             }) {
-                // Only set delegate if it's not already set
                 if mainWindow.delegate == nil {
                     mainWindow.delegate = NSApp.delegate as? NSWindowDelegate
                 }
