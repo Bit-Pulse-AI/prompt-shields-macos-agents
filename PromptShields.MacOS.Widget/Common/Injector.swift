@@ -1,49 +1,114 @@
 import os
 import Foundation
 
+// MARK: - Inject Property Wrapper
+
+/// Property wrapper for dependency injection using the DependencyContainer
+/// Follows Dependency Inversion Principle - depends on abstractions, not concretions
 @propertyWrapper
 struct Inject<T>: Sendable {
-    private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier!,
-        category: String(describing: Inject.self)
-    )
-
+    
+    // MARK: - Properties
+    
+    private let container: DependencyContainer
+    
+    // MARK: - Initialization
+    
+    init() {
+        self.container = DependencyContainer.shared
+    }
+    
+    // MARK: - Property Wrapper
+    
     var wrappedValue: T {
-        if T.self == TeamDomainService.self {
-            return TeamDomainServiceImpl() as! T
-        } else if T.self == TeamNetworkService.self {
-            return TeamNetworkServiceImpl() as! T
-        } else if T.self == SubscriptionDomainService.self {
-            return SubscriptionDomainServiceImpl() as! T
-        } else if T.self == SubscriptionNetworkService.self {
-            return SubscriptionNetworkServiceImpl() as! T
-        } else if T.self == OrganisationDomainService.self {
-            return OrganisationDomainServiceImpl() as! T
-        } else if T.self == OrganisationNetworkService.self {
-            return OrganisationNetworkServiceImpl() as! T
-        } else if T.self == PersistenceManager.self {
-            return PersistenceManagerImpl.shared as! T
-        } else if T.self == KeychainManager.self {
-            return KeychainManagerImpl.shared as! T
-        } else if T.self == ProfileDomainService.self {
-            return ProfileDomainServiceImpl() as! T
-        } else if T.self == ProfileNetworkService.self {
-            return ProfileNetworkServiceImpl() as! T
-        } else if T.self == UserDomainService.self {
-            return UserDomainServiceImpl() as! T
-        } else if T.self == UserNetworkService.self {
-            return UserNetworkServiceImpl() as! T
-        } else if T.self == UserPreferencesDomainService.self {
-            return UserPreferencesDomainServiceImpl() as! T
-        } else if T.self == NetworkManager.self {
-            return NetworkManagerImpl.shared as! T
-        } else if T.self == LLMNetworkService.self {
-            return LLMNetworkServiceImpl() as! T
-        } else if T.self == SuggestionNetworkService.self {
-            return SuggestionNetworkServiceImpl() as! T
-        } else {
-            logger.error("Missing injectable type \(T.self)")
-            fatalError()
+        guard let instance = container.resolve(T.self) else {
+            // In production, we should handle this gracefully
+            // Log the error and provide a meaningful crash message
+            let logger = Logger(
+                subsystem: Bundle.main.bundleIdentifier ?? "ai.promptshields.widget",
+                category: "Inject"
+            )
+            logger.critical("Failed to resolve dependency: \(String(describing: T.self))")
+            
+            #if DEBUG
+            fatalError("Dependency not registered: \(T.self). Register it in DependencyContainer.registerDefaults()")
+            #else
+            // In release builds, we still need to crash but with a user-friendly message
+            preconditionFailure("Application configuration error. Please reinstall the application.")
+            #endif
         }
+        return instance
+    }
+}
+
+// MARK: - Lazy Inject Property Wrapper
+
+/// Lazy version of Inject that defers resolution until first access
+/// Useful for breaking circular dependencies
+@propertyWrapper
+final class LazyInject<T>: @unchecked Sendable {
+    
+    // MARK: - Properties
+    
+    private var instance: T?
+    private let lock = NSLock()
+    private let container: DependencyContainer
+    
+    // MARK: - Initialization
+    
+    init() {
+        self.container = DependencyContainer.shared
+    }
+    
+    // MARK: - Property Wrapper
+    
+    var wrappedValue: T {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        if let instance = instance {
+            return instance
+        }
+        
+        guard let resolved = container.resolve(T.self) else {
+            let logger = Logger(
+                subsystem: Bundle.main.bundleIdentifier ?? "ai.promptshields.widget",
+                category: "LazyInject"
+            )
+            logger.critical("Failed to resolve dependency: \(String(describing: T.self))")
+            
+            #if DEBUG
+            fatalError("Dependency not registered: \(T.self)")
+            #else
+            preconditionFailure("Application configuration error. Please reinstall the application.")
+            #endif
+        }
+        
+        instance = resolved
+        return resolved
+    }
+}
+
+// MARK: - Optional Inject Property Wrapper
+
+/// Optional version of Inject that returns nil instead of crashing
+/// Useful for optional features or graceful degradation
+@propertyWrapper
+struct OptionalInject<T>: Sendable {
+    
+    // MARK: - Properties
+    
+    private let container: DependencyContainer
+    
+    // MARK: - Initialization
+    
+    init() {
+        self.container = DependencyContainer.shared
+    }
+    
+    // MARK: - Property Wrapper
+    
+    var wrappedValue: T? {
+        container.resolve(T.self)
     }
 }

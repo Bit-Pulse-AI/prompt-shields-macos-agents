@@ -75,11 +75,12 @@ struct ActionView: View {
                     }
                     HStack {
                         Button {
-                            if let axUIElement = overlayStateModel.elementInfo?.element {
                                 Task {
-                                    await replaceText(axUIElement: axUIElement)
+                                    guard let elementIdentifier = overlayStateModel.elementInfo?.elementIdentifier else {
+                                        return
+                                    }
+                                    await replaceText(axElementID: elementIdentifier)
                                 }
-                            }
                         } label: {
                             Text("Agree & Update")
                         }
@@ -207,7 +208,7 @@ struct ActionView: View {
         }
     }
 
-    func replaceText(axUIElement: AXUIElement) async {
+    func replaceText(axElementID: AXElementID) async {
         if await isValidAXUIElement(axUIElement) {
             Task {
                 do {

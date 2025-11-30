@@ -187,11 +187,11 @@ final class TextFieldDetector: Sendable {
         }
 
         return ElementInfo(text: text,
-                          applicationName: applicationInfo.name,
-                          applicationBundleId: applicationInfo.bundleId,
-                          frame: try getElementRect(element),
-                          element: element,
-                          isSelectedText: isFromSelection)
+                           applicationName: applicationInfo.name,
+                           applicationBundleId: applicationInfo.bundleId,
+                           frame: try getElementRect(element),
+                           elementIdentifier: AXElementID(element),
+                           isSelectedText: isFromSelection)
     }
 
     // MARK: - Helpers

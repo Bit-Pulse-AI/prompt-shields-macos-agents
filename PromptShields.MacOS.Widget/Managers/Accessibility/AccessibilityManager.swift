@@ -382,7 +382,7 @@ extension ElementInfo {
                           applicationName: self.applicationName,
                           applicationBundleId: self.applicationBundleId,
                           frame: frame,
-                          element: self.element,
+                           elementIdentifier: self.elementIdentifier,
                           isSelectedText: self.isSelectedText)
     }
 
@@ -391,7 +391,7 @@ extension ElementInfo {
                           applicationName: self.applicationName,
                           applicationBundleId: self.applicationBundleId,
                           frame: self.frame,
-                          element: self.element,
+                          elementIdentifier: self.elementIdentifier,
                           isSelectedText: self.isSelectedText)
     }
 }

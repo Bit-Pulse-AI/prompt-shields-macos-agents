@@ -21,9 +21,9 @@ extension Optional<String> {
         }
     }
 }
-/// Extension to convert optional Data to String
+
 extension Optional<Data> {
-    /// Converts Data to String using UTF-8 encoding
+    
     var string: String? {
         if let safe = self {
             return String(data: safe, encoding: .utf8)

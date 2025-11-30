@@ -3,12 +3,6 @@ import SwiftData
 import Combine
 import os
 
-struct ApplicationInfo: Equatable {
-    let name: String
-
-    static let empty: ApplicationInfo = .init(name: "")
-}
-
 struct OverlayInfo {
     let frame: CGRect
 

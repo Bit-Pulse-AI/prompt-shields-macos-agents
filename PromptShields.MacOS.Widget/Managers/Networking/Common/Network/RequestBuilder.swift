@@ -185,7 +185,7 @@ struct RequestBuilder {
         logger.debug("Request URL: \(request.url?.absoluteString ?? "nil")")
         logger.debug("Request Method: \(request.httpMethod ?? "nil")")
         logger.debug("Request Headers: \(request.allHTTPHeaderFields ?? [:])")
-        logger.debug("Request Body: \(request.httpBody.string ?? "nil")")
+//        logger.debug("Request Body: \(request.httpBody ?? "nil")")
     }
 //
 //    func request(url: String, method: HTTPMethod, headers: [String : String]?) async throws -> Data {
