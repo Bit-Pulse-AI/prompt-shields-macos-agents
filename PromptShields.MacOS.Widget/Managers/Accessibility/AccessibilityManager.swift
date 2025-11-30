@@ -4,13 +4,22 @@ import Foundation
 import ApplicationServices
 import AppKit
 
-actor AccessibilityManagerImpl: ObservableObject {
-    private let elementInfo: Binding<ElementInfo?>
-    private let applicationInfo: Binding<ApplicationInfo>
-    private let isActive: Binding<Bool>
+// MARK: - Accessibility Manager
 
-    private let pollInterval: TimeInterval = 0.5 // Increased from 0.2 to reduce frequency
-    private let timer: PausableTimer
+/// Manages accessibility operations for detecting and interacting with focused text fields.
+/// Uses MainActor isolation for all AXUIElement operations to ensure Swift 6 compliance.
+@MainActor
+final class AccessibilityManagerImpl: ObservableObject {
+    // MARK: - Published Properties
+
+    @Published var elementInfo: ElementInfo?
+    @Published var applicationInfo: ApplicationInfo = .empty
+    @Published var isActive: Bool = false
+
+    // MARK: - Private Properties
+
+    private let pollInterval: TimeInterval = 0.5
+    private var timerTask: Task<Void, Never>?
     private let textFieldDetector = TextFieldDetector()
     private var previousText: String?
     private var previousRect: CGRect?
@@ -19,102 +28,94 @@ actor AccessibilityManagerImpl: ObservableObject {
     private var shouldDisplayRestartPrompt = true
     private var shouldUpdateFrame = true
     private var shouldUpdateText = true
-    private var isProcessing = false // Prevent concurrent processing
-
-    private var saveIsActiveState: Bool?
+    private var isProcessing = false
+    private var savedIsActiveState: Bool?
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: AccessibilityManagerImpl.self)
     )
 
-    init(elementInfo: Binding<ElementInfo?>,
-         applicationInfo: Binding<ApplicationInfo>,
-         isActive: Binding<Bool>) {
-        self.elementInfo = elementInfo
-        self.applicationInfo = applicationInfo
-        self.isActive = isActive
-        self.timer = PausableTimer(interval: .seconds(pollInterval))
-        Task { [weak self] in
-            await self?.listenForSystemLock()
-            await self?.startTimer()
-        }
+    // MARK: - Initialization
+
+    init() {
+        setupSystemLockObservers()
+        startTimer()
     }
 
-    func updateSavedActiveState(saveIsActiveState: Bool?) {
-        self.saveIsActiveState = saveIsActiveState
+    deinit {
+        timerTask?.cancel()
     }
 
-    func updateIsActiveState(isActiveState: Bool) {
-        self.isActive.wrappedValue = isActiveState
-    }
-
-    func listenForSystemLock() {
-        let dnc = DistributedNotificationCenter.default()
-
-        dnc.addObserver(forName: .init("com.apple.screenIsLocked"),
-                                       object: nil, queue: .main) { _ in
-            Task {
-                await self.updateSavedActiveState(saveIsActiveState: self.isActive.wrappedValue)
-            }
-            self.isActive.wrappedValue = false
-        }
-
-        dnc.addObserver(forName: .init("com.apple.screenIsUnlocked"),
-                                         object: nil, queue: .main) { _ in
-            Task {
-                if let saveIsActiveState = await self.saveIsActiveState {
-                    await self.updateIsActiveState(isActiveState: saveIsActiveState)
-                    await self.updateSavedActiveState(saveIsActiveState: nil)
-                }
-            }
-        }
-    }
+    // MARK: - Timer Control
 
     func startTimer() {
         UserDefaults.standard.setValue(true, forKey: "shouldHideWelcome")
-        Task { [weak self] in
-            await self?.setIsActiveOnMain(true)
-        }
-        Task {
-            await timer.start { [weak self] in
+        isActive = true
+
+        timerTask?.cancel()
+        timerTask = Task { [weak self] in
+            while !Task.isCancelled {
                 await self?.timerTick()
+                try? await Task.sleep(for: .seconds(self?.pollInterval ?? 0.5))
             }
         }
     }
 
     func stopTimer() {
-        Task { [weak self] in
-            await self?.setIsActiveOnMain(false)
-            await self?.timer.stop()
-            await self?.setElementInfoOnMain(nil)
+        isActive = false
+        timerTask?.cancel()
+        timerTask = nil
+        elementInfo = nil
+    }
+
+    // MARK: - System Lock Observers
+
+    private func setupSystemLockObservers() {
+        let dnc = DistributedNotificationCenter.default()
+
+        dnc.addObserver(
+            forName: .init("com.apple.screenIsLocked"),
+            object: nil,
+            queue: .main
+        ) {_ in
+            Task { @MainActor [weak self] in
+                self?.savedIsActiveState = self?.isActive
+                self?.isActive = false
+            }
+        }
+
+        dnc.addObserver(
+            forName: .init("com.apple.screenIsUnlocked"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                if let savedState = self?.savedIsActiveState {
+                    self?.isActive = savedState
+                    self?.savedIsActiveState = nil
+                }
+            }
         }
     }
 
-    private func timerTick() {
-        if lastIsProcessTrusted == nil && isProcessTrusted {
-            logger.log("app has AX")
-        } else if lastIsProcessTrusted == nil && !isProcessTrusted {
-            logger.log("app does not have AX")
-            showPromptIfNeeded()
-            // Hide overlay when accessibility is not available
-            Task { [weak self] in
-                try? Task.checkCancellation()
-                await self?.updateElementInfo()
-            }
-        } else if lastIsProcessTrusted != isProcessTrusted && isProcessTrusted {
-            logger.log("user enabled AX")
-        } else if lastIsProcessTrusted != isProcessTrusted && !isProcessTrusted {
-            logger.log("user disabled AX")
-            // Hide overlay when accessibility is disabled
-            Task { [weak self] in
-                try? Task.checkCancellation()
-                await self?.updateElementInfo()
-            }
-        } else if lastIsProcessTrusted == isProcessTrusted && isProcessTrusted {
-//            logger.log("ticking on a trusted process")
-            shouldDisplayRestartPrompt = false
+    // MARK: - Timer Tick
 
+    private func timerTick() async {
+        let trusted = isProcessTrusted
+
+        if lastIsProcessTrusted == nil && trusted {
+            logger.log("App has accessibility permissions")
+        } else if lastIsProcessTrusted == nil && !trusted {
+            logger.log("App does not have accessibility permissions")
+            showPromptIfNeeded()
+            clearElementInfo()
+        } else if lastIsProcessTrusted != trusted && trusted {
+            logger.log("User enabled accessibility permissions")
+        } else if lastIsProcessTrusted != trusted && !trusted {
+            logger.log("User disabled accessibility permissions")
+            clearElementInfo()
+        } else if lastIsProcessTrusted == trusted && trusted {
             // Prevent concurrent processing
             guard !isProcessing else {
                 logger.debug("Skipping tick - already processing")
@@ -122,181 +123,124 @@ actor AccessibilityManagerImpl: ObservableObject {
             }
 
             isProcessing = true
-            Task { [weak self] in
-                try? Task.checkCancellation()
-                await self?.onAXAccessGranted()
-            }
-        } else if lastIsProcessTrusted == isProcessTrusted && !isProcessTrusted {
-            logger.log("ticking on a not trusted process")
-            // Hide overlay when accessibility is not available
-            Task { [weak self] in
-                try? Task.checkCancellation()
-                await self?.updateElementInfo()
-            }
-        }
-        lastIsProcessTrusted = isProcessTrusted
-    }
-
-    func showPromptIfNeeded() {
-        if shouldDisplayPermissionPrompt {
-            let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-            let options = [key: true] as CFDictionary
-            AXIsProcessTrustedWithOptions(options)
-            shouldDisplayPermissionPrompt = false
-        }
-    }
-
-    deinit {
-        // Cancel the timer synchronously to prevent memory leaks
-        Task { [weak self] in
-            await self?.timer.stop()
-        }
-    }
-
-    private var isProcessTrusted: Bool {
-        return AXIsProcessTrusted()
-    }
-
-    @MainActor
-    private func displayRestart() {
-        let alert = NSAlert()
-        alert.messageText = "Restart Required"
-        alert.informativeText = """
-        Accessibility permissions have been updated, and a restart is required \
-        for them to fully take effect. Please quit and reopen the app.
-        """
-        alert.addButton(withTitle: "OK")
-
-        alert.runModal()
-        Task { @MainActor [weak self] in
-            try? Task.checkCancellation()
-            self?.restartApp()
-        }
-    }
-
-    private func displayRestartIfNeeded() {
-        if shouldDisplayRestartPrompt {
-            shouldDisplayRestartPrompt = false
-            Task { [weak self] in
-                try? Task.checkCancellation()
-                await self?.displayRestart()
-            }
-        }
-    }
-
-    private func onAXAccessGranted() async {
-        Task {
-            if let focusedElement = try? await getFocusedElementWithRetry() {
-                do {
-                    try Task.checkCancellation()
-
-                    let isValidElement = await self.isValidElement(focusedElement)
-
-                    guard isValidElement else {
-                        self.logger.warning("Focused element is no longer valid")
-                        await updateElementInfo()
-                        return
-                    }
-
-                    let elementInfo = try await textFieldDetector.getAXElementOrSelectionInfo(focusedElement)
-                    await self.updateElementInfo(elementInfo: elementInfo)
-                } catch {
-                    logger.error("Error received analyzing textfield \(error)")
-                    await updateElementInfo()
-                }
-            } else {
-                displayRestartIfNeeded()
-                await updateElementInfo()
-            }
+            await processAccessibility()
             isProcessing = false
+        } else if lastIsProcessTrusted == trusted && !trusted {
+            logger.log("Ticking on untrusted process")
+            clearElementInfo()
+        }
+
+        lastIsProcessTrusted = trusted
+    }
+
+    // MARK: - Accessibility Processing
+
+    private func processAccessibility() async {
+        do {
+            guard let focusedElement = try getFocusedElementWithRetry() else {
+                displayRestartIfNeeded()
+                clearElementInfo()
+                return
+            }
+
+            guard AXUIElementSafeWrapper.isValidElement(focusedElement) else {
+                logger.warning("Focused element is no longer valid")
+                clearElementInfo()
+                return
+            }
+
+            let info = try textFieldDetector.getAXElementOrSelectionInfo(focusedElement)
+            updateElementInfo(info)
+        } catch {
+            logger.error("Error analyzing text field: \(error.localizedDescription)")
+            clearElementInfo()
         }
     }
 
-    func updateElementInfo(elementInfo: ElementInfo? = nil) async {
-        if let appName = elementInfo?.applicationName {
-            await setApplicationInfoOnMain(.init(name: appName))
-        } else {
-            await setApplicationInfoOnMain(.empty)
-        }
-        let isSelf = elementInfo?.applicationBundleId == Bundle.main.bundleIdentifier
-        guard let frame = elementInfo?.frame, frame.isValid else {
-            if elementInfo?.applicationBundleId != nil && !isSelf {
-                setElementInfoOnMain(nil)
-            }
-            return
-        }
-        if !shouldUpdateFrame {
-            shouldUpdateFrame = previousRect != elementInfo?.frame
-        }
-        if !shouldUpdateText {
-            shouldUpdateText = previousText != elementInfo?.text
-        }
-        if shouldUpdateFrame && previousRect == frame {
-            if elementInfo?.applicationBundleId != nil && !isSelf {
-                setElementInfoOnMain(elementInfo?.withFrame(frame: frame))
-                shouldUpdateFrame = false
-            }
-        } else if previousRect != elementInfo?.frame {
-            if elementInfo?.applicationBundleId != nil && !isSelf {
-                setElementInfoOnMain(nil)
-            }
-        }
-        let text = elementInfo?.text
-        if shouldUpdateText && previousText == text {
-            if elementInfo?.applicationBundleId != nil && !isSelf {
-                setElementInfoOnMain(elementInfo?.withText(text: elementInfo?.text ?? ""))
-                shouldUpdateText = false
-            }
-        } else if previousText != elementInfo?.text {
-            if elementInfo?.applicationBundleId != nil && !isSelf {
-                setElementInfoOnMain(nil)
-            }
-        }
-
-        if elementInfo?.applicationBundleId != nil && !isSelf {
-            previousRect = elementInfo?.frame
-            previousText = elementInfo?.text
-        }
-    }
-
-    private func getFocusedElementWithRetry() async throws -> AXUIElement {
+    /// Gets the focused element with retry logic
+    /// All operations stay on MainActor - no Sendable boundary crossing
+    private func getFocusedElementWithRetry() throws -> AXUIElement? {
         let maxRetries = 3
-        let retryDelay: UInt64 = 100_000_000 // 100ms
-
         let startTime = Date()
 
         for attempt in 1...maxRetries {
-            // Check if we've exceeded the total timeout
+            // Check timeout
             if Date().timeIntervalSince(startTime) > 2.0 {
                 logger.warning("Total timeout reached while getting focused element")
                 throw AccessibilityError.timeout
             }
 
-            do {
-                return try await getRobustFocusedElement()
-            } catch {
-                logger.warning("Attempt \(attempt) failed: \(error.localizedDescription)")
-                if attempt == maxRetries {
-                    throw error
-                }
-                try await Task.sleep(nanoseconds: retryDelay)
+            if let element = getRobustFocusedElement() {
+                return element
+            }
+
+            logger.warning("Attempt \(attempt) failed to get focused element")
+
+            if attempt < maxRetries {
+                // Brief synchronous wait (we're on MainActor, can't use async sleep here)
+                Thread.sleep(forTimeInterval: 0.1)
             }
         }
 
-        throw AccessibilityError.failedToGetFocusedElement
+        return nil
     }
 
-    private func isValidElement(_ element: AXUIElement) async -> Bool {
-        return AXUIElementSafeWrapper.isValidElement(element)
+    /// Gets the focused element using robust detection
+    /// Entirely MainActor-isolated - no crossing to other actors
+    private func getRobustFocusedElement() -> AXUIElement? {
+        AXUIElementSafeWrapper.withMemoryCleanup {
+            guard let frontApp = NSWorkspace.shared.frontmostApplication else {
+                return nil
+            }
+
+            guard let appElement = AXUIElementSafeWrapper.createApplicationElement(
+                processIdentifier: frontApp.processIdentifier
+            ) else {
+                return nil
+            }
+
+            // Try to get focused UI element directly
+            if let focusedRef = AXUIElementSafeWrapper.getAttributeValue(
+                from: appElement,
+                attribute: kAXFocusedUIElementAttribute
+            ) {
+                let focusedElement = focusedRef as! AXUIElement
+                if AXUIElementSafeWrapper.isValidElement(focusedElement) {
+                    return focusedElement
+                }
+            }
+
+            // Fall back to searching in focused window
+            if let windowRef = AXUIElementSafeWrapper.getAttributeValue(
+                from: appElement,
+                attribute: kAXFocusedWindowAttribute
+            ) {
+                let windowElement = windowRef as! AXUIElement
+                if AXUIElementSafeWrapper.isValidElement(windowElement) {
+                    return self.findFocusedInTree(windowElement, depth: 0, maxDepth: 20, visited: [])
+                }
+            }
+
+            return nil
+        }
     }
 
-    @MainActor
-    func localFindFocusedInTree(_ element: AXUIElement, depth: Int, maxDepth: Int, visited: Set<AXElementID>) -> AXUIElement? {
+    /// Recursively finds a focused text element in the UI tree
+    private func findFocusedInTree(
+        _ element: AXUIElement,
+        depth: Int,
+        maxDepth: Int,
+        visited: Set<AXElementID>
+    ) -> AXUIElement? {
         guard depth < maxDepth else { return nil }
+
         let elementID = AXElementID(element)
         guard !visited.contains(elementID) else { return nil }
+
+        // Check if this element has text attributes
         if AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXValueAttribute) != nil ||
-            AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) != nil {
+           AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) != nil {
+            // Verify it's the focused element
             if let frontApp = NSWorkspace.shared.frontmostApplication,
                let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier),
                let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) {
@@ -306,95 +250,142 @@ actor AccessibilityManagerImpl: ObservableObject {
                 }
             }
         }
+
+        // Search children
         let children = AXUIElementSafeWrapper.getChildren(from: element)
         var newVisited = visited
         newVisited.insert(elementID)
+
         for child in children {
-            if let found = localFindFocusedInTree(child, depth: depth + 1, maxDepth: maxDepth, visited: newVisited) {
+            if let found = findFocusedInTree(child, depth: depth + 1, maxDepth: maxDepth, visited: newVisited) {
                 return found
             }
         }
+
         return nil
     }
 
-    @MainActor
-    func getRobustFocusedElement() async throws -> AXUIElement {
-        let element: AXUIElement? = AXUIElementSafeWrapper.withMemoryCleanup {
-            guard let frontApp = NSWorkspace.shared.frontmostApplication else {
-                return nil
-            }
-            guard let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier) else {
-                return nil
-            }
-            if let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) {
-                let focusedElement = focusedRef as! AXUIElement
-                guard AXUIElementSafeWrapper.isValidElement(focusedElement) else { return nil }
-                return focusedElement
-            }
-            if let windowRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedWindowAttribute) {
-                let windowElement = windowRef as! AXUIElement
-                guard AXUIElementSafeWrapper.isValidElement(windowElement) else { return nil }
-                return localFindFocusedInTree(windowElement, depth: 0, maxDepth: 20, visited: Set<AXElementID>())
-            }
-            return nil
+    // MARK: - Element Info Updates
+
+    private func updateElementInfo(_ info: ElementInfo) {
+        let isSelf = info.applicationBundleId == Bundle.main.bundleIdentifier
+
+        // Update application info
+        applicationInfo = ApplicationInfo(name: info.applicationName, bundleId: info.applicationBundleId)
+
+        guard info.frame.isValid, !isSelf else {
+            return
         }
-        guard let element else {
-            throw AccessibilityError.failedToGetFrame
+
+        // Check if we should update frame
+        if !shouldUpdateFrame {
+            shouldUpdateFrame = previousRect != info.frame
         }
-        return element
+
+        // Check if we should update text
+        if !shouldUpdateText {
+            shouldUpdateText = previousText != info.text
+        }
+
+        // Update based on frame changes
+        if shouldUpdateFrame && previousRect == info.frame {
+            elementInfo = info.withFrame(frame: info.frame)
+            shouldUpdateFrame = false
+        } else if previousRect != info.frame {
+            elementInfo = nil
+        }
+
+        // Update based on text changes
+        if shouldUpdateText && previousText == info.text {
+            elementInfo = info.withText(text: info.text)
+            shouldUpdateText = false
+        } else if previousText != info.text {
+            elementInfo = nil
+        }
+
+        previousRect = info.frame
+        previousText = info.text
     }
 
-    @MainActor
-    func restartApp() {
+    private func clearElementInfo() {
+        elementInfo = nil
+        applicationInfo = .empty
+    }
+
+    // MARK: - Permissions
+
+    private var isProcessTrusted: Bool {
+        AXIsProcessTrusted()
+    }
+
+    private func showPromptIfNeeded() {
+        guard shouldDisplayPermissionPrompt else { return }
+
+        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+        let options = [key: true] as CFDictionary
+        AXIsProcessTrustedWithOptions(options)
+        shouldDisplayPermissionPrompt = false
+    }
+
+    private func displayRestartIfNeeded() {
+        guard shouldDisplayRestartPrompt else { return }
+        shouldDisplayRestartPrompt = false
+        displayRestart()
+    }
+
+    private func displayRestart() {
+        let alert = NSAlert()
+        alert.messageText = "Restart Required"
+        alert.informativeText = """
+        Accessibility permissions have been updated, and a restart is required \
+        for them to fully take effect. Please quit and reopen the app.
+        """
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+        restartApp()
+    }
+
+    private func restartApp() {
         guard let bundlePath = Bundle.main.bundlePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
             return
         }
+
         let script = """
         sleep 0.5
         open "\(bundlePath)"
         """
         _ = Process.launchedProcess(launchPath: "/bin/sh", arguments: ["-c", script])
-
-        // Terminate current app
         NSApp.terminate(nil)
     }
-
-    @MainActor
-    private func setIsActiveOnMain(_ value: Bool) {
-        isActive.wrappedValue = value
-    }
-
-    @MainActor
-    private func setApplicationInfoOnMain(_ value: ApplicationInfo) {
-        applicationInfo.wrappedValue = value
-    }
-
-    private func setElementInfoOnMain(_ value: ElementInfo?) {
-        Task {
-            elementInfo.wrappedValue = value
-        }
-    }
 }
+
+// MARK: - ElementInfo Extensions
 
 extension ElementInfo {
     func withFrame(frame: CGRect) -> ElementInfo {
-        return ElementInfo(text: self.text,
-                          applicationName: self.applicationName,
-                          applicationBundleId: self.applicationBundleId,
-                          frame: frame,
-                           elementIdentifier: self.elementIdentifier,
-                          isSelectedText: self.isSelectedText)
+        ElementInfo(
+            text: text,
+            applicationName: applicationName,
+            applicationBundleId: applicationBundleId,
+            frame: frame,
+            elementIdentifier: elementIdentifier,
+            isSelectedText: isSelectedText
+        )
     }
 
     func withText(text: String) -> ElementInfo {
-        return ElementInfo(text: text,
-                          applicationName: self.applicationName,
-                          applicationBundleId: self.applicationBundleId,
-                          frame: self.frame,
-                          elementIdentifier: self.elementIdentifier,
-                          isSelectedText: self.isSelectedText)
+        ElementInfo(
+            text: text,
+            applicationName: applicationName,
+            applicationBundleId: applicationBundleId,
+            frame: frame,
+            elementIdentifier: elementIdentifier,
+            isSelectedText: isSelectedText
+        )
     }
 }
+
+// MARK: - CGRect Extension
 
 extension CGRect {
     var isValid: Bool {

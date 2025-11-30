@@ -15,6 +15,7 @@ enum ActionToolState: Equatable {
 enum ResultAction {
     case inject(String)
 }
+
 final class OverlayStateModel: ObservableObject {
     @Published var elementInfo: ElementInfo?
     @Published var actionToolState: ActionToolState = .idle
@@ -27,9 +28,9 @@ final class OverlayStateModel: ObservableObject {
 // swiftlint:disable:next type_name
 @main
 struct MainApp: App {
-    @StateObject private var accessibilityManager: AccessibilityManagerImpl
-    @StateObject private var overlayStateModel: OverlayStateModel
-    @StateObject private var dashboardStateModel: DashboardStateModel
+    @StateObject private var accessibilityManager = AccessibilityManagerImpl()
+    @StateObject private var overlayStateModel = OverlayStateModel()
+    @StateObject private var dashboardStateModel = DashboardStateModel()
 
     @Environment(\.openWindow) private var openWindow
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -38,43 +39,12 @@ struct MainApp: App {
     static let actionRender = "action-render"
     static let mainWindow = "main-window"
 
-    init() {
-        let overlayStateModel = OverlayStateModel()
-        let dashboardStateModel = DashboardStateModel()
-        let elementInfoBinding = Binding(get: {
-            return overlayStateModel.elementInfo
-        }, set: { newValue in
-            Task { @MainActor in
-                overlayStateModel.elementInfo = newValue
-            }
-        })
-        let applicationInfoBinding = Binding(get: {
-            return dashboardStateModel.currentApplication
-        }, set: { newValue in
-            Task { @MainActor in
-                dashboardStateModel.currentApplication = newValue
-            }
-        })
-        let isActive = Binding(get: {
-            return dashboardStateModel.isActive
-        }, set: { newValue in
-            Task { @MainActor in
-                dashboardStateModel.isActive = newValue
-            }
-        })
-        let accessibilityManager = AccessibilityManagerImpl(elementInfo: elementInfoBinding,
-                                                            applicationInfo: applicationInfoBinding,
-                                                            isActive: isActive)
-        self._accessibilityManager = StateObject(wrappedValue: accessibilityManager)
-        self._overlayStateModel = StateObject(wrappedValue: overlayStateModel)
-        self._dashboardStateModel = StateObject(wrappedValue: dashboardStateModel)
-    }
-
     var body: some Scene {
         Window("Main", id: MainApp.mainWindow) {
             if $overlayStateModel.isMainConfigured.wrappedValue {
                 MainView()
-                    .onChange(of: overlayStateModel.elementInfo?.frame) { _, _ in
+                    .onChange(of: accessibilityManager.elementInfo?.frame) { _, _ in
+                        syncElementInfo()
                         updateMainWindow(isInitial: false)
                     }
                     .onChange(of: overlayStateModel.actionToolState) { _, _ in
@@ -87,6 +57,7 @@ struct MainApp: App {
                     .onAppear {
                         configureAppAppearance()
                         setupWindowDelegate()
+                        setupBindings()
                         updateMainWindow(isInitial: true)
                     }
             }
@@ -96,10 +67,12 @@ struct MainApp: App {
         .environmentObject(overlayStateModel)
         .environmentObject(dashboardStateModel)
         .windowStyle(.hiddenTitleBar)
+
         Window("Overlay Render", id: MainApp.overlayRender) {
             if $overlayStateModel.isOverlayConfigured.wrappedValue {
                 OverlayView()
-                    .onChange(of: overlayStateModel.elementInfo?.frame) { _, _ in
+                    .onChange(of: accessibilityManager.elementInfo?.frame) { _, _ in
+                        syncElementInfo()
                         updateOverlayWindow(isInitial: false)
                     }
                     .onChange(of: overlayStateModel.actionToolState) { _, _ in
@@ -122,7 +95,8 @@ struct MainApp: App {
         Window("Action", id: MainApp.actionRender) {
             if $overlayStateModel.isActionConfigured.wrappedValue {
                 ActionView()
-                    .onChange(of: overlayStateModel.elementInfo?.frame) { _, _ in
+                    .onChange(of: accessibilityManager.elementInfo?.frame) { _, _ in
+                        syncElementInfo()
                         updateActionWindow(isInitial: false)
                     }
                     .onChange(of: overlayStateModel.actionToolState) { _, _ in
@@ -141,6 +115,44 @@ struct MainApp: App {
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
+    }
+
+    // MARK: - Bindings Setup
+
+    /// Sets up Combine bindings to sync AccessibilityManager state to other models
+    private func setupBindings() {
+        // Sync elementInfo from AccessibilityManager to OverlayStateModel
+        accessibilityManager.$elementInfo
+            .receive(on: DispatchQueue.main)
+            .sink { [weak overlayStateModel] newValue in
+                overlayStateModel?.elementInfo = newValue
+            }
+            .store(in: &cancellables)
+
+        // Sync applicationInfo from AccessibilityManager to DashboardStateModel
+        accessibilityManager.$applicationInfo
+            .receive(on: DispatchQueue.main)
+            .sink { [weak dashboardStateModel] newValue in
+                dashboardStateModel?.currentApplication = newValue
+            }
+            .store(in: &cancellables)
+
+        // Sync isActive from AccessibilityManager to DashboardStateModel
+        accessibilityManager.$isActive
+            .receive(on: DispatchQueue.main)
+            .sink { [weak dashboardStateModel] newValue in
+                dashboardStateModel?.isActive = newValue
+            }
+            .store(in: &cancellables)
+    }
+
+    @State private var cancellables = Set<AnyCancellable>()
+
+    /// Syncs element info from accessibility manager to overlay state model
+    private func syncElementInfo() {
+        overlayStateModel.elementInfo = accessibilityManager.elementInfo
+        dashboardStateModel.currentApplication = accessibilityManager.applicationInfo
+        dashboardStateModel.isActive = accessibilityManager.isActive
     }
 
     private func updateMainWindow(isInitial: Bool) {

@@ -23,7 +23,6 @@ extension Optional<String> {
 }
 
 extension Optional<Data> {
-    
     var string: String? {
         if let safe = self {
             return String(data: safe, encoding: .utf8)

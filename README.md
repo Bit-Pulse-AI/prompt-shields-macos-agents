@@ -67,6 +67,27 @@ PromptShields.MacOS.Widget/
 - No data races - verified with strict concurrency checking
 - Structured concurrency with `Task` and `async/await`
 
+#### AXUIElement Registry Pattern
+
+Since `AXUIElement` is not `Sendable`, we use a registry pattern:
+
+```swift
+// ElementInfo stores only the Sendable AXElementID
+struct ElementInfo: Sendable {
+    let elementIdentifier: AXElementID?
+    // ... other properties
+}
+
+// When you need the actual element (on MainActor):
+@MainActor
+func injectText() async {
+    guard let element = elementInfo.elementIdentifier?.element else { return }
+    // Use element...
+}
+```
+
+The `AXElementRegistry` maintains references to active elements and allows safe lookup by ID.
+
 ## Setup
 
 ### 1. Clone & Open

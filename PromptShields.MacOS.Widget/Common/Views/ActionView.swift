@@ -75,12 +75,9 @@ struct ActionView: View {
                     }
                     HStack {
                         Button {
-                                Task {
-                                    guard let elementIdentifier = overlayStateModel.elementInfo?.elementIdentifier else {
-                                        return
-                                    }
-                                    await replaceText(axElementID: elementIdentifier)
-                                }
+                            Task {
+                                await replaceText()
+                            }
                         } label: {
                             Text("Agree & Update")
                         }
@@ -118,48 +115,7 @@ struct ActionView: View {
                                     overlayStateModel?.actionToolState = .loading
 
                                     Task {
-                                        do {
-                                            let result = try await suggestionDomainService
-                                                .process(
-                                                    text:
-                                                        overlayStateModel?.elementInfo?.text ?? "",
-                                                        llmProvider: LLMProvider
-                                                                        .AZURE_PROMPTSHIELDS
-                                                                        .rawValue,
-                                                    suggestionGroupId: profileDomainService.currentProfile.model.defaultSuggestionGroupId,
-                                                    teamId: profileDomainService.currentProfile.model.defaultTeamId,
-                                                        suggestionType: suggestionType.model.suggestionType,
-                                                        application: overlayStateModel?.elementInfo?.applicationName ?? "n/a")
-
-                                            try Task.checkCancellation()
-
-                                            if let axUIElement = overlayStateModel?.elementInfo?.element {
-                                                if await isValidAXUIElement(axUIElement) {
-                                                    await MainActor.run {
-                                                        actionText = result.model.suggestedText
-                                                        overlayStateModel?.actionToolState = .action
-                                                    }
-                                                } else {
-                                                    logger.error("AXUIElement is no longer valid")
-                                                    await MainActor.run {
-                                                        overlayStateModel?.actionToolState = .idle
-                                                    }
-                                                }
-                                            }
-                                        } catch is CancellationError {
-                                            logger.warning("LLM processing was cancelled")
-                                            await MainActor.run {
-                                                overlayStateModel?.actionToolState = .idle
-                                            }
-                                        } catch {
-                                            logger.error("Error processing LLM request: \(error)")
-                                            await MainActor.run {
-                                                overlayStateModel?.actionToolState = .idle
-                                            }
-                                        }
-                                        await MainActor.run {
-                                            isProcessing = false
-                                        }
+                                        await processSuggestion(suggestionType: suggestionType)
                                     }
                                 } label: {
                                     Text(suggestionType.model.suggestionName)
@@ -208,33 +164,70 @@ struct ActionView: View {
         }
     }
 
-    func replaceText(axElementID: AXElementID) async {
-        if await isValidAXUIElement(axUIElement) {
-            Task {
-                do {
-                    // Use the isSelectedText information from the element info
-                    let isSelectedText = overlayStateModel.elementInfo?.isSelectedText ?? false
-                    try await TextInjector.shared.injectText(actionText, into: axUIElement, isSelectedText: isSelectedText)
-                    await MainActor.run {
-                        self.overlayStateModel.actionToolState = .idle
-                    }
-                } catch {
-                    logger.error("Error injecting text: \(error)")
-                    await MainActor.run {
-                        self.overlayStateModel.actionToolState = .idle
-                    }
-                }
+    // MARK: - Private Methods
+
+    @MainActor
+    private func processSuggestion(suggestionType: SuggestionType) async {
+        do {
+            let result = try await suggestionDomainService
+                .process(
+                    text: overlayStateModel.elementInfo?.text ?? "",
+                    llmProvider: LLMProvider.AZURE_PROMPTSHIELDS.rawValue,
+                    suggestionGroupId: profileDomainService.currentProfile.model.defaultSuggestionGroupId,
+                    teamId: profileDomainService.currentProfile.model.defaultTeamId,
+                    suggestionType: suggestionType.model.suggestionType,
+                    application: overlayStateModel.elementInfo?.applicationName ?? "n/a"
+                )
+
+            try Task.checkCancellation()
+
+            // Check if the element is still valid using the registry
+            guard let elementId = overlayStateModel.elementInfo?.elementIdentifier,
+                  AXElementRegistry.shared.isValid(elementId) else {
+                logger.error("AXUIElement is no longer valid")
+                overlayStateModel.actionToolState = .idle
+                isProcessing = false
+                return
             }
+
+            actionText = result.model.suggestedText
+            overlayStateModel.actionToolState = .action
+        } catch is CancellationError {
+            logger.warning("LLM processing was cancelled")
+            overlayStateModel.actionToolState = .idle
+        } catch {
+            logger.error("Error processing LLM request: \(error)")
+            overlayStateModel.actionToolState = .idle
         }
+
+        isProcessing = false
     }
 
-    private func isValidAXUIElement(_ element: AXUIElement) async -> Bool {
-        var pid: pid_t = 0
-        let result = AXUIElementGetPid(element, &pid)
-        guard result == .success else {
-            return false
+    @MainActor
+    private func replaceText() async {
+        guard let elementId = overlayStateModel.elementInfo?.elementIdentifier else {
+            logger.error("No element identifier available")
+            overlayStateModel.actionToolState = .idle
+            return
         }
-        let app = NSWorkspace.shared.runningApplications.first { $0.processIdentifier == pid }
-        return app != nil
+
+        // Look up the actual AXUIElement from the registry
+        guard let element = AXElementRegistry.shared.lookup(elementId) else {
+            logger.error("Element not found in registry or no longer valid")
+            overlayStateModel.actionToolState = .idle
+            return
+        }
+
+        Task {
+            do {
+                // Use the isSelectedText information from the element info
+                let isSelectedText = overlayStateModel.elementInfo?.isSelectedText ?? false
+                try await TextInjector.shared.injectText(actionText, into: element, isSelectedText: isSelectedText)
+                overlayStateModel.actionToolState = .idle
+            } catch {
+                logger.error("Error injecting text: \(error)")
+                overlayStateModel.actionToolState = .idle
+            }
+        }
     }
 }

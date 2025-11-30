@@ -186,12 +186,18 @@ final class TextFieldDetector: Sendable {
             }
         }
 
-        return ElementInfo(text: text,
-                           applicationName: applicationInfo.name,
-                           applicationBundleId: applicationInfo.bundleId,
-                           frame: try getElementRect(element),
-                           elementIdentifier: AXElementID(element),
-                           isSelectedText: isFromSelection)
+        // Register the element in the registry and get its ID
+        // This allows us to look up the actual AXUIElement later when needed
+        let elementId = AXElementRegistry.shared.updateCurrent(element)
+
+        return ElementInfo(
+            text: text,
+            applicationName: applicationInfo.name,
+            applicationBundleId: applicationInfo.bundleId,
+            frame: try getElementRect(element),
+            elementIdentifier: elementId,
+            isSelectedText: isFromSelection
+        )
     }
 
     // MARK: - Helpers

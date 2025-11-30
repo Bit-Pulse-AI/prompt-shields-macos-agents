@@ -13,14 +13,13 @@ enum DataDecodingError: Error {
 /// Protocol for network operations
 /// Follows Interface Segregation Principle - focused on network operations only
 protocol NetworkManager: Sendable {
-    
     /// Performs a network request
     /// - Parameter request: The URLRequest to perform
     /// - Returns: The response data
     /// - Throws: NetworkError if the request fails
     @discardableResult
     func perform(request: URLRequest) async throws -> Data
-    
+
     /// Performs a network request with automatic token refresh on 401/403
     /// - Parameter request: The URLRequest to perform
     /// - Returns: The response data
@@ -33,20 +32,19 @@ protocol NetworkManager: Sendable {
 
 /// Thread-safe network manager implementation using actor isolation
 actor NetworkManagerImpl: NetworkManager {
-    
     // MARK: - Properties
-    
+
     private let session: URLSessionProtocol
     private let logger: Logger
     private let maxRetryAttempts: Int
     private let retryDelay: Duration
-    
+
     // MARK: - Singleton
-    
+
     static let shared = NetworkManagerImpl()
-    
+
     // MARK: - Initialization
-    
+
     init(
         session: URLSessionProtocol = URLSession.shared,
         logger: Logger = Logger(
@@ -61,32 +59,31 @@ actor NetworkManagerImpl: NetworkManager {
         self.maxRetryAttempts = maxRetryAttempts
         self.retryDelay = retryDelay
     }
-    
+
     // MARK: - Public Methods
-    
+
     @discardableResult
     func perform(request: URLRequest) async throws -> Data {
         let requestId = UUID().uuidString.prefix(8)
-        
+
         logger.debug("[\(requestId)] \(request.httpMethod ?? "GET") \(request.url?.absoluteString ?? "unknown")")
-        
+
         do {
             let (data, response) = try await session.dataTask(with: request)
-            
+
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw NetworkError(message: "Invalid response type")
             }
-            
+
             // Log response
             logResponse(requestId: String(requestId), statusCode: httpResponse.statusCode, data: data)
-            
+
             // Check for HTTP errors
             guard (200...299).contains(httpResponse.statusCode) else {
                 throw NetworkError.httpError(statusCode: httpResponse.statusCode, data: data)
             }
-            
+
             return data
-            
         } catch let error as NetworkError {
             logger.error("[\(requestId)] Network error: \(error.message)")
             throw error
@@ -95,22 +92,22 @@ actor NetworkManagerImpl: NetworkManager {
             throw NetworkError.connectionError(error)
         }
     }
-    
+
     @discardableResult
     func performWithAutoRefresh(request: URLRequest) async throws -> Data {
         do {
             return try await perform(request: request)
         } catch let networkError as NetworkError where networkError.isUnauthorized {
             logger.info("Received \(networkError.statusCode ?? 401) error, attempting token refresh...")
-            
+
             do {
                 // Attempt to refresh the token
                 let refreshedCredentials = try await TokenRefreshManager.shared.refreshToken()
-                
+
                 // Save refreshed credentials
                 let keychainManager = KeychainManagerImpl.shared
                 try keychainManager.saveUserCredentials(userCredentials: refreshedCredentials)
-                
+
                 // Retry the original request with new token
                 var retryRequest = request
                 if let authHeader = try? keychainManager.authorizationHeader {
@@ -118,29 +115,28 @@ actor NetworkManagerImpl: NetworkManager {
                         retryRequest.setValue(value, forHTTPHeaderField: key)
                     }
                 }
-                
+
                 logger.info("Token refreshed successfully, retrying request...")
                 return try await perform(request: retryRequest)
-                
             } catch {
                 logger.error("Token refresh failed: \(error.localizedDescription)")
-                
+
                 // Post notification for logout on main thread
                 await handleLogoutAfterFailedRefresh()
-                
+
                 throw networkError
             }
         }
     }
-    
+
     // MARK: - Private Methods
-    
+
     @MainActor
     private func handleLogoutAfterFailedRefresh() {
         logger.error("Token refresh failed, posting notification for logout...")
         NotificationCenter.default.post(name: .tokenRefreshFailed, object: nil)
     }
-    
+
     private func logResponse(requestId: String, statusCode: Int, data: Data) {
         #if DEBUG
         do {

@@ -7,19 +7,18 @@ import Foundation
 /// Follows Dependency Inversion Principle - depends on abstractions, not concretions
 @propertyWrapper
 struct Inject<T>: Sendable {
-    
     // MARK: - Properties
-    
+
     private let container: DependencyContainer
-    
+
     // MARK: - Initialization
-    
+
     init() {
         self.container = DependencyContainer.shared
     }
-    
+
     // MARK: - Property Wrapper
-    
+
     var wrappedValue: T {
         guard let instance = container.resolve(T.self) else {
             // In production, we should handle this gracefully
@@ -29,7 +28,7 @@ struct Inject<T>: Sendable {
                 category: "Inject"
             )
             logger.critical("Failed to resolve dependency: \(String(describing: T.self))")
-            
+
             #if DEBUG
             fatalError("Dependency not registered: \(T.self). Register it in DependencyContainer.registerDefaults()")
             #else
@@ -47,43 +46,42 @@ struct Inject<T>: Sendable {
 /// Useful for breaking circular dependencies
 @propertyWrapper
 final class LazyInject<T>: @unchecked Sendable {
-    
     // MARK: - Properties
-    
+
     private var instance: T?
     private let lock = NSLock()
     private let container: DependencyContainer
-    
+
     // MARK: - Initialization
-    
+
     init() {
         self.container = DependencyContainer.shared
     }
-    
+
     // MARK: - Property Wrapper
-    
+
     var wrappedValue: T {
         lock.lock()
         defer { lock.unlock() }
-        
+
         if let instance = instance {
             return instance
         }
-        
+
         guard let resolved = container.resolve(T.self) else {
             let logger = Logger(
                 subsystem: Bundle.main.bundleIdentifier ?? "ai.promptshields.widget",
                 category: "LazyInject"
             )
             logger.critical("Failed to resolve dependency: \(String(describing: T.self))")
-            
+
             #if DEBUG
             fatalError("Dependency not registered: \(T.self)")
             #else
             preconditionFailure("Application configuration error. Please reinstall the application.")
             #endif
         }
-        
+
         instance = resolved
         return resolved
     }
@@ -95,19 +93,18 @@ final class LazyInject<T>: @unchecked Sendable {
 /// Useful for optional features or graceful degradation
 @propertyWrapper
 struct OptionalInject<T>: Sendable {
-    
     // MARK: - Properties
-    
+
     private let container: DependencyContainer
-    
+
     // MARK: - Initialization
-    
+
     init() {
         self.container = DependencyContainer.shared
     }
-    
+
     // MARK: - Property Wrapper
-    
+
     var wrappedValue: T? {
         container.resolve(T.self)
     }

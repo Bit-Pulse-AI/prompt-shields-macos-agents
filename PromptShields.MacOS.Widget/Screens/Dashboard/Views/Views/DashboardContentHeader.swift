@@ -46,7 +46,7 @@ struct DashboardContentHeaderView: View {
                 Button {
                     if dashboardState.isActive {
                         Task {
-                            await accessibilityManager.stopTimer()
+                            accessibilityManager.stopTimer()
                         }
                     } else {
                         Task {
@@ -54,7 +54,7 @@ struct DashboardContentHeaderView: View {
                                 overlayState.elementInfo = nil
                                 overlayState.actionToolState = .idle
                             }
-                            await accessibilityManager.startTimer()
+                            accessibilityManager.startTimer()
                         }
                     }
                 } label: {

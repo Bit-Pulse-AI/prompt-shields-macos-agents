@@ -21,8 +21,10 @@ actor TextInjector {
     ///   - isSelectedText: Whether the original text came from a selection (true) or full element (false)
     func injectText(_ text: String, into element: AXUIElement, isSelectedText: Bool) async throws {
         if isSelectedText {
-            // For selected text, we need to replace only the selected range
-            try await replaceSelectedText(with: text, in: element)
+            Task {
+                // For selected text, we need to replace only the selected range
+                try await replaceSelectedText(with: text, in: element)
+            }
         } else {
             // For full element text, replace the entire value
             try await injectText(text, into: element)

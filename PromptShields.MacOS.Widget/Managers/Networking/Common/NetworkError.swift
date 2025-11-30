@@ -5,23 +5,22 @@ import Foundation
 /// Comprehensive network error type with detailed error information
 /// Conforms to Sendable for safe concurrent access
 struct NetworkError: Error, Sendable, LocalizedError {
-    
     // MARK: - Properties
-    
+
     /// Human-readable error message
     let message: String
-    
+
     /// HTTP status code if available
     let statusCode: Int?
-    
+
     /// Underlying error if available
     let underlyingError: (any Error)?
-    
+
     /// Response data if available (for debugging)
     let responseData: Data?
-    
+
     // MARK: - Initialization
-    
+
     init(
         message: String,
         statusCode: Int? = nil,
@@ -33,31 +32,31 @@ struct NetworkError: Error, Sendable, LocalizedError {
         self.underlyingError = underlyingError
         self.responseData = responseData
     }
-    
+
     // MARK: - LocalizedError
-    
+
     var errorDescription: String? {
         if let statusCode = statusCode {
             return "[\(statusCode)] \(message)"
         }
         return message
     }
-    
+
     var failureReason: String? {
         underlyingError?.localizedDescription
     }
-    
+
     // MARK: - Factory Methods
-    
+
     static func invalidResponse(message: String) -> NetworkError {
         NetworkError(message: message)
     }
-    
+
     static func httpError(statusCode: Int, data: Data? = nil) -> NetworkError {
         let message = HTTPStatusCode(rawValue: statusCode)?.description ?? "HTTP Error"
         return NetworkError(message: message, statusCode: statusCode, responseData: data)
     }
-    
+
     static func decodingError(_ error: DecodingError) -> NetworkError {
         let message: String
         switch error {
@@ -74,33 +73,33 @@ struct NetworkError: Error, Sendable, LocalizedError {
         }
         return NetworkError(message: message, underlyingError: error)
     }
-    
+
     static func connectionError(_ error: any Error) -> NetworkError {
         NetworkError(
             message: "Connection failed: \(error.localizedDescription)",
             underlyingError: error
         )
     }
-    
+
     // MARK: - Status Checks
-    
+
     /// Whether the error indicates an authentication failure
     var isUnauthorized: Bool {
         statusCode == 401 || statusCode == 403
     }
-    
+
     /// Whether the error indicates a client error (4xx)
     var isClientError: Bool {
         guard let code = statusCode else { return false }
         return (400...499).contains(code)
     }
-    
+
     /// Whether the error indicates a server error (5xx)
     var isServerError: Bool {
         guard let code = statusCode else { return false }
         return (500...599).contains(code)
     }
-    
+
     /// Whether the error is retryable
     var isRetryable: Bool {
         // Retry on server errors, timeout, or connection issues
@@ -129,7 +128,7 @@ enum HTTPStatusCode: Int {
     case badGateway = 502
     case serviceUnavailable = 503
     case gatewayTimeout = 504
-    
+
     var description: String {
         switch self {
         case .ok: return "OK"

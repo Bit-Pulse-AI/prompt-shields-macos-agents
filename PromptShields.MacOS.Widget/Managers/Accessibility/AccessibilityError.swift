@@ -5,41 +5,40 @@ import Foundation
 /// Errors that can occur during accessibility operations
 /// Conforms to Sendable for safe concurrent access in Swift 6
 enum AccessibilityError: Error, Sendable, LocalizedError {
-    
     // MARK: - Cases
-    
+
     /// Failed to get the frame of an element
     case failedToGetFrame
-    
+
     /// Failed to get application information
     case failedToGetApplicationInfo
-    
+
     /// Failed to inject text into an element
     case failedToInjectText
-    
+
     /// Failed to get the focused element
     case failedToGetFocusedElement
-    
+
     /// The UI element is invalid or no longer exists
     case invalidUIElement
-    
+
     /// Accessibility permissions are not granted
     case permissionsNotGranted
-    
+
     /// Operation timed out
     case timeout
-    
+
     /// The element does not support text operations
     case textNotSupported
-    
+
     /// Failed to get selected text range
     case failedToGetSelectionRange
-    
+
     /// The process is not trusted for accessibility
     case processNotTrusted
-    
+
     // MARK: - LocalizedError
-    
+
     var errorDescription: String? {
         switch self {
         case .failedToGetFrame:
@@ -64,7 +63,7 @@ enum AccessibilityError: Error, Sendable, LocalizedError {
             return "Process is not trusted for accessibility"
         }
     }
-    
+
     var recoverySuggestion: String? {
         switch self {
         case .permissionsNotGranted, .processNotTrusted:

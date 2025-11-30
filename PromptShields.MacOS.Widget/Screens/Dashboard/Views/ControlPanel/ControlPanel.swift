@@ -63,7 +63,7 @@ struct ControlPanelView: View {
             if !dashboardState.isActive {
                 Button("Get Started") {
                     Task {
-                        await accessibilityManagerImpl.startTimer()
+                        accessibilityManagerImpl.startTimer()
                     }
                 }
                 .buttonStyle(.borderedProminent)
