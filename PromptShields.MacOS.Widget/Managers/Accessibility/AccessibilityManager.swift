@@ -92,6 +92,7 @@ final class AccessibilityManagerImpl: ObservableObject {
 
         if hasAccessibilityPermission {
             startMonitoring()
+            Analytics.trackAsync(.monitoringEnabled)
         } else {
             requestAccessibilityPermissions()
         }
@@ -102,6 +103,7 @@ final class AccessibilityManagerImpl: ObservableObject {
         logger.info("Disable monitoring requested")
         stopMonitoring()
         monitoringState = .disabled
+        Analytics.trackAsync(.monitoringDisabled)
     }
 
     /// Toggles monitoring state
@@ -153,6 +155,9 @@ final class AccessibilityManagerImpl: ObservableObject {
         monitoringState = .awaitingPermissions
         permissionCheckCount = 0
 
+        // Track permission request
+        Analytics.trackAsync(.accessibilityPermissionRequested)
+
         // Show the system permission prompt
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         let options = [key: true] as CFDictionary
@@ -175,7 +180,9 @@ final class AccessibilityManagerImpl: ObservableObject {
 
                 if granted {
                     self.logger.info("Accessibility permissions granted")
+                    Analytics.trackAsync(.accessibilityPermissionGranted)
                     self.startMonitoring()
+                    Analytics.trackAsync(.monitoringEnabled)
                     return
                 }
 
@@ -184,6 +191,7 @@ final class AccessibilityManagerImpl: ObservableObject {
                 // After several checks, stop polling and wait for user action
                 if self.permissionCheckCount > 30 { // ~15 seconds
                     self.logger.info("Permission polling timeout, waiting for user action")
+                    Analytics.trackAsync(.accessibilityPermissionDenied)
                     return
                 }
 
@@ -427,6 +435,14 @@ final class AccessibilityManagerImpl: ObservableObject {
 
         // Simple update - just set the new info
         if previousRect != info.frame || previousText != info.text {
+            // Track text field detection if this is a new detection
+            if elementInfo == nil {
+                if info.isSelectedText {
+                    Analytics.trackAsync(.selectedTextDetected(application: info.applicationName, length: info.text.count))
+                } else {
+                    Analytics.trackAsync(.textFieldDetected(application: info.applicationName))
+                }
+            }
             elementInfo = info
         }
 
@@ -435,6 +451,9 @@ final class AccessibilityManagerImpl: ObservableObject {
     }
 
     private func clearElementInfo() {
+        if elementInfo != nil {
+            Analytics.trackAsync(.textFieldLost)
+        }
         elementInfo = nil
         applicationInfo = .empty
         previousRect = nil

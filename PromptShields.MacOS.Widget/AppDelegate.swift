@@ -24,34 +24,120 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         logger.info("Application did finish launching - starting setup...")
 
-        // Clean up any hanging windows first
-        cleanupHangingWindows()
+        // Initialize analytics
+        Task { @MainActor in
+            await AnalyticsManager.shared.initialize()
+        }
 
-        // Test just the activation policy change first
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            self.logger.info("Setting activation policy to accessory...")
-//            NSApp.setActivationPolicy(.accessory)
+        // Setup status bar menu immediately
+        setupStatusBarMenu()
+
+        // Configure windows after a short delay to ensure SwiftUI has created them
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.configureAllWindows()
         }
 
         logger.info("Application finished launching successfully")
-        setupStatusBarMenu()
     }
 
     /// Called when the last window is closed
     /// Prevents the app from terminating when windows are closed
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // Switch back to accessory mode when all windows are closed
-//        NSApp.setActivationPolicy(.accessory)
         return false
     }
 
-    /// Called when the application is about to hide
-    /// Switches back to accessory mode
-    func applicationWillHide(_ notification: Notification) {
-//        NSApp.setActivationPolicy(.accessory)
+    /// Called when the application is about to terminate
+    func applicationWillTerminate(_ notification: Notification) {
+        Analytics.trackAsync(.appTerminated)
+
+        // Flush analytics before termination
+        Task { @MainActor in
+            await AnalyticsManager.shared.flush()
+        }
     }
 
-    // MARK: - Private Methods
+    /// Called when the application becomes active
+    func applicationDidBecomeActive(_ notification: Notification) {
+        Analytics.trackAsync(.appBecameActive)
+    }
+
+    /// Called when the application resigns active
+    func applicationWillResignActive(_ notification: Notification) {
+        Analytics.trackAsync(.appResignedActive)
+    }
+
+    /// Called when the application is about to hide
+    func applicationWillHide(_ notification: Notification) {
+        // No action needed
+    }
+
+    // MARK: - Window Configuration
+
+    /// Configures all overlay and action windows to ensure they display properly
+    @MainActor
+    private func configureAllWindows() {
+        logger.info("Configuring all windows...")
+
+        // Configure overlay window
+        if let overlayWindow = NSApp.windows.first(where: {
+            $0.identifier?.rawValue.hasPrefix(MainApp.overlayRender) ?? false
+        }) {
+            configureFloatingWindow(overlayWindow, name: "overlay")
+        } else {
+            logger.warning("Overlay window not found")
+        }
+
+        // Configure action window
+        if let actionWindow = NSApp.windows.first(where: {
+            $0.identifier?.rawValue.hasPrefix(MainApp.actionRender) ?? false
+        }) {
+            configureFloatingWindow(actionWindow, name: "action")
+        } else {
+            logger.warning("Action window not found")
+        }
+
+        logger.info("Window configuration completed")
+    }
+
+    /// Configures a floating window with the correct properties
+    @MainActor
+    private func configureFloatingWindow(_ window: NSWindow, name: String) {
+        // Essential: Don't let the system restore or auto-save window state
+        window.isRestorable = false
+        window.setFrameAutosaveName("")
+
+        // Make window transparent
+        window.isOpaque = false
+        window.backgroundColor = .clear
+
+        // Set window level to screenSaver (ensures visibility above other apps in release mode)
+        window.level = .screenSaver
+
+        // Remove shadow for cleaner appearance
+        window.hasShadow = false
+
+        // Remove title bar if present
+        if window.styleMask.contains(.titled) {
+            window.styleMask.remove(.titled)
+        }
+
+        // Allow window to appear on all spaces and in full screen
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+
+        // Prevent window from being moved by dragging
+        window.isMovableByWindowBackground = false
+
+        // IMPORTANT: Keep window at minimal size initially, hidden off-screen
+        // This prevents release mode from optimizing away "empty" windows
+        if window.frame.width <= 0 || window.frame.height <= 0 {
+            window.setFrame(CGRect(x: -10000, y: -10000, width: 1, height: 1), display: false)
+            window.alphaValue = 0.0
+        }
+
+        logger.info("Configured \(name) window successfully")
+    }
+
+    // MARK: - Status Bar Menu
 
     @MainActor
     private func setupStatusBarMenu() {
@@ -132,8 +218,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openMainWindow() {
         logger.info("Opening main window...")
 
-        // Clean up any hanging windows first
-        cleanupHangingWindows(windowIdentifiers: [MainApp.mainWindow])
+        // Track event
+        Analytics.trackAsync(.mainWindowOpened)
 
         // Temporarily change activation policy to show windows
         NSApp.setActivationPolicy(.regular)
@@ -149,22 +235,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             mainWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         } else {
-            logger.info("Main window not found, will retry...")
-            // If main window doesn't exist, try to create it
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                if let mainWindow = NSApp.windows.first(where: {
-                    $0.identifier?.rawValue.hasPrefix(MainApp.mainWindow) ?? false
-                }) {
-                    self?.logger.info("Found main window on retry, showing it...")
-                    if mainWindow.isMiniaturized {
-                        mainWindow.deminiaturize(nil)
-                    }
-                    mainWindow.makeKeyAndOrderFront(nil)
-                    NSApp.activate(ignoringOtherApps: true)
-                } else {
-                    self?.logger.error("Main window still not found after retry")
-                }
-            }
+            logger.warning("Main window not found")
         }
     }
 
@@ -177,22 +248,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let aboutWindow = AboutWindow()
         aboutWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-    }
-
-    @MainActor
-    private func cleanupHangingWindows(windowIdentifiers: [String] = [MainApp.mainWindow, MainApp.overlayRender, MainApp.actionRender]) {
-        logger.info("Cleaning up hanging windows...")
-        let existingWindows = NSApp.windows
-
-        for window in existingWindows {
-            if let identifier = window.identifier?.rawValue,
-               windowIdentifiers.contains(identifier) {
-                logger.info("Closing hanging window with identifier: \(identifier)")
-                window.close()
-            }
-        }
-
-        logger.info("Window cleanup completed")
     }
 }
 
@@ -211,10 +266,6 @@ extension AppDelegate: NSWindowDelegate {
             logger.info("Main window close requested, minimizing instead...")
             // Minimize the window instead of closing it
             sender.miniaturize(nil)
-            // Switch back to accessory mode
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-//                NSApp.setActivationPolicy(.accessory)
-            }
             return false
         }
         return true

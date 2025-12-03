@@ -187,4 +187,3 @@ extension Optional where Wrapped == String {
         self?.decrypt
     }
 }
-

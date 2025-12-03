@@ -39,6 +39,11 @@ struct MainApp: App {
     static let actionRender = "action-render"
     static let mainWindow = "main-window"
 
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier!,
+        category: "MainApp"
+    )
+
     var body: some Scene {
         Window("Main", id: MainApp.mainWindow) {
             if $overlayStateModel.isMainConfigured.wrappedValue {
@@ -51,17 +56,17 @@ struct MainApp: App {
                         updateMainWindow(isInitial: false)
                     }
             } else {
-                VStack {
-                }
-                .frame(width: 1, height: 1)
-                .onAppear {
-                    configureAppAppearance()
-                    setupWindowDelegate()
-                    updateMainWindow(isInitial: true)
-                }
+                // Use a minimal but non-zero size to ensure the window is created
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .onAppear {
+                        configureAppAppearance()
+                        setupWindowDelegate()
+                        updateMainWindow(isInitial: true)
+                    }
             }
         }
-        .defaultSize(.zero)
+        .defaultSize(width: 1, height: 1)
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .environmentObject(dashboardStateModel)
@@ -78,15 +83,15 @@ struct MainApp: App {
                         updateOverlayWindow(isInitial: false)
                     }
             } else {
-                VStack {
-                }
-                .frame(width: 1, height: 1)
-                .onAppear {
-                    updateOverlayWindow(isInitial: true)
-                }
+                // Use a minimal but non-zero size to ensure the window is created
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .onAppear {
+                        updateOverlayWindow(isInitial: true)
+                    }
             }
         }
-        .defaultSize(.zero)
+        .defaultSize(width: 1, height: 1)
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
@@ -102,15 +107,15 @@ struct MainApp: App {
                         updateActionWindow(isInitial: false)
                     }
             } else {
-                VStack {
-                }
-                .frame(width: 1, height: 1)
-                .onAppear {
-                    updateActionWindow(isInitial: true)
-                }
+                // Use a minimal but non-zero size to ensure the window is created
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .onAppear {
+                        updateActionWindow(isInitial: true)
+                    }
             }
         }
-        .defaultSize(.zero)
+        .defaultSize(width: 1, height: 1)
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
@@ -183,51 +188,89 @@ struct MainApp: App {
     @MainActor
     private func configureActionWindow(isInitial: Bool, window: NSWindow?, targetRect: CGRect?, actionSize: CGSize) {
         guard let window else {
+            logger.warning("Action window is nil")
             return
         }
+
+        // Basic window configuration
         window.isRestorable = false
         window.setFrameAutosaveName("")
         window.isOpaque = false
         window.backgroundColor = .clear
-
-        window.level = .floating
         window.hasShadow = false
 
-        window.styleMask.remove(.titled)
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // Remove title bar if present
+        if window.styleMask.contains(.titled) {
+            window.styleMask.remove(.titled)
+        }
+
+        // Set window level - use screenSaver level to ensure visibility above other apps
+        window.level = .screenSaver
+
+        // Allow window to appear on all spaces
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.isMovableByWindowBackground = false
 
         if let targetRect = targetRect {
-            let targetTransform = CGRect(x: targetRect.origin.x, y: targetRect.origin.y, width: actionSize.width, height: actionSize.height)
+            let targetTransform = CGRect(
+                x: targetRect.origin.x,
+                y: targetRect.origin.y,
+                width: actionSize.width,
+                height: actionSize.height
+            )
             window.setFrame(targetTransform, display: true, animate: false)
+            window.alphaValue = 1.0
+            window.orderFrontRegardless() // Force window to front regardless of app activation state
+            // logger.debug("Action window positioned at: \(targetTransform)")
         } else {
-            window.setFrame(CGRect(x: 0, y: 0, width: 10, height: 10), display: false, animate: false)
+            // Hide window off-screen when no target
+            window.setFrame(CGRect(x: -10000, y: -10000, width: 1, height: 1), display: false, animate: false)
+            window.alphaValue = 0.0
         }
     }
 
     @MainActor
     private func configureOverlayWindow(isInitial: Bool, window: NSWindow?, targetRect: CGRect?) {
         guard let window else {
+            logger.warning("Overlay window is nil")
             return
         }
+
+        // Basic window configuration
         window.isRestorable = false
         window.setFrameAutosaveName("")
         window.isOpaque = false
         window.backgroundColor = .clear
-
-        window.level = .floating
         window.hasShadow = false
 
-        window.styleMask.remove(.titled)
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // Remove title bar if present
+        if window.styleMask.contains(.titled) {
+            window.styleMask.remove(.titled)
+        }
+
+        // Set window level - use screenSaver level to ensure visibility above other apps
+        window.level = .screenSaver
+
+        // Allow window to appear on all spaces
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.isMovableByWindowBackground = false
-        window.ignoresMouseEvents = true
+        window.ignoresMouseEvents = true // Overlay should not capture mouse events
 
         if let targetRect = targetRect {
-            let targetTransform = CGRect(x: targetRect.origin.x, y: targetRect.origin.y, width: 0, height: 0)
+            let targetTransform = CGRect(
+                x: targetRect.origin.x,
+                y: targetRect.origin.y - targetRect.height,
+                width: max(targetRect.width, 1),
+                height: max(targetRect.height, 1)
+            )
             window.setFrame(targetTransform, display: true, animate: false)
+            window.alphaValue = 1.0
+            window.orderFrontRegardless() // Force window to front regardless of app activation state
+            // logger.debug("Overlay window positioned at: \(targetTransform)")
         } else {
-            window.setFrame(CGRect(x: 0, y: 0, width: 10, height: 10), display: false, animate: false)
+            // Hide window off-screen when no target
+            window.setFrame(CGRect(x: -10000, y: -10000, width: 1, height: 1), display: false, animate: false)
+            window.alphaValue = 0.0
         }
     }
 

@@ -106,7 +106,7 @@ struct ActionView: View {
                         }
                         .buttonStyle(ButtonStyleGreen())
                         Button {
-                            resetState()
+                            rejectSuggestion()
                         } label: {
                             Text("Keep Original")
                         }
@@ -200,9 +200,11 @@ struct ActionView: View {
             // Entering interactive state - pause monitoring to preserve element info
             accessibilityManager.pauseForInteraction()
             injectionError = nil
+            Analytics.trackAsync(.actionMenuOpened)
         } else if wasInteractive && !isNowInteractive {
             // Leaving interactive state - resume monitoring
             accessibilityManager.resumeFromInteraction()
+            Analytics.trackAsync(.actionMenuClosed)
         }
     }
 
@@ -227,6 +229,14 @@ struct ActionView: View {
     private func processSuggestion(suggestionType: SuggestionType) async {
         defer { isProcessing = false }
 
+        let suggestionTypeName = suggestionType.model.suggestionType
+        let suggestionCategory = suggestionType.model.suggestionTypeCategory ?? "unknown"
+        let startTime = Date()
+
+        // Track suggestion type selected and processing started
+        Analytics.trackAsync(.suggestionTypeSelected(type: suggestionTypeName, category: suggestionCategory))
+        Analytics.trackAsync(.suggestionProcessingStarted(type: suggestionTypeName))
+
         do {
             let result = try await suggestionDomainService
                 .process(
@@ -234,19 +244,24 @@ struct ActionView: View {
                     llmProvider: LLMProvider.AZURE_PROMPTSHIELDS.rawValue,
                     suggestionGroupId: profileDomainService.currentProfile.model.defaultSuggestionGroupId,
                     teamId: profileDomainService.currentProfile.model.defaultTeamId,
-                    suggestionType: suggestionType.model.suggestionType,
+                    suggestionType: suggestionTypeName,
                     application: overlayStateModel.elementInfo?.applicationName ?? "n/a"
                 )
 
             try Task.checkCancellation()
 
+            let duration = Date().timeIntervalSince(startTime)
+            Analytics.trackAsync(.suggestionProcessingCompleted(type: suggestionTypeName, duration: duration))
+
             actionText = result.model.suggestedText
             overlayStateModel.actionToolState = .action
         } catch is CancellationError {
             logger.warning("LLM processing was cancelled")
+            Analytics.trackAsync(.suggestionProcessingFailed(type: suggestionTypeName, error: "cancelled"))
             resetState()
         } catch {
             logger.error("Error processing LLM request: \(error)")
+            Analytics.trackAsync(.suggestionProcessingFailed(type: suggestionTypeName, error: error.localizedDescription))
             resetState()
         }
     }
@@ -260,24 +275,41 @@ struct ActionView: View {
 
         // Get the preserved element info
         let targetInfo = overlayStateModel.elementInfo
+        let applicationName = targetInfo?.applicationName ?? "unknown"
 
         guard targetInfo != nil else {
             logger.error("No element info available")
             injectionError = "Target field not found"
+            Analytics.trackAsync(.textInjectionFailed(application: applicationName, error: "no_element_info"))
             return
         }
+
+        // Track injection started
+        Analytics.trackAsync(.textInjectionStarted(application: applicationName))
 
         do {
             // Use the new injection service which gets a fresh element reference
             try textInjectionService.injectText(actionText, targetInfo: targetInfo)
             logger.info("Text injection successful")
+
+            // Track success and suggestion accepted
+            Analytics.trackAsync(.textInjectionSucceeded(application: applicationName, method: "injection_service"))
+            Analytics.trackAsync(.suggestionAccepted(type: "text_replacement"))
+
             resetState()
         } catch let error as AccessibilityError {
             logger.error("Accessibility error: \(error.localizedDescription)")
             injectionError = error.localizedDescription
+            Analytics.trackAsync(.textInjectionFailed(application: applicationName, error: error.localizedDescription))
         } catch {
             logger.error("Unexpected error: \(error.localizedDescription)")
             injectionError = "Failed to update text"
+            Analytics.trackAsync(.textInjectionFailed(application: applicationName, error: error.localizedDescription))
         }
+    }
+
+    private func rejectSuggestion() {
+        Analytics.trackAsync(.suggestionRejected(type: "text_replacement"))
+        resetState()
     }
 }
