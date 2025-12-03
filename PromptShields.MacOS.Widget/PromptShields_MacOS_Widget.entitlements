@@ -6,13 +6,7 @@
 	<array>
 		<string>webcredentials:dev-oo0k5tvqxyn7i84t.us.auth0.com</string>
 	</array>
-	<key>com.apple.security.app-sandbox</key>
-	<false/>
-	<key>com.apple.security.files.user-selected.read-only</key>
-	<true/>
 	<key>com.apple.security.network.client</key>
-	<true/>
-	<key>com.apple.security.network.server</key>
 	<true/>
 </dict>
 </plist>

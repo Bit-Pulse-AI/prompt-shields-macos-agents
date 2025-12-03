@@ -1,12 +1,9 @@
 import SwiftUI
-import RevenueCat
 import os
 
 struct AccountView: View {
     @EnvironmentObject private var mainState: MainStateModel
 
-    @State var offerings: Offerings?
-    @State var customerInfo: CustomerInfo?
     @State var isLoading = false
     @State var showCreateOrganisation = false
     @State var showCreateSubscription = false
@@ -193,23 +190,6 @@ struct AccountView: View {
     }
 
     private func deletePhoto() {
-    }
-}
-
-extension SubscriptionPeriod.Unit {
-    var description: String {
-        switch self {
-        case .day:
-            return "day"
-        case .week:
-            return "week"
-        case .month:
-            return "month"
-        case .year:
-            return "year"
-        @unknown default:
-            return "period"
-        }
     }
 }
 
