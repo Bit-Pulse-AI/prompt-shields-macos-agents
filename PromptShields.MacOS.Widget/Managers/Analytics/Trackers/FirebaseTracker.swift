@@ -304,7 +304,7 @@ actor FirebaseTracker: AnalyticsTracker {
 
         let payload = PerformancePayload(
             appId: appId,
-            appVersion: App.version,
+            appVersion: version,
             osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
             deviceModel: "Mac",
             traces: [tracePayload]
@@ -367,8 +367,8 @@ actor FirebaseTracker: AnalyticsTracker {
 
     private func saveCurrentAppState() {
         let state: [String: Any] = [
-            "appVersion": App.version,
-            "buildNumber": App.build,
+            "appVersion": version,
+            "buildNumber": build,
             "osVersion": ProcessInfo.processInfo.operatingSystemVersionString,
             "timestamp": ISO8601DateFormatter().string(from: Date())
         ]
@@ -442,8 +442,8 @@ actor FirebaseTracker: AnalyticsTracker {
 
     private func getCurrentAppState() -> AppState {
         AppState(
-            appVersion: App.version,
-            buildNumber: App.build,
+            appVersion: version,
+            buildNumber: build,
             osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
             memoryUsage: getMemoryUsage(),
             diskUsage: getDiskUsage()

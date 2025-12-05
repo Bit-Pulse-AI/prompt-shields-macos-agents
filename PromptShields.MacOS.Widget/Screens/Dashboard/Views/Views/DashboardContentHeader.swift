@@ -69,31 +69,6 @@ struct DashboardContentHeaderView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
             }
-
-            // Status Indicators
-//            if dashboardState.isActive {
-//                HStack(spacing: 16) {
-//                    StatusIndicator(
-//                        title: "Application",
-//                        value: applicationStatusIndicator,
-//                        icon: "app.badge"
-//                    )
-//                    
-//                    StatusIndicator(
-//                        title: "Suggestions",
-//                        value: "\(suggestionStatusIndicator)",
-//                        icon: "textformat.abc.dottedunderline"
-//                    )
-//                    
-//                    if dashboardState.isAnalyzing {
-//                        StatusIndicator(
-//                            title: "Analyzing",
-//                            value: "In Progress",
-//                            icon: "clock"
-//                        )
-//                    }
-//                }
-//            }
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))

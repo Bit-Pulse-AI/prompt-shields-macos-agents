@@ -37,6 +37,50 @@
             endingLineNumber = "105"
             landmarkName = "getUser()"
             landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "7F7D60D5-BDD8-434E-84E1-7003D985DA8B - c722a1d631be10d1"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for PromptShields_MacOS_Widget.UserDomainServiceImpl.getUser() async throws -&gt; PromptShields_MacOS_Widget.User"
+                  moduleName = "PromptShields.MacOS.Widget.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/gabrielsabiescu/Workspace/Freelance/Promptshields/prompt-shield-v2/prompt-shields-macos-widget/PromptShields.MacOS.Widget/Domain/Services/UserDomainService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "105"
+                  endingLineNumber = "105">
+               </Location>
+               <Location
+                  uuid = "7F7D60D5-BDD8-434E-84E1-7003D985DA8B - bdebacd7ae4a47d4"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(6) await resume partial function for PromptShields_MacOS_Widget.UserDomainServiceImpl.getUser() async throws -&gt; PromptShields_MacOS_Widget.User"
+                  moduleName = "PromptShields.MacOS.Widget.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/gabrielsabiescu/Workspace/Freelance/Promptshields/prompt-shield-v2/prompt-shields-macos-widget/PromptShields.MacOS.Widget/Domain/Services/UserDomainService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "105"
+                  endingLineNumber = "105">
+               </Location>
+               <Location
+                  uuid = "7F7D60D5-BDD8-434E-84E1-7003D985DA8B - e773aac413c5e7e3"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(10) suspend resume partial function for PromptShields_MacOS_Widget.UserDomainServiceImpl.getUser() async throws -&gt; PromptShields_MacOS_Widget.User"
+                  moduleName = "PromptShields.MacOS.Widget.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/gabrielsabiescu/Workspace/Freelance/Promptshields/prompt-shield-v2/prompt-shields-macos-widget/PromptShields.MacOS.Widget/Domain/Services/UserDomainService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "105"
+                  endingLineNumber = "105">
+               </Location>
+            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy

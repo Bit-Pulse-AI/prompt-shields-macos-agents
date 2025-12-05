@@ -84,5 +84,3 @@ enum TrackerType: String, CaseIterable, Sendable {
         }
     }
 }
-
-

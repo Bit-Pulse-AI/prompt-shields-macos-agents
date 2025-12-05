@@ -7,7 +7,7 @@ import os
 /// Orchestrates multiple trackers and provides a unified API
 /// Following Open/Closed Principle - open for extension (new trackers), closed for modification
 @MainActor
-final class AnalyticsManager: ObservableObject, Sendable {
+final class AnalyticsManager: ObservableObject {
     // MARK: - Singleton
 
     static let shared = AnalyticsManager()
@@ -276,9 +276,7 @@ enum Analytics {
     }
 
     /// Fire-and-forget tracking
-    static func trackAsync(_ event: AnalyticsEvent) {
+    @MainActor static func trackAsync(_ event: AnalyticsEvent) {
         AnalyticsManager.shared.trackAsync(event)
     }
 }
-
-

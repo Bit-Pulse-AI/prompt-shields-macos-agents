@@ -234,7 +234,7 @@ actor PostHogTracker: AnalyticsTracker {
 
             // Add standard PostHog properties
             properties["$lib"] = AnyCodable("promptshields-macos")
-            properties["$lib_version"] = AnyCodable(App.version)
+            properties["$lib_version"] = AnyCodable(version)
             properties["$os"] = AnyCodable("macOS")
             properties["$os_version"] = AnyCodable(ProcessInfo.processInfo.operatingSystemVersionString)
 
