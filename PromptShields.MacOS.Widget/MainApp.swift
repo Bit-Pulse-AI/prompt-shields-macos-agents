@@ -1,7 +1,6 @@
 import SwiftUI
 import Combine
 import SwiftData
-import AppKit
 import os
 
 enum ActionToolState: Equatable {
@@ -25,13 +24,12 @@ final class OverlayStateModel: ObservableObject {
     @Published var isActionConfigured: Bool = false
 }
 
-// swiftlint:disable:next type_name
 @main
+// swiftlint:disable:next type_name
 struct MainApp: App {
     @StateObject private var accessibilityManager = AccessibilityManagerImpl()
     @StateObject private var overlayStateModel = OverlayStateModel()
     @StateObject private var dashboardStateModel = DashboardStateModel()
-
     @Environment(\.openWindow) private var openWindow
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 

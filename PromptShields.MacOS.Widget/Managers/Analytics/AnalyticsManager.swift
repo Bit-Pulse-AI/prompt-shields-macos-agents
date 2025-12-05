@@ -32,7 +32,7 @@ final class AnalyticsManager: ObservableObject, Sendable {
 
     private init() {
         // Load enabled state from UserDefaults
-        isEnabled = UserDefaults.standard.object(forKey: "analytics_enabled") as? Bool ?? Const.Analytics.isEnabledByDefault
+        isEnabled = UserDefaults.standard.object(forKey: "analytics_enabled") as? Bool ?? true
     }
 
     // MARK: - Setup
@@ -52,8 +52,14 @@ final class AnalyticsManager: ObservableObject, Sendable {
         await addTracker(ConsoleAnalyticsTracker())
         #endif
 
-        // Always add Google Analytics as the primary tracker
+        // Add Google Analytics for general analytics
         await addTracker(GoogleAnalyticsTracker.createDefault())
+
+        // Add PostHog for product analytics
+        await addTracker(PostHogTracker.createDefault())
+
+        // Add Firebase for performance and crash reporting
+        await addTracker(FirebaseTracker.createDefault())
 
         isInitialized = true
         logger.info("AnalyticsManager initialized with \(self.trackers.count) tracker(s)")
@@ -274,4 +280,5 @@ enum Analytics {
         AnalyticsManager.shared.trackAsync(event)
     }
 }
+
 

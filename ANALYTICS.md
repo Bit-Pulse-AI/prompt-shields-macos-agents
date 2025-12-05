@@ -14,40 +14,70 @@ The analytics system is built with a pluggable architecture that follows SOLID p
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    AnalyticsManager                         │
-│                    (Orchestrator)                           │
-├─────────────────────────────────────────────────────────────┤
-│  ┌──────────────────┐  ┌──────────────────┐                │
-│  │ GoogleAnalytics  │  │ ConsoleTracker   │  ... (more)    │
-│  │    Tracker       │  │   (Debug)        │                │
-│  └──────────────────┘  └──────────────────┘                │
-├─────────────────────────────────────────────────────────────┤
-│                  AnalyticsTracker Protocol                  │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           AnalyticsManager                                  │
+│                           (Orchestrator)                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐          │
+│  │ GoogleAnalytics  │  │   PostHog        │  │    Firebase      │          │
+│  │    Tracker       │  │   Tracker        │  │    Tracker       │          │
+│  │  (GA4 Events)    │  │  (Product)       │  │  (Perf/Crashes)  │          │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘          │
+│                                                                             │
+│  ┌──────────────────┐                                                       │
+│  │ ConsoleTracker   │  ... (extensible)                                     │
+│  │   (Debug)        │                                                       │
+│  └──────────────────┘                                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                       AnalyticsTracker Protocol                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+## Trackers Overview
+
+| Tracker | Purpose | API Used |
+|---------|---------|----------|
+| **Google Analytics** | General event tracking, user behavior | GA4 Measurement Protocol |
+| **PostHog** | Product analytics, feature usage, user journeys | PostHog Capture API |
+| **Firebase** | Performance monitoring, crash reporting | Firebase REST APIs |
+| **Console** | Debug logging (DEBUG builds only) | os.Logger |
 
 ## Configuration
 
 ### Google Analytics Setup
 
-1. Create a GA4 property in Google Analytics
-2. Get your Measurement ID (format: `G-XXXXXXXXXX`)
-3. Create a Measurement Protocol API secret
-4. Configure in `Const.swift` or environment variables:
+1. Create a GA4 property in [Google Analytics](https://analytics.google.com)
+2. Get your Measurement ID (format: `G-XXXXXXXXXX`) from Admin > Data Streams
+3. Create a Measurement Protocol API secret from the same location
+4. Configure in `Const.swift`:
 
 ```swift
-// Option 1: Environment variables (recommended for security)
-GA_MEASUREMENT_ID=G-XXXXXXXXXX
-GA_API_SECRET=your_api_secret
+let googleMeasurementId = "G-XXXXXXXXXX"
+let googleApiSecret = "your_api_secret"
+```
 
-// Option 2: In Const.swift
-enum Const {
-    enum Analytics {
-        static let googleMeasurementId = "G-XXXXXXXXXX"
-        static let googleApiSecret = "your_api_secret"
-    }
-}
+### PostHog Setup
+
+1. Create a project at [PostHog](https://posthog.com) or your self-hosted instance
+2. Get your API key from Project Settings
+3. Configure in `Const.swift`:
+
+```swift
+let postHogApiKey = "phc_your_api_key"
+let postHogHost = "https://app.posthog.com"  // or your self-hosted URL
+```
+
+### Firebase Setup
+
+1. Create a project in [Firebase Console](https://console.firebase.google.com)
+2. Add a macOS app to your project
+3. Get your configuration from Project Settings > General
+4. Configure in `Const.swift`:
+
+```swift
+let firebaseApiKey = "your_web_api_key"
+let firebaseProjectId = "your-project-id"
+let firebaseAppId = "1:123456789:macos:abcdef"
 ```
 
 ### Enabling/Disabling Analytics
@@ -64,135 +94,195 @@ await AnalyticsManager.shared.setEnabled(false)
 
 ### App Lifecycle Events
 
-| Event Name | Category | Description | Parameters |
-|------------|----------|-------------|------------|
-| `app_launched` | app_lifecycle | App started | - |
-| `app_terminated` | app_lifecycle | App is terminating | - |
-| `app_became_active` | app_lifecycle | App came to foreground | - |
-| `app_resigned_active` | app_lifecycle | App went to background | - |
+| Event Name | Category | Description | Parameters | Trackers |
+|------------|----------|-------------|------------|----------|
+| `app_launched` | app_lifecycle | App started | - | All |
+| `app_terminated` | app_lifecycle | App is terminating | - | All |
+| `app_became_active` | app_lifecycle | App came to foreground | - | All |
+| `app_resigned_active` | app_lifecycle | App went to background | - | All |
 
 **Tracked in**: `AppDelegate.swift`
 
 ### Authentication Events
 
-| Event Name | Category | Description | Parameters |
-|------------|----------|-------------|------------|
-| `login_started` | authentication | User initiated login | - |
-| `login_succeeded` | authentication | Login completed successfully | `provider` |
-| `login_failed` | authentication | Login failed | `error` |
-| `logout_started` | authentication | User initiated logout | - |
-| `logout_completed` | authentication | Logout completed | - |
-| `token_refreshed` | authentication | Auth token refreshed | - |
-| `token_refresh_failed` | authentication | Token refresh failed | `error` |
+| Event Name | Category | Description | Parameters | Trackers |
+|------------|----------|-------------|------------|----------|
+| `login_started` | authentication | User initiated login | - | All |
+| `login_succeeded` | authentication | Login completed successfully | `provider` | All |
+| `login_failed` | authentication | Login failed | `error` | All + Firebase (error) |
+| `logout_started` | authentication | User initiated logout | - | All |
+| `logout_completed` | authentication | Logout completed | - | All |
+| `token_refreshed` | authentication | Auth token refreshed | - | All |
+| `token_refresh_failed` | authentication | Token refresh failed | `error` | All + Firebase (error) |
 
-**Tracked in**: `AuthManager.swift` (pending integration)
+**Tracked in**: `AuthManager.swift`
 
 ### Accessibility Events
 
-| Event Name | Category | Description | Parameters |
-|------------|----------|-------------|------------|
-| `accessibility_permission_requested` | accessibility | Permission dialog shown | - |
-| `accessibility_permission_granted` | accessibility | User granted permission | - |
-| `accessibility_permission_denied` | accessibility | User denied/timeout | - |
-| `monitoring_enabled` | accessibility | Monitoring started | - |
-| `monitoring_disabled` | accessibility | Monitoring stopped | - |
-| `monitoring_paused` | accessibility | Monitoring paused | `reason` |
-| `monitoring_resumed` | accessibility | Monitoring resumed | - |
+| Event Name | Category | Description | Parameters | Trackers |
+|------------|----------|-------------|------------|----------|
+| `accessibility_permission_requested` | accessibility | Permission dialog shown | - | All |
+| `accessibility_permission_granted` | accessibility | User granted permission | - | All |
+| `accessibility_permission_denied` | accessibility | User denied/timeout | - | All |
+| `monitoring_enabled` | accessibility | Monitoring started | - | All |
+| `monitoring_disabled` | accessibility | Monitoring stopped | - | All |
+| `monitoring_paused` | accessibility | Monitoring paused | `reason` | All |
+| `monitoring_resumed` | accessibility | Monitoring resumed | - | All |
 
 **Tracked in**: `AccessibilityManager.swift`
 
 ### Text Detection Events
 
-| Event Name | Category | Description | Parameters |
-|------------|----------|-------------|------------|
-| `text_field_detected` | text_detection | Text field found | `application` |
-| `text_field_lost` | text_detection | Text field lost focus | - |
-| `selected_text_detected` | text_detection | User selected text | `application`, `text_length` |
+| Event Name | Category | Description | Parameters | Trackers |
+|------------|----------|-------------|------------|----------|
+| `text_field_detected` | text_detection | Text field found | `application` | All |
+| `text_field_lost` | text_detection | Text field lost focus | - | All |
+| `selected_text_detected` | text_detection | User selected text | `application`, `text_length` | All |
 
 **Tracked in**: `AccessibilityManager.swift`
 
 ### Suggestion Events
 
-| Event Name | Category | Description | Parameters |
-|------------|----------|-------------|------------|
-| `suggestion_category_selected` | suggestions | User selected category | `category` |
-| `suggestion_type_selected` | suggestions | User selected suggestion type | `type`, `category` |
-| `suggestion_processing_started` | suggestions | LLM processing began | `type` |
-| `suggestion_processing_completed` | suggestions | LLM processing finished | `type`, `duration_seconds` |
-| `suggestion_processing_failed` | suggestions | LLM processing failed | `type`, `error` |
-| `suggestion_accepted` | suggestions | User accepted suggestion | `type` |
-| `suggestion_rejected` | suggestions | User rejected suggestion | `type` |
+| Event Name | Category | Description | Parameters | Trackers |
+|------------|----------|-------------|------------|----------|
+| `suggestion_category_selected` | suggestions | User selected category | `category` | GA, PostHog |
+| `suggestion_type_selected` | suggestions | User selected suggestion type | `type`, `category` | GA, PostHog |
+| `suggestion_processing_started` | suggestions | LLM processing began | `type` | All + Firebase (trace) |
+| `suggestion_processing_completed` | suggestions | LLM processing finished | `type`, `duration_seconds` | All + Firebase (trace) |
+| `suggestion_processing_failed` | suggestions | LLM processing failed | `type`, `error` | All + Firebase (error) |
+| `suggestion_accepted` | suggestions | User accepted suggestion | `type` | All |
+| `suggestion_rejected` | suggestions | User rejected suggestion | `type` | All |
 
 **Tracked in**: `ActionView.swift`
 
+**Firebase Performance**: Automatically creates traces for `suggestion_[type]` operations.
+
 ### Text Injection Events
 
-| Event Name | Category | Description | Parameters |
-|------------|----------|-------------|------------|
-| `text_injection_started` | text_injection | Injection attempt began | `application` |
-| `text_injection_succeeded` | text_injection | Text successfully injected | `application`, `injection_method` |
-| `text_injection_failed` | text_injection | Injection failed | `application`, `error` |
+| Event Name | Category | Description | Parameters | Trackers |
+|------------|----------|-------------|------------|----------|
+| `text_injection_started` | text_injection | Injection attempt began | `application` | All + Firebase (trace) |
+| `text_injection_succeeded` | text_injection | Text successfully injected | `application`, `injection_method` | All + Firebase (trace) |
+| `text_injection_failed` | text_injection | Injection failed | `application`, `error` | All + Firebase (error) |
 
 **Tracked in**: `ActionView.swift`, `TextInjectionService.swift`
 
+**Firebase Performance**: Automatically creates traces for `text_injection_[app]` operations.
+
 ### UI Events
 
-| Event Name | Category | Description | Parameters |
-|------------|----------|-------------|------------|
-| `main_window_opened` | ui_interaction | Main window shown | - |
-| `main_window_closed` | ui_interaction | Main window hidden | - |
-| `overlay_displayed` | ui_interaction | Overlay appeared | - |
-| `overlay_hidden` | ui_interaction | Overlay hidden | - |
-| `action_menu_opened` | ui_interaction | Action menu opened | - |
-| `action_menu_closed` | ui_interaction | Action menu closed | - |
-| `about_window_opened` | ui_interaction | About dialog shown | - |
-| `settings_opened` | ui_interaction | Settings viewed | - |
-| `status_bar_menu_opened` | ui_interaction | Status bar menu clicked | - |
+| Event Name | Category | Description | Parameters | Trackers |
+|------------|----------|-------------|------------|----------|
+| `main_window_opened` | ui_interaction | Main window shown | - | GA, PostHog |
+| `main_window_closed` | ui_interaction | Main window hidden | - | GA, PostHog |
+| `overlay_displayed` | ui_interaction | Overlay appeared | - | GA, PostHog |
+| `overlay_hidden` | ui_interaction | Overlay hidden | - | GA, PostHog |
+| `action_menu_opened` | ui_interaction | Action menu opened | - | GA, PostHog |
+| `action_menu_closed` | ui_interaction | Action menu closed | - | GA, PostHog |
+| `about_window_opened` | ui_interaction | About dialog shown | - | GA, PostHog |
+| `settings_opened` | ui_interaction | Settings viewed | - | GA, PostHog |
+| `status_bar_menu_opened` | ui_interaction | Status bar menu clicked | - | GA, PostHog |
 
 **Tracked in**: `AppDelegate.swift`, `ActionView.swift`
 
 ### Subscription Events
 
-| Event Name | Category | Description | Parameters |
-|------------|----------|-------------|------------|
-| `subscription_viewed` | subscription | Pricing page viewed | - |
-| `subscription_purchase_started` | subscription | Purchase flow started | `plan` |
-| `subscription_purchase_completed` | subscription | Purchase successful | `plan` |
-| `subscription_purchase_failed` | subscription | Purchase failed | `plan`, `error` |
-| `subscription_cancelled` | subscription | Subscription cancelled | - |
+| Event Name | Category | Description | Parameters | Trackers |
+|------------|----------|-------------|------------|----------|
+| `subscription_viewed` | subscription | Pricing page viewed | - | All |
+| `subscription_purchase_started` | subscription | Purchase flow started | `plan` | All |
+| `subscription_purchase_completed` | subscription | Purchase successful | `plan` | All |
+| `subscription_purchase_failed` | subscription | Purchase failed | `plan`, `error` | All + Firebase (error) |
+| `subscription_cancelled` | subscription | Subscription cancelled | - | All |
 
-**Tracked in**: `SubscriptionView.swift` (pending integration)
+**Tracked in**: `SubscriptionView.swift`
 
 ### Team Events
 
-| Event Name | Category | Description | Parameters |
-|------------|----------|-------------|------------|
-| `team_switched` | team | User switched teams | `team_id` |
-| `team_created` | team | New team created | - |
-| `team_joined` | team | User joined team | `team_id` |
+| Event Name | Category | Description | Parameters | Trackers |
+|------------|----------|-------------|------------|----------|
+| `team_switched` | team | User switched teams | `team_id` | All |
+| `team_created` | team | New team created | - | All |
+| `team_joined` | team | User joined team | `team_id` | All |
 
-**Tracked in**: `TeamView.swift` (pending integration)
+**Tracked in**: `TeamView.swift`
 
 ### Error Events
 
-| Event Name | Category | Description | Parameters |
-|------------|----------|-------------|------------|
-| `error_occurred` | errors | Application error | `error_domain`, `error_code`, `error_message` |
-| `crash_detected` | errors | Crash detected | `crash_reason` |
+| Event Name | Category | Description | Parameters | Trackers |
+|------------|----------|-------------|------------|----------|
+| `error_occurred` | errors | Application error | `error_domain`, `error_code`, `error_message` | All + Firebase (non-fatal) |
+| `crash_detected` | errors | Crash detected | `crash_reason` | Firebase (fatal) |
 
 **Tracked in**: Throughout application
 
 ### Performance Events
 
-| Event Name | Category | Description | Parameters |
-|------------|----------|-------------|------------|
-| `performance_metric` | performance | Performance measurement | `metric_name`, `metric_value`, `metric_unit` |
+| Event Name | Category | Description | Parameters | Trackers |
+|------------|----------|-------------|------------|----------|
+| `performance_metric` | performance | Performance measurement | `metric_name`, `metric_value`, `metric_unit` | Firebase |
 
 **Tracked in**: Via `AnalyticsManager.measureAsync()`
 
+## Firebase-Specific Features
+
+### Performance Traces
+
+Firebase automatically tracks these operations as performance traces:
+
+| Trace Name | Triggered By | Measures |
+|------------|--------------|----------|
+| `app_startup` | `app_launched` | App launch time |
+| `suggestion_[type]` | Suggestion processing | LLM response time |
+| `text_injection_[app]` | Text injection | Injection duration |
+
+### Crash Reporting
+
+Firebase captures:
+- Fatal crashes with stack traces
+- Non-fatal errors (from `error_occurred` events)
+- App state at time of crash (memory, disk usage)
+- User context (user ID, subscription tier)
+
+Crashes are:
+1. Persisted locally if they can't be sent immediately
+2. Sent on next app launch
+
+### Custom Traces
+
+```swift
+// Start a trace
+await firebaseTracker.startTrace(name: "my_operation")
+
+// Add attributes during operation
+await firebaseTracker.addAttribute(traceName: "my_operation", key: "step", value: "processing")
+
+// Increment counters
+await firebaseTracker.incrementCounter(traceName: "my_operation", counterName: "items_processed")
+
+// End trace
+await firebaseTracker.endTrace(name: "my_operation")
+```
+
+## PostHog-Specific Features
+
+### User Identification
+
+PostHog automatically tracks:
+- Distinct ID (persistent across sessions)
+- User properties ($set and $set_once)
+- Device and OS information
+
+### Session Tracking
+
+PostHog groups events by session automatically based on:
+- Distinct ID
+- Timestamps
+- Session timeout (30 minutes of inactivity)
+
 ## User Properties
 
-The following user properties are tracked:
+The following user properties are tracked across all trackers:
 
 | Property | Description |
 |----------|-------------|
@@ -268,13 +358,22 @@ actor MyCustomTracker: AnalyticsTracker {
 }
 ```
 
-2. Register in `AnalyticsManager`:
+2. Add to `TrackerType` enum in `AnalyticsTracker.swift`:
 
 ```swift
-await AnalyticsManager.shared.addTracker(MyCustomTracker())
+enum TrackerType: String, CaseIterable, Sendable {
+    case myCustom = "my_custom"
+    // ...
+}
 ```
 
-3. Remove when no longer needed:
+3. Register in `AnalyticsManager.initialize()`:
+
+```swift
+await addTracker(MyCustomTracker())
+```
+
+4. Remove when no longer needed:
 
 ```swift
 await AnalyticsManager.shared.removeTracker(identifier: "my_custom_tracker")
@@ -286,11 +385,16 @@ await AnalyticsManager.shared.removeTracker(identifier: "my_custom_tracker")
 - Email addresses are anonymized (only domain tracked)
 - No PII (Personally Identifiable Information) is collected
 - Text content is never tracked, only metadata
-- Client ID is randomly generated and stored locally
+- Client/distinct IDs are randomly generated and stored locally
+- Crash reports include stack traces but no user data
 
 ## Debug Mode
 
-In DEBUG builds, a console tracker is automatically added that logs all events to the Xcode console with the 📊 prefix.
+In DEBUG builds:
+1. Console tracker logs all events with 📊 prefix
+2. All trackers use shorter flush intervals (5s vs 30s)
+3. Smaller batch sizes for immediate feedback
+4. Verbose logging enabled
 
 ```
 📊 [suggestions] suggestion_processing_completed - {type: grammar_check, duration_seconds: 1.234}
@@ -304,12 +408,28 @@ In DEBUG builds, a console tracker is automatically added that logs all events t
 | `AnalyticsTracker.swift` | Protocol and configuration |
 | `AnalyticsManager.swift` | Central orchestrator |
 | `GoogleAnalyticsTracker.swift` | GA4 implementation |
+| `PostHogTracker.swift` | PostHog implementation |
+| `FirebaseTracker.swift` | Firebase Performance & Crashlytics |
 | `ConsoleAnalyticsTracker.swift` | Debug logging |
 | `Const.swift` | Configuration constants |
+
+## Tracker Comparison
+
+| Feature | Google Analytics | PostHog | Firebase |
+|---------|-----------------|---------|----------|
+| Event Tracking | ✅ | ✅ | Performance events only |
+| User Properties | ✅ | ✅ | Custom keys |
+| Session Tracking | ✅ | ✅ | - |
+| Funnels | ✅ | ✅ | - |
+| Performance Traces | - | - | ✅ |
+| Crash Reporting | - | - | ✅ |
+| Feature Flags | - | ✅ | - |
+| Self-Hosted | - | ✅ | - |
 
 ## Version History
 
 | Version | Changes |
 |---------|---------|
-| 1.0.0 | Initial analytics implementation |
-
+| 1.0.0 | Initial analytics implementation with Google Analytics |
+| 1.1.0 | Added PostHog tracker for product analytics |
+| 1.2.0 | Added Firebase tracker for performance and crash reporting |

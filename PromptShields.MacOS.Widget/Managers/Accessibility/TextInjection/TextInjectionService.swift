@@ -341,3 +341,4 @@ final class DefaultTextInjectionService: TextInjectionService {
         return true
     }
 }
+

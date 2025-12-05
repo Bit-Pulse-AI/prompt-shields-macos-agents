@@ -71,13 +71,18 @@ struct AnalyticsConfiguration: Sendable {
 /// Registry for managing available tracker types
 enum TrackerType: String, CaseIterable, Sendable {
     case googleAnalytics = "google_analytics"
+    case postHog = "posthog"
+    case firebase = "firebase"
     case console = "console" // For debugging
 
     var displayName: String {
         switch self {
         case .googleAnalytics: return "Google Analytics"
+        case .postHog: return "PostHog"
+        case .firebase: return "Firebase"
         case .console: return "Console Logger"
         }
     }
 }
+
 

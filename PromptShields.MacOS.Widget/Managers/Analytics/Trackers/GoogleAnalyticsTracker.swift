@@ -276,23 +276,20 @@ struct AnyCodable: Codable, Sendable {
 extension GoogleAnalyticsTracker {
     /// Creates a Google Analytics tracker with configuration from environment or constants
     static func createDefault() -> GoogleAnalyticsTracker {
-        // These should be configured in your app's constants or environment
-        let measurementId = Const.Analytics.googleMeasurementId
-        let apiSecret = Const.Analytics.googleApiSecret
-
         #if DEBUG
         return GoogleAnalyticsTracker(
-            measurementId: measurementId,
-            apiSecret: apiSecret,
+            measurementId: googleMeasurementId,
+            apiSecret: googleApiSecret,
             configuration: .debug
         )
         #else
         return GoogleAnalyticsTracker(
-            measurementId: measurementId,
-            apiSecret: apiSecret,
+            measurementId: googleMeasurementId,
+            apiSecret: googleApiSecret,
             configuration: .default
         )
         #endif
     }
 }
+
 
