@@ -311,4 +311,3 @@ extension PostHogTracker {
         #endif
     }
 }
-

@@ -63,12 +63,12 @@ struct ElementInfo: Equatable, Hashable, Sendable {
     // MARK: - Equatable
 
     static func == (lhs: ElementInfo, rhs: ElementInfo) -> Bool {
-        lhs.applicationBundleId == rhs.applicationBundleId &&
-        lhs.applicationName == rhs.applicationName &&
-        lhs.text == rhs.text &&
-        lhs.frame == rhs.frame &&
+            lhs.applicationBundleId == rhs.applicationBundleId &&
+            lhs.applicationName == rhs.applicationName &&
+            lhs.text == rhs.text &&
+            lhs.frame == rhs.frame &&
         lhs.elementIdentifier == rhs.elementIdentifier &&
-        lhs.isSelectedText == rhs.isSelectedText
+            lhs.isSelectedText == rhs.isSelectedText
     }
 
     // MARK: - Validation

@@ -230,43 +230,78 @@ actor GoogleAnalyticsTracker: AnalyticsTracker {
 
 // MARK: - AnyCodable Helper
 
-/// Helper type for encoding heterogeneous dictionary values
-struct AnyCodable: Codable, Sendable {
-    let value: Any
+/// Type-safe, Sendable wrapper for heterogeneous dictionary values
+/// Uses an enum instead of Any to maintain Swift 6 Sendable compliance
+enum AnyCodable: Codable, Sendable, Equatable {
+    case string(String)
+    case int(Int)
+    case double(Double)
+    case bool(Bool)
 
+    /// Initialize from any supported value type
     init(_ value: Any) {
-        self.value = value
+        if let string = value as? String {
+            self = .string(string)
+        } else if let int = value as? Int {
+            self = .int(int)
+        } else if let double = value as? Double {
+            self = .double(double)
+        } else if let bool = value as? Bool {
+            self = .bool(bool)
+        } else {
+            // Convert unsupported types to string representation
+            self = .string(String(describing: value))
+        }
+    }
+
+    /// Convenience initializer for String
+    init(_ value: String) {
+        self = .string(value)
+    }
+
+    /// Convenience initializer for Int
+    init(_ value: Int) {
+        self = .int(value)
+    }
+
+    /// Convenience initializer for Double
+    init(_ value: Double) {
+        self = .double(value)
+    }
+
+    /// Convenience initializer for Bool
+    init(_ value: Bool) {
+        self = .bool(value)
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
 
         if let string = try? container.decode(String.self) {
-            value = string
+            self = .string(string)
         } else if let int = try? container.decode(Int.self) {
-            value = int
+            self = .int(int)
         } else if let double = try? container.decode(Double.self) {
-            value = double
+            self = .double(double)
         } else if let bool = try? container.decode(Bool.self) {
-            value = bool
+            self = .bool(bool)
         } else {
-            value = ""
+            self = .string("")
         }
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
 
-        if let string = value as? String {
-            try container.encode(string)
-        } else if let int = value as? Int {
-            try container.encode(int)
-        } else if let double = value as? Double {
-            try container.encode(double)
-        } else if let bool = value as? Bool {
-            try container.encode(bool)
-        } else {
-            try container.encode(String(describing: value))
+        switch self {
+        case .string(let value):
+            try container.encode(value)
+        case .int(let value):
+            try container.encode(value)
+        case .double(let value):
+            try container.encode(value)
+        case .bool(let value):
+            try container.encode(value)
         }
     }
 }

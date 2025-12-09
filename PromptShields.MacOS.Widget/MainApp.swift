@@ -37,6 +37,9 @@ struct MainApp: App {
     static let actionRender = "action-render"
     static let mainWindow = "main-window"
 
+    // Minimum size that doesn't cause constraint issues on macOS Sequoia
+    private static let minWindowSize = CGSize(width: 50, height: 50)
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: "MainApp"
@@ -44,89 +47,63 @@ struct MainApp: App {
 
     var body: some Scene {
         Window("Main", id: MainApp.mainWindow) {
-            if $overlayStateModel.isMainConfigured.wrappedValue {
-                MainView()
-                    .onReceive(accessibilityManager.$elementInfo) { newValue in
-                        overlayStateModel.elementInfo = newValue
-                        updateMainWindow(isInitial: false)
-                    }
-                    .onChange(of: overlayStateModel.actionToolState) { _, _ in
-                        updateMainWindow(isInitial: false)
-                    }
-            } else {
-                // Use a minimal but non-zero size to ensure the window is created
-                Color.clear
-                    .frame(width: 1, height: 1)
-                    .onAppear {
-                        configureAppAppearance()
-                        setupWindowDelegate()
-                        updateMainWindow(isInitial: true)
-                    }
-            }
+            MainWindowContent()
+                .environmentObject(accessibilityManager)
+                .environmentObject(overlayStateModel)
+                .environmentObject(dashboardStateModel)
+                .task {
+                    await initializeMainWindow()
+                }
         }
-        .defaultSize(width: 1, height: 1)
+        .defaultSize(width: MainApp.minWindowSize.width, height: MainApp.minWindowSize.height)
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .environmentObject(dashboardStateModel)
         .windowStyle(.hiddenTitleBar)
 
         Window("Overlay Render", id: MainApp.overlayRender) {
-            if $overlayStateModel.isOverlayConfigured.wrappedValue {
-                OverlayView()
-                    .onReceive(accessibilityManager.$elementInfo) { newValue in
-                        overlayStateModel.elementInfo = newValue
-                        updateOverlayWindow(isInitial: false)
-                    }
-                    .onChange(of: overlayStateModel.actionToolState) { _, _ in
-                        updateOverlayWindow(isInitial: false)
-                    }
-            } else {
-                // Use a minimal but non-zero size to ensure the window is created
-                Color.clear
-                    .frame(width: 1, height: 1)
-                    .onAppear {
-                        updateOverlayWindow(isInitial: true)
-                    }
-            }
+            OverlayWindowContent()
+                .environmentObject(accessibilityManager)
+                .environmentObject(overlayStateModel)
         }
-        .defaultSize(width: 1, height: 1)
+        .defaultSize(width: MainApp.minWindowSize.width, height: MainApp.minWindowSize.height)
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
 
         Window("Action", id: MainApp.actionRender) {
-            if $overlayStateModel.isActionConfigured.wrappedValue {
-                ActionView()
-                    .onReceive(accessibilityManager.$elementInfo) { newValue in
-                        overlayStateModel.elementInfo = newValue
-                        updateActionWindow(isInitial: false)
-                    }
-                    .onChange(of: overlayStateModel.actionToolState) { _, _ in
-                        updateActionWindow(isInitial: false)
-                    }
-            } else {
-                // Use a minimal but non-zero size to ensure the window is created
-                Color.clear
-                    .frame(width: 1, height: 1)
-                    .onAppear {
-                        updateActionWindow(isInitial: true)
-                    }
-            }
+            ActionWindowContent()
+                .environmentObject(accessibilityManager)
+                .environmentObject(overlayStateModel)
         }
-        .defaultSize(width: 1, height: 1)
+        .defaultSize(width: MainApp.minWindowSize.width, height: MainApp.minWindowSize.height)
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
+    }
+
+    @MainActor
+    private func initializeMainWindow() async {
+        // Wait for the next run loop iteration to ensure window is created
+        try? await Task.sleep(for: .milliseconds(100))
+
+        configureAppAppearance()
+        setupWindowDelegate()
+
+        // Configure windows after a delay to avoid constraint conflicts
+        try? await Task.sleep(for: .milliseconds(200))
+
+        updateMainWindow(isInitial: true)
+        updateOverlayWindow(isInitial: true)
+        updateActionWindow(isInitial: true)
     }
 
     private func updateMainWindow(isInitial: Bool) {
         let targetFrame = overlayStateModel.elementInfo?.frame
 
         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.mainWindow) ?? false }) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak window] in
-                configureMainWindow(isInitial: isInitial, window: window, targetRect: targetFrame)
-                overlayStateModel.isMainConfigured = true
-            }
+            configureMainWindow(isInitial: isInitial, window: window, targetRect: targetFrame)
+            overlayStateModel.isMainConfigured = true
         }
     }
 
@@ -137,10 +114,8 @@ struct MainApp: App {
         let targetFrame = overlayStateModel.elementInfo?.frame
 
         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.overlayRender) ?? false }) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak window] in
-                configureOverlayWindow(isInitial: isInitial, window: window, targetRect: targetFrame)
-                overlayStateModel.isOverlayConfigured = true
-            }
+            configureOverlayWindow(isInitial: isInitial, window: window, targetRect: targetFrame)
+            overlayStateModel.isOverlayConfigured = true
         }
     }
 
@@ -218,11 +193,10 @@ struct MainApp: App {
             )
             window.setFrame(targetTransform, display: true, animate: false)
             window.alphaValue = 1.0
-            window.orderFrontRegardless() // Force window to front regardless of app activation state
-            // logger.debug("Action window positioned at: \(targetTransform)")
+            window.orderFrontRegardless()
         } else {
             // Hide window off-screen when no target
-            window.setFrame(CGRect(x: -10000, y: -10000, width: 1, height: 1), display: false, animate: false)
+            window.setFrame(CGRect(x: -10000, y: -10000, width: MainApp.minWindowSize.width, height: MainApp.minWindowSize.height), display: false, animate: false)
             window.alphaValue = 0.0
         }
     }
@@ -252,30 +226,37 @@ struct MainApp: App {
         // Allow window to appear on all spaces
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.isMovableByWindowBackground = false
-        window.ignoresMouseEvents = true // Overlay should not capture mouse events
+        window.ignoresMouseEvents = true
 
         if let targetRect = targetRect {
             let targetTransform = CGRect(
                 x: targetRect.origin.x,
                 y: targetRect.origin.y - targetRect.height,
-                width: max(targetRect.width, 1),
-                height: max(targetRect.height, 1)
+                width: max(targetRect.width, MainApp.minWindowSize.width),
+                height: max(targetRect.height, MainApp.minWindowSize.height)
             )
             window.setFrame(targetTransform, display: true, animate: false)
             window.alphaValue = 1.0
-            window.orderFrontRegardless() // Force window to front regardless of app activation state
-            // logger.debug("Overlay window positioned at: \(targetTransform)")
+            window.orderFrontRegardless()
         } else {
             // Hide window off-screen when no target
-            window.setFrame(CGRect(x: -10000, y: -10000, width: 1, height: 1), display: false, animate: false)
+            window.setFrame(CGRect(x: -10000, y: -10000, width: MainApp.minWindowSize.width, height: MainApp.minWindowSize.height), display: false, animate: false)
             window.alphaValue = 0.0
         }
     }
 
     private func configureAppAppearance() {
+        // Open windows sequentially with delays to avoid constraint conflicts on Sequoia
         openWindow(id: MainApp.mainWindow)
-        openWindow(id: MainApp.overlayRender)
-        openWindow(id: MainApp.actionRender)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [openWindow] in
+            openWindow(id: MainApp.overlayRender)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [openWindow] in
+            openWindow(id: MainApp.actionRender)
+        }
+
         NSApp.appearance = NSAppearance(named: .aqua)
     }
 
@@ -288,6 +269,139 @@ struct MainApp: App {
                     mainWindow.delegate = NSApp.delegate as? NSWindowDelegate
                 }
             }
+        }
+    }
+}
+
+// MARK: - Window Content Views
+
+/// Main window content that handles its own updates
+private struct MainWindowContent: View {
+    @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
+    @EnvironmentObject private var overlayStateModel: OverlayStateModel
+
+    var body: some View {
+        Group {
+            if overlayStateModel.isMainConfigured {
+                MainView()
+            } else {
+                // Placeholder with valid minimum size to prevent constraint issues
+                Color.clear
+                    .frame(minWidth: 50, minHeight: 50)
+            }
+        }
+        .onReceive(accessibilityManager.$elementInfo) { newValue in
+            guard overlayStateModel.isMainConfigured else { return }
+            overlayStateModel.elementInfo = newValue
+        }
+    }
+}
+
+/// Overlay window content that handles its own updates
+private struct OverlayWindowContent: View {
+    @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
+    @EnvironmentObject private var overlayStateModel: OverlayStateModel
+
+    var body: some View {
+        Group {
+            if overlayStateModel.isOverlayConfigured {
+                OverlayView()
+            } else {
+                // Placeholder with valid minimum size to prevent constraint issues
+                Color.clear
+                    .frame(minWidth: 50, minHeight: 50)
+            }
+        }
+        .onReceive(accessibilityManager.$elementInfo) { newValue in
+            guard overlayStateModel.isOverlayConfigured else { return }
+            overlayStateModel.elementInfo = newValue
+            if newValue?.frame == nil {
+                overlayStateModel.actionToolState = .idle
+            }
+            updateOverlayWindowPosition()
+        }
+        .onChange(of: overlayStateModel.actionToolState) { _, _ in
+            guard overlayStateModel.isOverlayConfigured else { return }
+            updateOverlayWindowPosition()
+        }
+    }
+
+    private func updateOverlayWindowPosition() {
+        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.overlayRender) ?? false }) else {
+            return
+        }
+
+        if let targetRect = overlayStateModel.elementInfo?.frame {
+            let targetTransform = CGRect(
+                x: targetRect.origin.x,
+                y: targetRect.origin.y - targetRect.height,
+                width: max(targetRect.width, 50),
+                height: max(targetRect.height, 50)
+            )
+            window.setFrame(targetTransform, display: true, animate: false)
+            window.alphaValue = 1.0
+            window.orderFrontRegardless()
+        } else {
+            window.setFrame(CGRect(x: -10000, y: -10000, width: 50, height: 50), display: false, animate: false)
+            window.alphaValue = 0.0
+        }
+    }
+}
+
+/// Action window content that handles its own updates
+private struct ActionWindowContent: View {
+    @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
+    @EnvironmentObject private var overlayStateModel: OverlayStateModel
+
+    var body: some View {
+        Group {
+            if overlayStateModel.isActionConfigured {
+                ActionView()
+            } else {
+                // Placeholder with valid minimum size to prevent constraint issues
+                Color.clear
+                    .frame(minWidth: 50, minHeight: 50)
+            }
+        }
+        .onReceive(accessibilityManager.$elementInfo) { newValue in
+            guard overlayStateModel.isActionConfigured else { return }
+            overlayStateModel.elementInfo = newValue
+            updateActionWindowPosition()
+        }
+        .onChange(of: overlayStateModel.actionToolState) { _, _ in
+            guard overlayStateModel.isActionConfigured else { return }
+            updateActionWindowPosition()
+        }
+    }
+
+    private func updateActionWindowPosition() {
+        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.actionRender) ?? false }) else {
+            return
+        }
+
+        var actionSize: CGSize
+        switch overlayStateModel.actionToolState {
+        case .idle, .loading:
+            actionSize = CGSize(width: 50, height: 50)
+        case .options, .category:
+            actionSize = CGSize(width: 200, height: 100)
+        case .action:
+            actionSize = CGSize(width: 200, height: 200)
+        }
+
+        if let targetRect = overlayStateModel.elementInfo?.frame {
+            let targetTransform = CGRect(
+                x: targetRect.origin.x,
+                y: targetRect.origin.y,
+                width: actionSize.width,
+                height: actionSize.height
+            )
+            window.setFrame(targetTransform, display: true, animate: false)
+            window.alphaValue = 1.0
+            window.orderFrontRegardless()
+        } else {
+            window.setFrame(CGRect(x: -10000, y: -10000, width: 50, height: 50), display: false, animate: false)
+            window.alphaValue = 0.0
         }
     }
 }

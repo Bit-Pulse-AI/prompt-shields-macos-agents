@@ -13,11 +13,11 @@ struct OverlayView: View {
                 FloatingToolView()
                     .background(Color.clear)
             } else {
-                // Minimal placeholder to keep window alive
+                // Minimal placeholder with valid size to prevent constraint issues on Sequoia
                 Color.clear
-                    .frame(width: 1, height: 1)
+                    .frame(minWidth: 50, minHeight: 50)
             }
         }
-        .frame(alignment: .top)
+        .frame(minWidth: 50, minHeight: 50, alignment: .top)
     }
 }

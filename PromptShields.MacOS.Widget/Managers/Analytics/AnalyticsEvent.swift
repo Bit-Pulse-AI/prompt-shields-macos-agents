@@ -323,4 +323,3 @@ struct AnalyticsUserProperties: Sendable {
         return dict
     }
 }
-

@@ -112,7 +112,7 @@ final class AccessibilityManagerImpl: ObservableObject {
             disableMonitoring()
         } else {
             enableMonitoring()
-        }
+            }
     }
 
     /// Pauses element info updates while user is interacting with action menu
@@ -134,7 +134,7 @@ final class AccessibilityManagerImpl: ObservableObject {
         // Unlock the registry to allow normal operation
         AXElementRegistry.shared.unlock()
         logger.info("Resuming monitoring after user interaction")
-    }
+        }
 
     /// Refreshes the permission state without prompting
     func refreshPermissionState() {
@@ -192,8 +192,8 @@ final class AccessibilityManagerImpl: ObservableObject {
                 if self.permissionCheckCount > 30 { // ~15 seconds
                     self.logger.info("Permission polling timeout, waiting for user action")
                     Analytics.trackAsync(.accessibilityPermissionDenied)
-                    return
-                }
+                return
+            }
 
                 try? await Task.sleep(for: .milliseconds(500))
             }
@@ -221,7 +221,7 @@ final class AccessibilityManagerImpl: ObservableObject {
                 }
 
                 try? await Task.sleep(for: .seconds(self.pollInterval))
-            }
+        }
         }
     }
 
@@ -242,7 +242,7 @@ final class AccessibilityManagerImpl: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor [weak self] in
+        Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 if self.monitoringState == .enabled {
                     self.savedMonitoringState = .enabled
@@ -250,7 +250,7 @@ final class AccessibilityManagerImpl: ObservableObject {
                     self.clearElementInfo()
                     self.logger.info("Screen locked, pausing monitoring")
                 }
-            }
+        }
         }
 
         dnc.addObserver(
@@ -264,7 +264,7 @@ final class AccessibilityManagerImpl: ObservableObject {
                     self.monitoringState = .enabled
                     self.savedMonitoringState = nil
                     self.logger.info("Screen unlocked, resuming monitoring")
-                }
+                    }
             }
         }
     }
@@ -317,8 +317,8 @@ final class AccessibilityManagerImpl: ObservableObject {
         } catch {
             logger.error("Error analyzing text field: \(error.localizedDescription)")
             clearElementInfo()
+            }
         }
-    }
 
     /// Gets the focused element with retry logic
     private func getFocusedElementWithRetry() throws -> AXUIElement? {
@@ -374,7 +374,7 @@ final class AccessibilityManagerImpl: ObservableObject {
                 let windowElement = windowRef as! AXUIElement
                 if AXUIElementSafeWrapper.isValidElement(windowElement) {
                     return self.findFocusedInTree(windowElement, depth: 0, maxDepth: 20, visited: [])
-                }
+    }
             }
 
             return nil
@@ -395,7 +395,7 @@ final class AccessibilityManagerImpl: ObservableObject {
 
         // Check if this element has text attributes
         if AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXValueAttribute) != nil ||
-           AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) != nil {
+            AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) != nil {
             // Verify it's the focused element
             if let frontApp = NSWorkspace.shared.frontmostApplication,
                let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier),
@@ -441,7 +441,7 @@ final class AccessibilityManagerImpl: ObservableObject {
                     Analytics.trackAsync(.selectedTextDetected(application: info.applicationName, length: info.text.count))
                 } else {
                     Analytics.trackAsync(.textFieldDetected(application: info.applicationName))
-                }
+            }
             }
             elementInfo = info
         }
@@ -481,7 +481,7 @@ extension ElementInfo {
             text: text,
             applicationName: applicationName,
             applicationBundleId: applicationBundleId,
-            frame: frame,
+                          frame: frame,
             elementIdentifier: elementIdentifier,
             isSelectedText: isSelectedText
         )

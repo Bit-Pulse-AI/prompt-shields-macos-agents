@@ -624,4 +624,3 @@ extension FirebaseTracker {
         }
     }
 }
-

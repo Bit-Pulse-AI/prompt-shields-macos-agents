@@ -235,8 +235,8 @@ struct ControlPanelView: View {
             return "Monitoring paused (screen locked)."
         case .awaitingPermissions:
             return "Waiting for accessibility permissions to be granted."
+            }
         }
-    }
 
     // MARK: - Recent Activity Section
 

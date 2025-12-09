@@ -192,9 +192,9 @@ final class TextFieldDetector: Sendable {
 
         return ElementInfo(
             text: text,
-            applicationName: applicationInfo.name,
-            applicationBundleId: applicationInfo.bundleId,
-            frame: try getElementRect(element),
+                           applicationName: applicationInfo.name,
+                           applicationBundleId: applicationInfo.bundleId,
+                           frame: try getElementRect(element),
             elementIdentifier: elementId,
             isSelectedText: isFromSelection
         )

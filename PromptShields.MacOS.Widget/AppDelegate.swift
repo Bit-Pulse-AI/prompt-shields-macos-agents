@@ -119,7 +119,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Remove title bar if present
         if window.styleMask.contains(.titled) {
             window.styleMask.remove(.titled)
-        }
+    }
 
         // Allow window to appear on all spaces and in full screen
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]

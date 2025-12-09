@@ -71,7 +71,10 @@ struct ActionView: View {
                         .aspectRatio(contentMode: .fit)
                 }
                 .buttonStyle(ButtonStyleWhite())
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(minWidth: 50,
+                       maxWidth: .infinity,
+                       minHeight: 50,
+                       maxHeight: .infinity)
             case .loading:
                 VStack {
                     ProgressView()
@@ -80,6 +83,10 @@ struct ActionView: View {
                 .padding()
                 .background(.white)
                 .cornerRadius(8)
+                .frame(minWidth: 50,
+                       maxWidth: .infinity,
+                       minHeight: 50,
+                       maxHeight: .infinity)
             case .action:
                 VStack {
                     ScrollView {
@@ -98,9 +105,9 @@ struct ActionView: View {
 
                     HStack {
                         Button {
-                            Task {
+                                Task {
                                 await replaceText()
-                            }
+                                }
                         } label: {
                             Text("Agree & Update")
                         }
@@ -116,7 +123,10 @@ struct ActionView: View {
                 .padding()
                 .background(.white)
                 .cornerRadius(8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(minWidth: 50,
+                       maxWidth: .infinity,
+                       minHeight: 50,
+                       maxHeight: .infinity)
             case .options(let category):
                 VStack {
                     HStack(spacing: .zero) {
@@ -153,7 +163,10 @@ struct ActionView: View {
                 .padding()
                 .background(.white)
                 .cornerRadius(8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(minWidth: 50,
+                       maxWidth: .infinity,
+                       minHeight: 50,
+                       maxHeight: .infinity)
 
             case .category:
                 VStack {
@@ -175,8 +188,16 @@ struct ActionView: View {
                 .padding()
                 .background(.white)
                 .cornerRadius(8)
+                .frame(minWidth: 50,
+                       maxWidth: .infinity,
+                       minHeight: 50,
+                       maxHeight: .infinity)
             }
         }
+        .frame(minWidth: 50,
+               maxWidth: .infinity,
+               minHeight: 50,
+               maxHeight: .infinity)
         .onAppear {
             isViewActive = true
         }
@@ -230,7 +251,7 @@ struct ActionView: View {
         defer { isProcessing = false }
 
         let suggestionTypeName = suggestionType.model.suggestionType
-        let suggestionCategory = suggestionType.model.suggestionTypeCategory ?? "unknown"
+        let suggestionCategory = suggestionType.model.suggestionTypeCategory
         let startTime = Date()
 
         // Track suggestion type selected and processing started
@@ -259,7 +280,7 @@ struct ActionView: View {
             logger.warning("LLM processing was cancelled")
             Analytics.trackAsync(.suggestionProcessingFailed(type: suggestionTypeName, error: "cancelled"))
             resetState()
-        } catch {
+                } catch {
             logger.error("Error processing LLM request: \(error)")
             Analytics.trackAsync(.suggestionProcessingFailed(type: suggestionTypeName, error: error.localizedDescription))
             resetState()

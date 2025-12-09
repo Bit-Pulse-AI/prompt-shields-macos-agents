@@ -60,4 +60,3 @@ actor ConsoleAnalyticsTracker: AnalyticsTracker {
         logger.info("📊 Console tracker \(enabled ? "enabled" : "disabled")")
     }
 }
-
