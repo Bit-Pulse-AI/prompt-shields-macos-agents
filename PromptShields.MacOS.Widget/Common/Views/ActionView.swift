@@ -195,6 +195,15 @@ struct ActionView: View {
                     .disabled(isProcessing)
                     .padding(.vertical, 2)
                 }
+                Button {
+                    overlayStateModel.actionToolState = .idle
+                } label: {
+                    Text("Close suggestions")
+                        .font(.caption)
+                }
+                .buttonStyle(ButtonStyleRed())
+                .frame(maxWidth: .infinity)
+                .padding(.top, 12)
             } else {
                 Text("No suggestions enabled")
                     .font(.caption)
@@ -239,6 +248,15 @@ struct ActionView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Button {
+                overlayStateModel.actionToolState = .idle
+            } label: {
+                Text("Close suggestions")
+                    .font(.caption)
+            }
+            .buttonStyle(ButtonStyleRed())
+            .frame(maxWidth: .infinity)
+            .padding(.top, 12)
         }
         .padding(12)
         .frame(minWidth: 150)
