@@ -37,8 +37,11 @@ struct MainApp: App {
     static let actionRender = "action-render"
     static let mainWindow = "main-window"
 
-    // Minimum size that doesn't cause constraint issues on macOS Sequoia
-    private static let minWindowSize = CGSize(width: 50, height: 50)
+    // Proper size for main dashboard window
+    private static let mainWindowSize = CGSize(width: 900, height: 600)
+
+    // Minimum size for utility windows to avoid constraint issues on Sequoia
+    private static let utilityWindowMinSize = CGSize(width: 50, height: 50)
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
@@ -52,10 +55,10 @@ struct MainApp: App {
                 .environmentObject(overlayStateModel)
                 .environmentObject(dashboardStateModel)
                 .task {
-                    await initializeMainWindow()
+                    await initializeWindows()
                 }
         }
-        .defaultSize(width: MainApp.minWindowSize.width, height: MainApp.minWindowSize.height)
+        .defaultSize(width: MainApp.mainWindowSize.width, height: MainApp.mainWindowSize.height)
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .environmentObject(dashboardStateModel)
@@ -66,7 +69,7 @@ struct MainApp: App {
                 .environmentObject(accessibilityManager)
                 .environmentObject(overlayStateModel)
         }
-        .defaultSize(width: MainApp.minWindowSize.width, height: MainApp.minWindowSize.height)
+        .defaultSize(width: MainApp.utilityWindowMinSize.width, height: MainApp.utilityWindowMinSize.height)
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
@@ -76,15 +79,15 @@ struct MainApp: App {
                 .environmentObject(accessibilityManager)
                 .environmentObject(overlayStateModel)
         }
-        .defaultSize(width: MainApp.minWindowSize.width, height: MainApp.minWindowSize.height)
+        .defaultSize(width: MainApp.utilityWindowMinSize.width, height: MainApp.utilityWindowMinSize.height)
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
     }
 
     @MainActor
-    private func initializeMainWindow() async {
-        // Wait for the next run loop iteration to ensure window is created
+    private func initializeWindows() async {
+        // Wait for windows to be created
         try? await Task.sleep(for: .milliseconds(100))
 
         configureAppAppearance()
@@ -93,156 +96,92 @@ struct MainApp: App {
         // Configure windows after a delay to avoid constraint conflicts
         try? await Task.sleep(for: .milliseconds(200))
 
-        updateMainWindow(isInitial: true)
-        updateOverlayWindow(isInitial: true)
-        updateActionWindow(isInitial: true)
-    }
+        configureMainWindow()
+        configureOverlayWindow()
+        configureActionWindow()
 
-    private func updateMainWindow(isInitial: Bool) {
-        let targetFrame = overlayStateModel.elementInfo?.frame
-
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.mainWindow) ?? false }) {
-            configureMainWindow(isInitial: isInitial, window: window, targetRect: targetFrame)
-            overlayStateModel.isMainConfigured = true
-        }
-    }
-
-    private func updateOverlayWindow(isInitial: Bool) {
-        if overlayStateModel.elementInfo?.frame == nil {
-            overlayStateModel.actionToolState = .idle
-        }
-        let targetFrame = overlayStateModel.elementInfo?.frame
-
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.overlayRender) ?? false }) {
-            configureOverlayWindow(isInitial: isInitial, window: window, targetRect: targetFrame)
-            overlayStateModel.isOverlayConfigured = true
-        }
-    }
-
-    private func updateActionWindow(isInitial: Bool) {
-        let targetFrame = overlayStateModel.elementInfo?.frame
-        let actionToolState = overlayStateModel.actionToolState
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.actionRender) ?? false }) {
-            var actionSize: CGSize
-
-            switch actionToolState {
-            case .idle:
-                actionSize = CGSize(width: 50, height: 50)
-            case .loading:
-                actionSize = CGSize(width: 50, height: 50)
-            case .options, .category:
-                actionSize = CGSize(width: 200, height: 100)
-            case .action:
-                actionSize = CGSize(width: 200, height: 200)
-            }
-
-            configureActionWindow(isInitial: isInitial, window: window, targetRect: targetFrame, actionSize: actionSize)
-            overlayStateModel.isActionConfigured = true
-        }
+        // Mark windows as configured
+        overlayStateModel.isMainConfigured = true
+        overlayStateModel.isOverlayConfigured = true
+        overlayStateModel.isActionConfigured = true
     }
 
     @MainActor
-    private func configureMainWindow(isInitial: Bool, window: NSWindow?, targetRect: CGRect?) {
-        guard let window else {
+    private func configureMainWindow() {
+        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.mainWindow) ?? false }) else {
             return
         }
+
         window.isRestorable = false
         window.setFrameAutosaveName("")
         window.isOpaque = true
         window.backgroundColor = .white
-
         window.level = .modalPanel
-        window.hasShadow = false
-
+        window.hasShadow = true
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = false
+
+        // Set proper size for main window
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        let windowSize = MainApp.mainWindowSize
+        let windowOrigin = CGPoint(
+            x: (screenFrame.width - windowSize.width) / 2 + screenFrame.origin.x,
+            y: (screenFrame.height - windowSize.height) / 2 + screenFrame.origin.y
+        )
+        window.setFrame(CGRect(origin: windowOrigin, size: windowSize), display: true)
     }
 
     @MainActor
-    private func configureActionWindow(isInitial: Bool, window: NSWindow?, targetRect: CGRect?, actionSize: CGSize) {
-        guard let window else {
-            logger.warning("Action window is nil")
+    private func configureOverlayWindow() {
+        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.overlayRender) ?? false }) else {
+            logger.warning("Overlay window not found")
             return
         }
 
-        // Basic window configuration
         window.isRestorable = false
         window.setFrameAutosaveName("")
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
 
-        // Remove title bar if present
         if window.styleMask.contains(.titled) {
             window.styleMask.remove(.titled)
         }
 
-        // Set window level - use screenSaver level to ensure visibility above other apps
         window.level = .screenSaver
-
-        // Allow window to appear on all spaces
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        window.isMovableByWindowBackground = false
-
-        if let targetRect = targetRect {
-            let targetTransform = CGRect(
-                x: targetRect.origin.x,
-                y: targetRect.origin.y,
-                width: actionSize.width,
-                height: actionSize.height
-            )
-            window.setFrame(targetTransform, display: true, animate: false)
-            window.alphaValue = 1.0
-            window.orderFrontRegardless()
-        } else {
-            // Hide window off-screen when no target
-            window.setFrame(CGRect(x: -10000, y: -10000, width: MainApp.minWindowSize.width, height: MainApp.minWindowSize.height), display: false, animate: false)
-            window.alphaValue = 0.0
-        }
-    }
-
-    @MainActor
-    private func configureOverlayWindow(isInitial: Bool, window: NSWindow?, targetRect: CGRect?) {
-        guard let window else {
-            logger.warning("Overlay window is nil")
-            return
-        }
-
-        // Basic window configuration
-        window.isRestorable = false
-        window.setFrameAutosaveName("")
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.hasShadow = false
-
-        // Remove title bar if present
-        if window.styleMask.contains(.titled) {
-            window.styleMask.remove(.titled)
-        }
-
-        // Set window level - use screenSaver level to ensure visibility above other apps
-        window.level = .screenSaver
-
-        // Allow window to appear on all spaces
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.isMovableByWindowBackground = false
         window.ignoresMouseEvents = true
 
-        if let targetRect = targetRect {
-            let targetTransform = CGRect(
-                x: targetRect.origin.x,
-                y: targetRect.origin.y - targetRect.height,
-                width: max(targetRect.width, MainApp.minWindowSize.width),
-                height: max(targetRect.height, MainApp.minWindowSize.height)
-            )
-            window.setFrame(targetTransform, display: true, animate: false)
-            window.alphaValue = 1.0
-            window.orderFrontRegardless()
-        } else {
-            // Hide window off-screen when no target
-            window.setFrame(CGRect(x: -10000, y: -10000, width: MainApp.minWindowSize.width, height: MainApp.minWindowSize.height), display: false, animate: false)
-            window.alphaValue = 0.0
+        // Start off-screen
+        window.setFrame(CGRect(x: -10000, y: -10000, width: 50, height: 50), display: false)
+        window.alphaValue = 0.0
+    }
+
+    @MainActor
+    private func configureActionWindow() {
+        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.actionRender) ?? false }) else {
+            logger.warning("Action window not found")
+            return
         }
+
+        window.isRestorable = false
+        window.setFrameAutosaveName("")
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = false
+
+        if window.styleMask.contains(.titled) {
+            window.styleMask.remove(.titled)
+        }
+
+        window.level = .screenSaver
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        window.isMovableByWindowBackground = false
+
+        // Start off-screen
+        window.setFrame(CGRect(x: -10000, y: -10000, width: 50, height: 50), display: false)
+        window.alphaValue = 0.0
     }
 
     private func configureAppAppearance() {
@@ -275,7 +214,7 @@ struct MainApp: App {
 
 // MARK: - Window Content Views
 
-/// Main window content that handles its own updates
+/// Main window content
 private struct MainWindowContent: View {
     @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
@@ -285,9 +224,15 @@ private struct MainWindowContent: View {
             if overlayStateModel.isMainConfigured {
                 MainView()
             } else {
-                // Placeholder with valid minimum size to prevent constraint issues
-                Color.clear
-                    .frame(minWidth: 50, minHeight: 50)
+                // Loading placeholder with proper size
+                VStack {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                    Text("Loading...")
+                        .foregroundColor(.secondary)
+                        .padding(.top, 8)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .onReceive(accessibilityManager.$elementInfo) { newValue in
@@ -297,7 +242,7 @@ private struct MainWindowContent: View {
     }
 }
 
-/// Overlay window content that handles its own updates
+/// Overlay window content
 private struct OverlayWindowContent: View {
     @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
@@ -307,9 +252,8 @@ private struct OverlayWindowContent: View {
             if overlayStateModel.isOverlayConfigured {
                 OverlayView()
             } else {
-                // Placeholder with valid minimum size to prevent constraint issues
                 Color.clear
-                    .frame(minWidth: 50, minHeight: 50)
+                    .frame(width: 50, height: 50)
             }
         }
         .onReceive(accessibilityManager.$elementInfo) { newValue in
@@ -348,7 +292,7 @@ private struct OverlayWindowContent: View {
     }
 }
 
-/// Action window content that handles its own updates
+/// Action window content that scales with its content
 private struct ActionWindowContent: View {
     @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
@@ -357,10 +301,24 @@ private struct ActionWindowContent: View {
         Group {
             if overlayStateModel.isActionConfigured {
                 ActionView()
+                    .fixedSize() // Allow the view to size to its content
+                    .background(
+                        GeometryReader { geometry in
+                            Color.clear
+                                .onChange(of: geometry.size) { _, newSize in
+                                    updateActionWindowSize(to: newSize)
+                                }
+                                .onAppear {
+                                    // Initial size update
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        updateActionWindowSize(to: geometry.size)
+                                    }
+                                }
+                        }
+                    )
             } else {
-                // Placeholder with valid minimum size to prevent constraint issues
                 Color.clear
-                    .frame(minWidth: 50, minHeight: 50)
+                    .frame(width: 50, height: 50)
             }
         }
         .onReceive(accessibilityManager.$elementInfo) { newValue in
@@ -370,7 +328,28 @@ private struct ActionWindowContent: View {
         }
         .onChange(of: overlayStateModel.actionToolState) { _, _ in
             guard overlayStateModel.isActionConfigured else { return }
-            updateActionWindowPosition()
+            // Delay position update to allow content size to settle
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                updateActionWindowPosition()
+            }
+        }
+    }
+
+    private func updateActionWindowSize(to size: CGSize) {
+        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.actionRender) ?? false }),
+              size.width > 0, size.height > 0 else {
+            return
+        }
+
+        // Only resize if we have a valid target position
+        if let targetRect = overlayStateModel.elementInfo?.frame {
+            let newFrame = CGRect(
+                x: targetRect.origin.x,
+                y: targetRect.origin.y,
+                width: max(size.width, 50),
+                height: max(size.height, 50)
+            )
+            window.setFrame(newFrame, display: true, animate: false)
         }
     }
 
@@ -379,22 +358,17 @@ private struct ActionWindowContent: View {
             return
         }
 
-        var actionSize: CGSize
-        switch overlayStateModel.actionToolState {
-        case .idle, .loading:
-            actionSize = CGSize(width: 50, height: 50)
-        case .options, .category:
-            actionSize = CGSize(width: 200, height: 100)
-        case .action:
-            actionSize = CGSize(width: 200, height: 200)
-        }
-
         if let targetRect = overlayStateModel.elementInfo?.frame {
+            // Use the window's current content size or a minimum
+            let currentSize = window.frame.size
+            let width = max(currentSize.width, 50)
+            let height = max(currentSize.height, 50)
+
             let targetTransform = CGRect(
                 x: targetRect.origin.x,
                 y: targetRect.origin.y,
-                width: actionSize.width,
-                height: actionSize.height
+                width: width,
+                height: height
             )
             window.setFrame(targetTransform, display: true, animate: false)
             window.alphaValue = 1.0

@@ -8,16 +8,12 @@ struct OverlayView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            if hasElementInfo {
-                FloatingToolView()
-                    .background(Color.clear)
-            } else {
-                // Minimal placeholder with valid size to prevent constraint issues on Sequoia
-                Color.clear
-                    .frame(minWidth: 50, minHeight: 50)
-            }
+        if hasElementInfo {
+            FloatingToolView()
+        } else {
+            // Minimal placeholder - window will be hidden anyway
+            Color.clear
+                .frame(width: 50, height: 50)
         }
-        .frame(minWidth: 50, minHeight: 50, alignment: .top)
     }
 }

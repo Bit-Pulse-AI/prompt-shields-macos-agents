@@ -60,155 +60,191 @@ struct ActionView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            switch overlayStateModel.actionToolState {
-            case .idle:
-                Button {
-                    overlayStateModel.actionToolState = .category
-                } label: {
-                    Image(ImageResource(name: "logo_mid", bundle: .main))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                }
-                .buttonStyle(ButtonStyleWhite())
-                .frame(minWidth: 50,
-                       maxWidth: .infinity,
-                       minHeight: 50,
-                       maxHeight: .infinity)
-            case .loading:
-                VStack {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                .padding()
-                .background(.white)
-                .cornerRadius(8)
-                .frame(minWidth: 50,
-                       maxWidth: .infinity,
-                       minHeight: 50,
-                       maxHeight: .infinity)
-            case .action:
-                VStack {
-                    ScrollView {
-                        Text(actionText)
-                            .foregroundStyle(.black)
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(nil)
-                    }
+        contentView
+            .onAppear {
+                isViewActive = true
+            }
+            .onDisappear {
+                isViewActive = false
+                isProcessing = false
+                accessibilityManager.resumeFromInteraction()
+            }
+            .onChange(of: overlayStateModel.actionToolState) { oldState, newState in
+                handleStateChange(from: oldState, to: newState)
+            }
+    }
 
-                    if let error = injectionError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .padding(.vertical, 4)
-                    }
+    @ViewBuilder
+    private var contentView: some View {
+        switch overlayStateModel.actionToolState {
+        case .idle:
+            idleView
+        case .loading:
+            loadingView
+        case .action:
+            actionResultView
+        case .options(let category):
+            optionsView(category: category)
+        case .category:
+            categoryView
+        }
+    }
 
-                    HStack {
-                        Button {
-                                Task {
-                                await replaceText()
-                                }
-                        } label: {
-                            Text("Agree & Update")
-                        }
-                        .buttonStyle(ButtonStyleGreen())
-                        Button {
-                            rejectSuggestion()
-                        } label: {
-                            Text("Keep Original")
-                        }
-                        .buttonStyle(ButtonStyleRed())
-                    }
-                }
-                .padding()
-                .background(.white)
-                .cornerRadius(8)
-                .frame(minWidth: 50,
-                       maxWidth: .infinity,
-                       minHeight: 50,
-                       maxHeight: .infinity)
-            case .options(let category):
-                VStack {
-                    HStack(spacing: .zero) {
-                        Button { [weak overlayStateModel] in
-                            overlayStateModel?.actionToolState = .category
-                        } label: {
-                            Image(systemName: "arrow.backward")
-                                .frame(width: 12, height: 12)
-                        }.buttonStyle(.plain)
-                    }
+    // MARK: - State Views
+
+    private var idleView: some View {
+        Button {
+            overlayStateModel.actionToolState = .category
+        } label: {
+            Image(ImageResource(name: "logo_mid", bundle: .main))
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 40, height: 40)
+        }
+        .buttonStyle(ButtonStyleWhite())
+        .frame(width: 50, height: 50)
+        .cornerRadius(8)
+    }
+
+    private var loadingView: some View {
+        VStack {
+            ProgressView()
+                .controlSize(.small)
+        }
+        .frame(width: 60, height: 60)
+        .background(.white)
+        .cornerRadius(8)
+    }
+
+    private var actionResultView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView {
+                Text(actionText)
+                    .foregroundStyle(.black)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 150)
 
-                    VStack(alignment: .leading) {
-                        if suggestionTypes.count > 0 {
-                            ForEach(suggestionTypes.filter { $0.model.suggestionTypeCategory == category }, id: \.model.suggestionType) { suggestionType in
-                                Button { [weak overlayStateModel] in
-                                    guard !isProcessing else { return }
-                                    isProcessing = true
-                                    overlayStateModel?.actionToolState = .loading
+            if let error = injectionError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
 
-                                    Task {
-                                        await processSuggestion(suggestionType: suggestionType)
-                                    }
-                                } label: {
-                                    Text(suggestionType.model.suggestionName)
-                                }
-                                .disabled(isProcessing)
-                            }
-                        } else {
-                            Text("No suggestions enabled")
-                        }
+            HStack(spacing: 8) {
+                Button {
+                    Task {
+                        await replaceText()
                     }
+                } label: {
+                    Text("Agree & Update")
+                        .font(.caption)
                 }
-                .padding()
-                .background(.white)
-                .cornerRadius(8)
-                .frame(minWidth: 50,
-                       maxWidth: .infinity,
-                       minHeight: 50,
-                       maxHeight: .infinity)
+                .buttonStyle(ButtonStyleGreen())
 
-            case .category:
-                VStack {
-                    VStack(alignment: .leading) {
-                        if suggestionCategories.count > 0 {
-                            ForEach(suggestionCategories, id: \.self) { suggestionCategoryName in
-                                Button { [weak overlayStateModel] in
-                                    overlayStateModel?.actionToolState = .options(suggestionCategoryName)
-                                } label: {
-                                    Text(suggestionCategoryName)
-                                }
-                                .disabled(isProcessing)
-                            }
-                        } else {
-                            Text("No suggestions enabled")
-                        }
-                    }
+                Button {
+                    rejectSuggestion()
+                } label: {
+                    Text("Keep Original")
+                        .font(.caption)
                 }
-                .padding()
-                .background(.white)
-                .cornerRadius(8)
-                .frame(minWidth: 50,
-                       maxWidth: .infinity,
-                       minHeight: 50,
-                       maxHeight: .infinity)
+                .buttonStyle(ButtonStyleRed())
             }
         }
-        .frame(minWidth: 50,
-               maxWidth: .infinity,
-               minHeight: 50,
-               maxHeight: .infinity)
-        .onAppear {
-            isViewActive = true
+        .padding(12)
+        .frame(width: 250)
+        .background(.white)
+        .cornerRadius(8)
+    }
+
+    private func optionsView(category: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Button { [weak overlayStateModel] in
+                    overlayStateModel?.actionToolState = .category
+                } label: {
+                    Image(systemName: "arrow.backward")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+
+                Text(category)
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.bottom, 4)
+
+            if suggestionTypes.count > 0 {
+                ForEach(suggestionTypes.filter { $0.model.suggestionTypeCategory == category }, id: \.model.suggestionType) { suggestionType in
+                    Button { [weak overlayStateModel] in
+                        guard !isProcessing else { return }
+                        isProcessing = true
+                        overlayStateModel?.actionToolState = .loading
+
+                        Task {
+                            await processSuggestion(suggestionType: suggestionType)
+                        }
+                    } label: {
+                        Text(suggestionType.model.suggestionName)
+                            .font(.callout)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isProcessing)
+                    .padding(.vertical, 2)
+                }
+            } else {
+                Text("No suggestions enabled")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
-        .onDisappear {
-            isViewActive = false
-            isProcessing = false
-            accessibilityManager.resumeFromInteraction()
+        .padding(12)
+        .frame(minWidth: 150)
+        .frame(minHeight: 50)
+        .background(.white)
+        .cornerRadius(8)
+    }
+
+    private var categoryView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Categories")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 4)
+
+            if suggestionCategories.count > 0 {
+                ForEach(suggestionCategories, id: \.self) { suggestionCategoryName in
+                    Button { [weak overlayStateModel] in
+                        overlayStateModel?.actionToolState = .options(suggestionCategoryName)
+                    } label: {
+                        HStack {
+                            Text(suggestionCategoryName)
+                                .font(.callout)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isProcessing)
+                    .padding(.vertical, 2)
+                }
+            } else {
+                Text("No suggestions enabled")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
-        .onChange(of: overlayStateModel.actionToolState) { oldState, newState in
-            handleStateChange(from: oldState, to: newState)
-        }
+        .padding(12)
+        .frame(minWidth: 150)
+        .frame(minHeight: 50)
+        .background(.white)
+        .cornerRadius(8)
     }
 
     // MARK: - State Management
@@ -280,7 +316,7 @@ struct ActionView: View {
             logger.warning("LLM processing was cancelled")
             Analytics.trackAsync(.suggestionProcessingFailed(type: suggestionTypeName, error: "cancelled"))
             resetState()
-                } catch {
+        } catch {
             logger.error("Error processing LLM request: \(error)")
             Analytics.trackAsync(.suggestionProcessingFailed(type: suggestionTypeName, error: error.localizedDescription))
             resetState()

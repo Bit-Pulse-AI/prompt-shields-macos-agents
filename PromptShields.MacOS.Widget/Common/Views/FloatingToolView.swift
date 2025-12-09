@@ -3,9 +3,6 @@ import SwiftUI
 struct FloatingToolView: View {
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
 
-    // Minimum size to prevent constraint issues on macOS Sequoia
-    private static let minSize: CGFloat = 50
-
     private var frame: CGRect? {
         overlayStateModel.elementInfo?.frame
     }
@@ -16,22 +13,17 @@ struct FloatingToolView: View {
     }
 
     var body: some View {
-        ZStack {
-            if hasValidFrame {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.black.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.white, lineWidth: 1)
-                    )
-            } else {
-                // Transparent placeholder to maintain valid size
-                Color.clear
-            }
+        if hasValidFrame, let frame = frame {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.black.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.white, lineWidth: 1)
+                )
+                .frame(width: frame.width, height: frame.height)
+        } else {
+            Color.clear
+                .frame(width: 50, height: 50)
         }
-        .frame(
-            width: max(frame?.width ?? FloatingToolView.minSize, FloatingToolView.minSize),
-            height: max(frame?.height ?? FloatingToolView.minSize, FloatingToolView.minSize)
-        )
     }
 }
