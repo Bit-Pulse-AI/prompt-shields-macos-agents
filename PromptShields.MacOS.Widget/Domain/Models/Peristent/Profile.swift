@@ -7,6 +7,8 @@ struct Profile: Domain {
 
     struct ProfileModel: Model {
         let uuid: UID
+        var acceptedTerms: String?
+        var acceptedTermsDate: Date?
         let defaultTenantId: UID
         let defaultOrganisationId: UID
         let defaultSubscriptionId: UID
@@ -39,12 +41,15 @@ struct Profile: Domain {
         persistent.defaultSuggestionGroupId = model.defaultSuggestionGroupId.encrypt
         persistent.defaultTeamId = model.defaultTeamId.encrypt
         persistent.defaultProjectId = model.defaultProjectId.encrypt
+        persistent.acceptedTerms = model.acceptedTerms?.encrypt
+        persistent.acceptedTermsDate = model.acceptedTermsDate
         return persistent
     }
 
     static func fromPersistentModel(_ persistent: ProfilePersistentModel) -> Profile {
         let model = ProfileModel(
-            uuid: persistent.uuid.decrypt,
+            uuid: persistent.uuid.decrypt, acceptedTerms: persistent.acceptedTerms,
+            acceptedTermsDate: persistent.acceptedTermsDate,
             defaultTenantId: persistent.defaultTenantId.decrypt,
             defaultOrganisationId: persistent.defaultOrganisationId.decrypt,
             defaultSubscriptionId: persistent.defaultSubscriptionId.decrypt,
@@ -67,6 +72,8 @@ struct ProfileAPIResponse: APIResponse {
     let defaultSuggestionGroupId: UID
     let defaultTeamId: UID
     let defaultProjectId: UID
+    let acceptedTerms: String?
+    let acceptedTermsDate: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -76,11 +83,20 @@ struct ProfileAPIResponse: APIResponse {
         case defaultSuggestionGroupId = "default_suggestion_group_id"
         case defaultTeamId = "default_team_id"
         case defaultProjectId = "default_project_id"
+        case acceptedTerms = "accepted_terms"
+        case acceptedTermsDate = "accepted_date"
     }
 
     func toDomain() -> Profile {
+        let dateFormatter = ISO8601DateFormatter()
+        var acceptedTermsDate: Date?
+        if let safe_acceptedTermsDate = self.acceptedTermsDate {
+            acceptedTermsDate = dateFormatter.date(from: safe_acceptedTermsDate)
+        }
         let model = Profile.ProfileModel(
             uuid: id,
+            acceptedTerms: acceptedTerms,
+            acceptedTermsDate: acceptedTermsDate,
             defaultTenantId: defaultTenantId,
             defaultOrganisationId: defaultOrganisationId,
             defaultSubscriptionId: defaultSubscriptionId,
@@ -106,6 +122,8 @@ final class ProfilePersistentModel: UpdatablePersistentModel {
     var defaultSuggestionGroupId: UID = ""
     var defaultTeamId: UID = ""
     var defaultProjectId: UID = ""
+    var acceptedTerms: String?
+    var acceptedTermsDate: Date?
 
     init() {}
 
@@ -118,5 +136,7 @@ final class ProfilePersistentModel: UpdatablePersistentModel {
         self.defaultSuggestionGroupId = other.defaultSuggestionGroupId
         self.defaultTeamId = other.defaultTeamId
         self.defaultProjectId = other.defaultProjectId
+        self.acceptedTerms = other.acceptedTerms
+        self.acceptedTermsDate = other.acceptedTermsDate
     }
 }

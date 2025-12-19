@@ -1,6 +1,7 @@
 import Foundation
 protocol ProfileNetworkService: NetworkService {
     func getProfile() async throws -> ProfileAPIResponse
+    func acceptTermsAndConditions() async throws -> ProfileAPIResponse
 }
 
 struct ProfileNetworkServiceImpl: ProfileNetworkService {
@@ -15,6 +16,15 @@ struct ProfileNetworkServiceImpl: ProfileNetworkService {
         let request = try RequestBuilder().request(
             url: "\(baseURL)/\(path)/",
             method: .GET,
+            headers: keychainManager.applicationJSONAuthorizedHeader
+        )
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
+    }
+
+    func acceptTermsAndConditions() async throws -> ProfileAPIResponse {
+        let request = try RequestBuilder().request(
+            url: "\(baseURL)/\(path)/accept_terms",
+            method: .POST,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
         return try await networkManager.performWithAutoRefresh(request: request).decode()

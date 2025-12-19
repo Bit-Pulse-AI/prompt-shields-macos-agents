@@ -343,13 +343,14 @@ private struct ActionWindowContent: View {
 
         // Only resize if we have a valid target position
         if let targetRect = overlayStateModel.elementInfo?.frame {
-            let newFrame = CGRect(
+            let proposedFrame = CGRect(
                 x: targetRect.origin.x,
                 y: targetRect.origin.y,
                 width: max(size.width, 50),
                 height: max(size.height, 50)
             )
-            window.setFrame(newFrame, display: true, animate: false)
+            let adjustedFrame = adjustFrameToVisibleScreen(proposedFrame)
+            window.setFrame(adjustedFrame, display: true, animate: false)
         }
     }
 
@@ -364,18 +365,69 @@ private struct ActionWindowContent: View {
             let width = max(currentSize.width, 50)
             let height = max(currentSize.height, 50)
 
-            let targetTransform = CGRect(
+            let proposedFrame = CGRect(
                 x: targetRect.origin.x,
                 y: targetRect.origin.y,
                 width: width,
                 height: height
             )
-            window.setFrame(targetTransform, display: true, animate: false)
+            let adjustedFrame = adjustFrameToVisibleScreen(proposedFrame)
+            window.setFrame(adjustedFrame, display: true, animate: false)
             window.alphaValue = 1.0
             window.orderFrontRegardless()
         } else {
             window.setFrame(CGRect(x: -10000, y: -10000, width: 50, height: 50), display: false, animate: false)
             window.alphaValue = 0.0
         }
+    }
+
+    /// Adjusts a proposed frame to ensure it stays within the visible screen bounds
+    /// - Parameter frame: The proposed window frame
+    /// - Returns: An adjusted frame that fits within the visible screen area
+    private func adjustFrameToVisibleScreen(_ frame: CGRect) -> CGRect {
+        // Get the screen containing the proposed frame, or fall back to main screen
+        let screen = NSScreen.screens.first(where: { $0.frame.intersects(frame) }) ?? NSScreen.main
+        guard let visibleFrame = screen?.visibleFrame else {
+            return frame
+        }
+
+        var adjustedFrame = frame
+        let padding: CGFloat = 10 // Keep some padding from screen edges
+
+        // Adjust horizontal position
+        // If window extends beyond right edge, move it left
+        if adjustedFrame.maxX > visibleFrame.maxX - padding {
+            adjustedFrame.origin.x = visibleFrame.maxX - adjustedFrame.width - padding
+        }
+        // If window extends beyond left edge, move it right
+        if adjustedFrame.minX < visibleFrame.minX + padding {
+            adjustedFrame.origin.x = visibleFrame.minX + padding
+        }
+
+        // Adjust vertical position
+        // If window extends beyond top edge, move it down
+        if adjustedFrame.maxY > visibleFrame.maxY - padding {
+            adjustedFrame.origin.y = visibleFrame.maxY - adjustedFrame.height - padding
+        }
+        // If window extends beyond bottom edge, move it up
+        if adjustedFrame.minY < visibleFrame.minY + padding {
+            adjustedFrame.origin.y = visibleFrame.minY + padding
+        }
+
+        // Ensure minimum position values are valid
+        adjustedFrame.origin.x = max(adjustedFrame.origin.x, visibleFrame.minX + padding)
+        adjustedFrame.origin.y = max(adjustedFrame.origin.y, visibleFrame.minY + padding)
+
+        // If the window is larger than the screen, constrain it
+        if adjustedFrame.width > visibleFrame.width - (padding * 2) {
+            adjustedFrame.size.width = visibleFrame.width - (padding * 2)
+            adjustedFrame.origin.x = visibleFrame.minX + padding
+        }
+        if adjustedFrame.height > visibleFrame.height - (padding * 2) {
+            adjustedFrame.size.height = visibleFrame.height - (padding * 2)
+            adjustedFrame.origin.y = visibleFrame.minY + padding
+        }
+
+        return adjustedFrame
     }
 }

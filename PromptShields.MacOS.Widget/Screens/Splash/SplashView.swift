@@ -4,6 +4,7 @@ import os
 struct SplashView: View {
     @EnvironmentObject var mainState: MainStateModel
     @Environment(\.userDomainService) private var userDomainService
+    @Environment(\.profileDomainService) private var profileDomainService
     private let loginButtonStyle = AccountButtonStyle(foregroundColor: Color.primary,
                                                         backgroundColor: .white,
                                                         borderColor: .border,
@@ -32,8 +33,14 @@ struct SplashView: View {
     func checkAuth() {
         Task { @MainActor in
             do {
-                _ = try await userDomainService.currentUser
-                mainState.authState = .loggedIn
+                let user = try await userDomainService.currentUser(refresh: true)
+                let profile = try await profileDomainService.currentProfile(refresh: true)
+                let shaId = try user.model.uuid.sha512
+                if profile.model.acceptedTerms == shaId {
+                    mainState.authState = .loggedIn
+                } else {
+                    mainState.authState = .acceptTerms
+                }
             } catch {
                 mainState.authState = .loggedOut(error)
             }

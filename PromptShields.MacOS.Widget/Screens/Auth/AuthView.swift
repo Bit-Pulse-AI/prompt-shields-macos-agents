@@ -8,6 +8,7 @@ final class AuthStateModel: ObservableObject {
 struct AuthView: View {
     @EnvironmentObject private var mainState: MainStateModel
     @Environment(\.userDomainService) private var userDomainService
+    @Environment(\.profileDomainService) private var profileDomainService
 
     private let loginButtonStyle = AccountButtonStyle(foregroundColor: Color.primary,
                                                       backgroundColor: .white,
@@ -49,9 +50,18 @@ struct AuthView: View {
 
     func authenticateRegisterUser() async {
         do {
-            try await userDomainService.login()
-            await MainActor.run {
-                mainState.authState = .loggedIn
+            let user = try await userDomainService.login()
+            let profile = try await profileDomainService.currentProfile(refresh: true)
+
+            let shaId = try user.model.uuid.sha512
+            if profile.model.acceptedTerms == shaId {
+                await MainActor.run {
+                    mainState.authState = .loggedIn
+                }
+            } else {
+                await MainActor.run {
+                    mainState.authState = .acceptTerms
+                }
             }
         } catch {
             logger.error("Error encountered \(error)")

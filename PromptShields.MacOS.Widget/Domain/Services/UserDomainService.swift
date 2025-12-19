@@ -19,7 +19,7 @@ protocol UserDomainService: Sendable {
     var currentUser: User { get async throws }
 
     func currentUser(refresh: Bool) async throws -> User
-    func login() async throws
+    func login() async throws -> User
     func logout() async throws
 }
 
@@ -70,10 +70,11 @@ struct UserDomainServiceImpl: UserDomainService {
     }
 
     @MainActor
-    func login() async throws {
+    func login() async throws -> User {
         do {
             let existingUser = try await currentUser
             logger.log("Existing user: user with email '\(existingUser.model.email)' present")
+            return existingUser
         } catch {
             do {
                 logger.log("Existing user or user credentials missing ...")
@@ -86,10 +87,12 @@ struct UserDomainServiceImpl: UserDomainService {
                 logger.log("Create new encryption key")
                 try createNewEncryptionKey()
                 logger.log("Create new local user")
-                try await createNewLocalUser()
+                let user = try await createNewLocalUser()
                 logger.log("Created local user ✅")
+                return user
             } catch {
                 logger.error("Sequence failed \(error)")
+                throw UserNetworkServiceError.missingUserInfo
             }
         }
     }
@@ -106,7 +109,7 @@ struct UserDomainServiceImpl: UserDomainService {
         return result.toDomain(profileId: profile.model.uuid, preferenceId: preferences.model.uuid)
     }
 
-    private func deleteAll() async throws {
+    func deleteAll() async throws {
         try await deleteLocalData()
         try deleteCredentials()
         try await deleteEncryptionKey()
@@ -124,13 +127,14 @@ struct UserDomainServiceImpl: UserDomainService {
         try keychainManager.deleteEncryptionKey()
     }
 
-    private func createNewLocalUser() async throws {
+    private func createNewLocalUser() async throws -> User {
         let credentials = try keychainManager.loadUserCredentials()
         let currentProfile = try await profileDomainService.getProfile()
         let currentPreferences = try await preferenceDomainService.getPreferences()
         let currentUser: User = credentials.toDomain(profileId: currentProfile.model.uuid, preferenceId: currentPreferences.model.uuid)
         let persistenceManager = PersistenceManagerImpl.shared
         try await persistenceManager.insert(domain: currentUser)
+        return currentUser
     }
 
     private func createNewEncryptionKey() throws {

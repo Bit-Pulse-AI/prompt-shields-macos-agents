@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - API Configuration
 
-let baseURL = "https://apim-3n5enx234xc3g.azure-api.net/fjords/api/v1"
+ let baseURL = "https://apim-3n5enx234xc3g.azure-api.net/fjords/api/v1"
 // let baseURL = "http://localhost:8000/api/v1"
 
 // MARK: - Web Billing Configuration
@@ -13,22 +13,13 @@ let webBillingCancelURL = "\(webBillingScheme)://cancel"
 
 // MARK: - Analytics Configuration
 
-/// Google Analytics 4 Measurement ID (format: G-XXXXXXXXXX)
-let googleMeasurementId = ""
-/// Google Analytics 4 API Secret
-let googleApiSecret = ""
-
-/// PostHog API Key (from PostHog Project Settings)
-let postHogApiKey = ""
-/// PostHog Host URL (default: https://app.posthog.com or your self-hosted instance)
-let postHogHost = "https://app.posthog.com"
-
-/// Firebase Web API Key (for REST API access)
-let firebaseApiKey = ""
-/// Firebase Project ID
-let firebaseProjectId = ""
-/// Firebase App ID
-let firebaseAppId = ""
+let googleMeasurementId = "G-MX58JJXZT6"
+let googleApiSecret = "ukE_xXW-TyKrHO5nWl1SCA"
+let postHogApiKey = "phc_W36fXFCOap60fyEAoj4RqTIBpwg1toe9O5XCJvxLIRn"
+let postHogHost = "https://eu.i.posthog.com"
+let firebaseApiKey = "AIzaSyCN72aGg--8La6Oq43slhg-A5DBWSFHTfA"
+let firebaseProjectId = "promptshields---dev"
+let firebaseAppId = "1:173256827283:web:c69c632f462435513b8866"
 
 /// Whether analytics is enabled by default
 let analyticsEnabledByDefault = true

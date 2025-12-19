@@ -66,6 +66,17 @@ extension String {
         )
     }
 
+    static func stringFromBundleFile(
+        named name: String,
+        extension ext: String = "txt",
+        encoding: String.Encoding = .utf8
+    ) -> String {
+        guard let url = Bundle.main.url(forResource: name, withExtension: ext) else {
+            return "n/a"
+        }
+        return (try? String(contentsOf: url, encoding: encoding)) ?? "n/a"
+    }
+
     // MARK: - URL Conversion
 
     /// Converts the string to a URL

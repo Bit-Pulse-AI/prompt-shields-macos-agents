@@ -22,6 +22,7 @@ protocol ProfileDomainService: Sendable {
     var currentProfile: Profile { get async throws }
     func getProfile() async throws -> Profile
     func currentProfile(refresh: Bool) async throws -> Profile
+    func acceptTermsAndConditions() async throws -> Profile
 }
 
 struct ProfileDomainServiceImpl: ProfileDomainService {
@@ -66,5 +67,15 @@ struct ProfileDomainServiceImpl: ProfileDomainService {
     func getProfile() async throws -> Profile {
         let result = try await profileNetworkService.getProfile()
         return result.toDomain()
+    }
+
+    func acceptTermsAndConditions() async throws -> Profile {
+        let result = try await profileNetworkService.acceptTermsAndConditions()
+        let profile = result.toDomain()
+        var updatedProfile = try await currentProfile(refresh: true)
+        updatedProfile.model.acceptedTerms = profile.model.acceptedTerms
+        updatedProfile.model.acceptedTermsDate = profile.model.acceptedTermsDate
+        try await persistenceManager.update(domain: updatedProfile)
+        return updatedProfile
     }
 }

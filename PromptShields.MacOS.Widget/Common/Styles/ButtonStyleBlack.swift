@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ButtonStyleBlack: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled: Bool
+
     func makeBody(configuration: Configuration) -> some View {
         HStack {
             configuration.label
@@ -13,6 +15,6 @@ struct ButtonStyleBlack: ButtonStyle {
         .background(.black)
         .cornerRadius(8)
         .scaleEffect(configuration.isPressed ? 0.99 : 1.0)
-        .opacity(configuration.isPressed ? 0.8 : 1.0)
+        .opacity(configuration.isPressed || !isEnabled ? 0.8 : 1.0)
     }
 }
