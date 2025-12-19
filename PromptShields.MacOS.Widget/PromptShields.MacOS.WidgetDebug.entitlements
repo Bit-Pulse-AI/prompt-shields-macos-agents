@@ -6,8 +6,6 @@
 	<array>
 		<string>webcredentials:dev-oo0k5tvqxyn7i84t.us.auth0.com</string>
 	</array>
-	<key>com.apple.security.network.client</key>
-	<true/>
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)ai.bit-pulse.PromptShields</string>
