@@ -1,0 +1,6 @@
+.swiftlint.yml
+/PromptShields.MacOS.Widget.xcodeproj/project.xcworkspace
+/PromptShields.MacOS.Widget.xcodeproj/xcshareddata
+/PromptShields.MacOS.Widget.xcodeproj/xcuserdata
+/PromptShields.MacOS.Widget/Resources/Dev
+/PromptShields.MacOS.Widget/Resources/Prod
