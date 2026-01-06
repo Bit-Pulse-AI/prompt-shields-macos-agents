@@ -123,7 +123,7 @@ struct KeychainManagerImpl: KeychainManager, @unchecked Sendable {
     // MARK: - Initialization
 
     init(
-        service: String = "ai.promptshields.widget.service",
+        service: String = keyChainManagerServiceName,
         accessGroup: String? = nil
     ) {
         self.service = service

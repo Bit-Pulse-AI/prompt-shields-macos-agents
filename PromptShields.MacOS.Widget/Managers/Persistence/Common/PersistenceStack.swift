@@ -10,7 +10,8 @@ final class PersistenceStack: Sendable {
             guard let url = FileManager.default
                 .urls(for: .applicationSupportDirectory, in: .userDomainMask)
                 .first?
-                .appendingPathComponent("PromptshieldsDB.sqlite") else {
+                .appendingPathComponent("Promptshields", isDirectory: true)
+                .appendingPathComponent(swiftDataDB) else {
                 fatalError("failed sqlite")
             }
             let modelConfiguration = ModelConfiguration(
