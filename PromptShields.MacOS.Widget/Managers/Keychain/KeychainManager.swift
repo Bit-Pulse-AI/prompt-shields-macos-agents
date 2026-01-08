@@ -8,8 +8,8 @@ import os
 
 /// Keys used for storing data in the keychain
 enum KeychainManagerKey: String, Sendable {
-    case userCredentials
-    case encryptionToken
+    case userCredentials = "App credentials"
+    case encryptionToken = "Internal Token"
 }
 
 // MARK: - Keychain Manager Errors
@@ -110,9 +110,6 @@ struct KeychainManagerImpl: KeychainManager, @unchecked Sendable {
     /// Service identifier for keychain items
     private let service: String
 
-    /// Access group for keychain sharing (optional)
-    private let accessGroup: String?
-
     /// Logger for keychain operations
     private let logger: Logger
 
@@ -123,11 +120,9 @@ struct KeychainManagerImpl: KeychainManager, @unchecked Sendable {
     // MARK: - Initialization
 
     init(
-        service: String = keyChainManagerServiceName,
-        accessGroup: String? = nil
+        service: String = keyChainManagerServiceName
     ) {
         self.service = service
-        self.accessGroup = accessGroup
         self.logger = Logger(
             subsystem: Bundle.main.bundleIdentifier ?? "ai.promptshields.widget",
             category: "KeychainManager"
@@ -212,20 +207,16 @@ struct KeychainManagerImpl: KeychainManager, @unchecked Sendable {
     // MARK: - Private Methods
 
     private func saveSecureData(key: KeychainManagerKey, secureData: Data, override: Bool) throws {
-        let serviceHashed = try service.sha512
-        let accountHashed = try key.rawValue.sha512
+        let service = service
+        let account = key.rawValue
 
-        var query: [CFString: Any] = [
+        let query: [CFString: Any] = [
             kSecValueData: secureData,
             kSecClass: kSecClassGenericPassword,
-            kSecAttrService: serviceHashed,
-            kSecAttrAccount: accountHashed,
+            kSecAttrService: service,
+            kSecAttrAccount: account,
             kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
-
-        if let accessGroup = accessGroup {
-            query[kSecAttrAccessGroup] = accessGroup
-        }
 
         let saveStatus = SecItemAdd(query as CFDictionary, nil)
 
@@ -237,8 +228,8 @@ struct KeychainManagerImpl: KeychainManager, @unchecked Sendable {
             // Update existing item
             let searchQuery: [CFString: Any] = [
                 kSecClass: kSecClassGenericPassword,
-                kSecAttrService: serviceHashed,
-                kSecAttrAccount: accountHashed
+                kSecAttrService: service,
+                kSecAttrAccount: account
             ]
 
             let updateQuery: [CFString: Any] = [
@@ -264,8 +255,8 @@ struct KeychainManagerImpl: KeychainManager, @unchecked Sendable {
     }
 
     private func deleteSecureData(key: KeychainManagerKey) throws {
-        let serviceHashed = try service.sha512
-        let accountHashed = try key.rawValue.sha512
+        let serviceHashed = service
+        let accountHashed = key.rawValue
 
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
@@ -284,8 +275,8 @@ struct KeychainManagerImpl: KeychainManager, @unchecked Sendable {
     }
 
     private func loadSecureData(key: KeychainManagerKey) throws -> Data {
-        let serviceHashed = try service.sha512
-        let accountHashed = try key.rawValue.sha512
+        let serviceHashed = service
+        let accountHashed = key.rawValue
 
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,

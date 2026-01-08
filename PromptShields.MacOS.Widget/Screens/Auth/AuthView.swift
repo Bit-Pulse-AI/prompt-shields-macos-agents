@@ -22,10 +22,10 @@ struct AuthView: View {
 
     var body: some View {
         VStack(alignment: .center, spacing: 8) {
-            Image(ImageResource(name: "logo", bundle: .main))
+            Image(ImageResource(name: "large_logo", bundle: .main))
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(height: 120)
+                .frame(height: 100)
             if mainState.isBusy {
                 ProgressView()
             } else {

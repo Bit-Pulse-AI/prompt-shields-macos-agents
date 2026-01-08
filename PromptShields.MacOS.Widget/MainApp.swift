@@ -116,7 +116,7 @@ struct MainApp: App {
         window.setFrameAutosaveName("")
         window.isOpaque = true
         window.backgroundColor = .white
-        window.level = .modalPanel
+        window.level = .normal
         window.hasShadow = true
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = false
