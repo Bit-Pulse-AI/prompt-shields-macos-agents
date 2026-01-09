@@ -27,14 +27,7 @@ struct SettingsView: View {
             if !isLoading, let preferences = preferences {
                 ScrollView {
                     VStack(spacing: 20) {
-                        // Suggestion Types
                         suggestionTypesSection(preferences)
-
-                        // Application Blocking
-//                        applicationBlockingSection(preferences)
-
-                        // UI Settings
-//                        uiSettingsSection(preferences)
                     }
                     .padding()
                 }
@@ -62,19 +55,17 @@ struct SettingsView: View {
                                isOn:
                                 Binding(
                                     get: {
-                                        guard let suggestionTypes = preferences
+                                        let suggestionTypes = preferences
                                             .model
-                                            .enabledSuggestionTypes else {
-                                            return true
-                                        }
+                                            .enabledSuggestionTypes
                                         return suggestionTypes.contains(suggestionType.model.suggestionType)
                                     },
                                     set: { newValue in
                                         var newTypes = preferences.model.enabledSuggestionTypes
                                         if newValue {
-                                            newTypes?.append(suggestionType.model.suggestionType)
+                                            newTypes.append(suggestionType.model.suggestionType)
                                         } else {
-                                            newTypes?.removeAll(where: {
+                                            newTypes.removeAll(where: {
                                                 $0 == suggestionType.model.suggestionType
                                             })
                                         }
@@ -101,7 +92,7 @@ struct SettingsView: View {
     private func loadData() async {
         isLoading = true
         do {
-            let preferences = try await userPreferencesDomainService.currentUserPreferences
+            let preferences = try await userPreferencesDomainService.currentUserPreferences()
             self.preferences = preferences
             try await suggestionDomainService.fetchSuggestionTypes()
         } catch {

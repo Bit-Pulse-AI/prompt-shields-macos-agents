@@ -16,10 +16,8 @@ struct UserPreferencesDomainServiceKey: EnvironmentKey {
 }
 
 protocol UserPreferencesDomainService: Sendable {
-    var currentUserPreferences: UserPreferences { get async throws }
-
-    func getPreferences() async throws -> UserPreferences
-    func currentUserPreferences(refresh: Bool) async throws -> UserPreferences
+    func newPreferences() async throws -> UserPreferences
+    func currentUserPreferences() async throws -> UserPreferences
 }
 
 struct UserPreferencesDomainServiceImpl: UserPreferencesDomainService {
@@ -35,33 +33,20 @@ struct UserPreferencesDomainServiceImpl: UserPreferencesDomainService {
         category: String(describing: UserDomainServiceImpl.self)
     )
 
-    var currentUserPreferences: UserPreferences {
-        get async throws {
-            try await currentUserPreferences(refresh: false)
-        }
-    }
-
-    func currentUserPreferences(refresh: Bool) async throws -> UserPreferences {
-        if refresh {
+    func currentUserPreferences() async throws -> UserPreferences {
+        let currentUser = try await userDomainService.currentUser
+        let preferenceId = currentUser.model.preferenceId
+        do {
+            return try await persistenceManager.fetchItem {
+                $0.model.uuid == preferenceId
+            }
+        } catch PersistenceManagerError.missingModel {
             return try await persistenceManager
                 .syncLocalWithRemote(
-                    domain: try await getPreferences()
+                    domain: try await newPreferences()
                 )
-        } else {
-            let currentUser = try await userDomainService.currentUser
-            let preferenceId = currentUser.model.preferenceId
-            do {
-                return try await persistenceManager.fetchItem {
-                    $0.model.uuid == preferenceId
-                }
-            } catch PersistenceManagerError.missingModel {
-                return try await persistenceManager
-                    .syncLocalWithRemote(
-                        domain: try await getPreferences()
-                    )
-            } catch {
-                throw error
-            }
+        } catch {
+            throw error
         }
     }
 
@@ -69,12 +54,9 @@ struct UserPreferencesDomainServiceImpl: UserPreferencesDomainService {
         try await persistenceManager.update(domain: preferences)
     }
 
-    func getPreferences() async throws -> UserPreferences {
+    func newPreferences() async throws -> UserPreferences {
         let preference = UserPreferences(model: .init(uuid: UUID().uuidString,
-                                                      isEnabled: true,
-                                                      enabledSuggestionTypes: nil,
-                                                      hasFetchedSuggestionTypesOnce: false,
-                                                      lastUpdated: Date()))
+                                                      enabledSuggestionTypes: []))
         return try await persistenceManager.insert(domain: preference)
     }
 }

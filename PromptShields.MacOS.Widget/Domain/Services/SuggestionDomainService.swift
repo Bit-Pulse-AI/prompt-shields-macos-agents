@@ -98,18 +98,5 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         let suggestionTypes = suggestionResult.toDomain()
         try await persistenceManager.deleteEntity(entity: SuggestionType.self)
         try await persistenceManager.insert(domains: suggestionTypes)
-
-        // Only populate all types on first fetch - after that, respect user's selections
-        if let preferenceId = try await userDomainService.currentUser.model.preferenceId {
-            var preference: UserPreferences = try await persistenceManager.fetchItem(uid: preferenceId)
-
-            if !preference.model.hasFetchedSuggestionTypesOnce {
-                // First time fetch - enable all suggestion types by default
-                preference.model.enabledSuggestionTypes = suggestionTypes.compactMap { $0.model.suggestionType }
-                preference.model.hasFetchedSuggestionTypesOnce = true
-                try await persistenceManager.update(domain: preference)
-            }
-            // If hasFetchedSuggestionTypesOnce is true, don't overwrite user's selections
-        }
     }
 }

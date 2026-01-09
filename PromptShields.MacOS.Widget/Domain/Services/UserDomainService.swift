@@ -105,7 +105,7 @@ struct UserDomainServiceImpl: UserDomainService {
     private func getUser() async throws -> User {
         let result = try await userNetworkService.getUser()
         let profile = try await profileDomainService.getProfile()
-        let preferences = try await preferenceDomainService.getPreferences()
+        let preferences = try await preferenceDomainService.currentUserPreferences()
         return result.toDomain(profileId: profile.model.uuid, preferenceId: preferences.model.uuid)
     }
 
@@ -130,7 +130,7 @@ struct UserDomainServiceImpl: UserDomainService {
     private func createNewLocalUser() async throws -> User {
         let credentials = try keychainManager.loadUserCredentials()
         let currentProfile = try await profileDomainService.getProfile()
-        let currentPreferences = try await preferenceDomainService.getPreferences()
+        let currentPreferences = try await preferenceDomainService.newPreferences()
         let currentUser: User = credentials.toDomain(profileId: currentProfile.model.uuid, preferenceId: currentPreferences.model.uuid)
         let persistenceManager = PersistenceManagerImpl.shared
         try await persistenceManager.insert(domain: currentUser)

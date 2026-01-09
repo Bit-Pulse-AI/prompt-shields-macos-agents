@@ -42,6 +42,7 @@
 		7254B3D52F0D16F300CF28FF /* Exceptions for "PromptShields.MacOS.Widget" folder in "PromptShields.MacOS.Widget-Dev" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"Resources/Dev/PromptShields.MacOS.Widget-Info.plist",
 				Resources/Prod/Auth0.plist,
 				Resources/Prod/Config.swift,
 				"Resources/Prod/PromptShields.MacOS.Widget-Info.plist",
@@ -54,6 +55,7 @@
 				Resources/Dev/Auth0.plist,
 				Resources/Dev/Config.swift,
 				"Resources/Dev/PromptShields.MacOS.Widget-Info.plist",
+				"Resources/Prod/PromptShields.MacOS.Widget-Info.plist",
 			);
 			target = 7254B4142F0D1F0200CF28FF /* PromptShields.MacOS.Widget-Prod */;
 		};
@@ -252,7 +254,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 2610;
+				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					729CD45D2D2C614D00D55B7C = {
 						CreatedOnToolsVersion = 16.2;

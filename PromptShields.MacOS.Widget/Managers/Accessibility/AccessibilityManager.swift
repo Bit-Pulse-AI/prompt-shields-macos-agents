@@ -112,7 +112,7 @@ final class AccessibilityManagerImpl: ObservableObject {
             disableMonitoring()
         } else {
             enableMonitoring()
-            }
+        }
     }
 
     /// Pauses element info updates while user is interacting with action menu

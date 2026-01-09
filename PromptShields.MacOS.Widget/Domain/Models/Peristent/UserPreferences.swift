@@ -23,12 +23,7 @@ struct UserPreferences: Domain {
 
     struct UserPreferencesModel: Model {
         let uuid: UID
-        var isEnabled: Bool
-        var enabledSuggestionTypes: [String]?
-        /// Flag indicating if suggestion types have been fetched at least once.
-        /// When false, the first fetch will populate all suggestion types as enabled by default.
-        var hasFetchedSuggestionTypesOnce: Bool
-        let lastUpdated: Date
+        var enabledSuggestionTypes: [String]
     }
 
     let identifier: ModelIdentifier?
@@ -50,55 +45,16 @@ struct UserPreferences: Domain {
         let persistent = UserPreferencesPersistentModel()
         persistent.ik = try? model.uuid.sha512
         persistent.uuid = model.uuid
-        persistent.isEnabled = model.isEnabled
         persistent.enabledSuggestionTypes = model.enabledSuggestionTypes
-        persistent.hasFetchedSuggestionTypesOnce = model.hasFetchedSuggestionTypesOnce
-        persistent.lastUpdated = model.lastUpdated
         return persistent
     }
 
     static func fromPersistentModel(_ persistent: UserPreferencesPersistentModel) -> UserPreferences {
         let model = UserPreferencesModel(
             uuid: persistent.uuid,
-            isEnabled: persistent.isEnabled,
-            enabledSuggestionTypes: persistent.enabledSuggestionTypes,
-            hasFetchedSuggestionTypesOnce: persistent.hasFetchedSuggestionTypesOnce,
-            lastUpdated: persistent.lastUpdated
+            enabledSuggestionTypes: persistent.enabledSuggestionTypes
         )
         return UserPreferences(model: model, identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
-    }
-}
-
-// MARK: - API Models
-
-struct UserPreferencesAPIResponse: APIResponse, Encodable {
-    let isEnabled: Bool
-    let enabledSuggestionTypes: [String]
-    let blockedApplications: [String]
-    let language: String
-    let autoApplySuggestions: Bool
-    let showFloatingPanel: Bool
-    let panelPosition: String
-
-    enum CodingKeys: String, CodingKey {
-        case isEnabled
-        case enabledSuggestionTypes
-        case blockedApplications
-        case language
-        case autoApplySuggestions
-        case showFloatingPanel
-        case panelPosition
-    }
-
-    func toDomain() -> some Domain {
-        let model = UserPreferences.UserPreferencesModel(
-            uuid: "",
-            isEnabled: isEnabled,
-            enabledSuggestionTypes: enabledSuggestionTypes,
-            hasFetchedSuggestionTypesOnce: false,
-            lastUpdated: Date()
-        )
-        return UserPreferences(model: model)
     }
 }
 
@@ -107,24 +63,7 @@ struct UserPreferencesAPIResponse: APIResponse, Encodable {
 @Model
 final class UserPreferencesPersistentModel: UpdatablePersistentModel {
     var uuid: String = ""
-    var isEnabled: Bool = true
-
-    var enabledSuggestionTypesData: Data?
-    var enabledSuggestionTypes: [String]? {
-        get {
-            guard let enabledSuggestionTypesData else { return nil }
-            return (try? JSONDecoder().decode([String].self, from: enabledSuggestionTypesData))
-        }
-        set {
-            enabledSuggestionTypesData = try? JSONEncoder().encode(newValue)
-        }
-    }
-
-    /// Flag indicating if suggestion types have been fetched at least once.
-    /// When false, the first fetch will populate all suggestion types as enabled by default.
-    var hasFetchedSuggestionTypesOnce: Bool = false
-
-    var lastUpdated: Date = Date()
+    var enabledSuggestionTypes: [String] = []
 
     var pk: String?
     var ik: String?
@@ -134,9 +73,6 @@ final class UserPreferencesPersistentModel: UpdatablePersistentModel {
     func updateProperties(from preferences: UserPreferencesPersistentModel) {
         self.uuid = preferences.uuid
         self.ik = preferences.ik
-        self.isEnabled = preferences.isEnabled
         self.enabledSuggestionTypes = preferences.enabledSuggestionTypes
-        self.hasFetchedSuggestionTypesOnce = preferences.hasFetchedSuggestionTypesOnce
-        self.lastUpdated = preferences.lastUpdated
     }
 }

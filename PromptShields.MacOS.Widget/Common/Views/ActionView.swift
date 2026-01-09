@@ -5,15 +5,14 @@ struct ActionView: View {
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
     @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
     @Environment(\.suggestionDomainService) private var suggestionDomainService
+    @Environment(\.userPreferencesDomainService) private var userPreferencesDomainService
     @Environment(\.profileDomainService) private var profileDomainService
 
     @StateObject private var suggestionTypesQueryable = ObservableQueryable(
         sortDescriptors: [SortDescriptor(\.suggestionName, order: .reverse)],
         mapping: DefaultMapping<SuggestionType>.self
     )
-    @StateObject private var userPreferencesTypesQueryable = ObservableQueryable(
-        mapping: DefaultMapping<UserPreferences>.self
-    )
+    @State private var currentUserPreferences: UserPreferences?
     @State private var isProcessing = false
     @State private var isViewActive = true
     @State private var actionText: String = ""
@@ -38,7 +37,7 @@ struct ActionView: View {
     }
 
     private var suggestionTypes: [SuggestionType] {
-        let enabledFilters = userPreferences?.model.enabledSuggestionTypes ?? []
+        let enabledFilters = currentUserPreferences?.model.enabledSuggestionTypes ?? []
         return suggestionTypesQueryable.wrappedValue.filter {
             enabledFilters.contains($0.model.suggestionType)
         }.sorted(by: {
@@ -53,10 +52,6 @@ struct ActionView: View {
         return Array(Set(set)).sorted(by: {
             $0 < $1
         })
-    }
-
-    private var userPreferences: UserPreferences? {
-        userPreferencesTypesQueryable.wrappedValue.first
     }
 
     var body: some View {
@@ -94,7 +89,12 @@ struct ActionView: View {
 
     private var idleView: some View {
         Button {
-            overlayStateModel.actionToolState = .category
+            isProcessing = true
+            Task { @MainActor in
+                currentUserPreferences = try await userPreferencesDomainService.currentUserPreferences()
+                overlayStateModel.actionToolState = .category
+                isProcessing = false
+            }
         } label: {
             Image(ImageResource(name: "logo_mid", bundle: .main))
                 .resizable()
