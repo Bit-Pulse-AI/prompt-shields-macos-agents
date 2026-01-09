@@ -58,14 +58,14 @@ struct SettingsView: View {
                                         let suggestionTypes = preferences
                                             .model
                                             .enabledSuggestionTypes
-                                        return suggestionTypes.contains(suggestionType.model.suggestionType)
+                                        return ((suggestionTypes?.contains(suggestionType.model.suggestionType)) != nil)
                                     },
                                     set: { newValue in
                                         var newTypes = preferences.model.enabledSuggestionTypes
                                         if newValue {
-                                            newTypes.append(suggestionType.model.suggestionType)
+                                            newTypes?.append(suggestionType.model.suggestionType)
                                         } else {
-                                            newTypes.removeAll(where: {
+                                            newTypes?.removeAll(where: {
                                                 $0 == suggestionType.model.suggestionType
                                             })
                                         }

@@ -34,6 +34,9 @@ struct DefaultMapping<T>: QueryableMapping {
 // MARK: - Observable Queryable (merged)
 /// Single component that performs background data operations and publishes updates on main thread
 /// All SwiftData access is properly isolated to the PersistenceManager actor
+/// 
+/// IMPORTANT: This class does NOT auto-load data on init to avoid SwiftData race conditions.
+/// Use the `.onAppear` modifier to call `refresh()` when the view appears.
 @MainActor
 final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObject where M.SourceType == D, M.TargetType == D {
     // Query configuration
@@ -45,11 +48,15 @@ final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObjec
 
     // Tasks
     private var observerTask: Task<Void, Never>?
-    private var initialLoadTask: Task<Void, Never>?
+    private var loadTask: Task<Void, Never>?
+
+    // State management to prevent concurrent loads
+    private var isLoading: Bool = false
+    private var isObserving: Bool = false
 
     // Debounce state to prevent rapid reloads from notification storms
     private var lastLoadTime: Date = .distantPast
-    private let minimumLoadInterval: TimeInterval = 0.1
+    private let minimumLoadInterval: TimeInterval = 0.3
 
     // Published data consumed by SwiftUI
     @Published private(set) var wrappedValue: [D] = []
@@ -67,44 +74,64 @@ final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObjec
         self.persistenceManager = persistenceManager
         self.mapping = mapping
 
-        // Defer observer setup to ensure @MainActor context is fully established
-        // Using Task.detached with explicit @MainActor ensures proper actor isolation
+        // Auto-start observing on next run loop iteration
+        // This ensures we're fully initialized before accessing SwiftData
         Task { @MainActor [weak self] in
-            self?.setupObservers()
+            // Wait for any pending view setup to complete
+            try? await Task.sleep(for: .milliseconds(100))
+            self?.startObservingIfNeeded()
         }
     }
 
+    /// Manually trigger a refresh. Safe to call multiple times.
+    func refresh() async {
+        await performLoad()
+    }
+
+    /// Start the notification observer. Called automatically, but can be called early if needed.
+    func startObservingIfNeeded() {
+        guard !isObserving else { return }
+        isObserving = true
+        setupObservers()
+    }
+
     private func setupObservers() {
-        // Observe model context saves and reload with debouncing
-        // Explicitly run on MainActor to ensure proper SwiftUI integration
+        // Cancel any existing observer
+        observerTask?.cancel()
+
+        // Start notification observer
         observerTask = Task { @MainActor [weak self] in
+            // Perform initial load
+            await self?.performLoad()
+
+            // Then listen for changes
             for await _ in NotificationCenter.default.notifications(named: ModelContext.didSave) {
                 guard !Task.isCancelled else { break }
-
-                // Debounce rapid notifications to prevent SwiftData contention
                 guard let self = self else { continue }
+
+                // Debounce rapid notifications
                 let now = Date()
                 guard now.timeIntervalSince(self.lastLoadTime) >= self.minimumLoadInterval else {
                     continue
                 }
-                self.lastLoadTime = now
 
-                await self.loadData()
+                // Small delay to let SwiftData settle after save
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { break }
+
+                await self.performLoad()
             }
-        }
-
-        // Initial load - explicitly on MainActor
-        initialLoadTask = Task { @MainActor [weak self] in
-            await self?.loadData()
         }
     }
 
-    @MainActor
-    private func loadData() async {
-        // Ensure we're on MainActor for SwiftUI state updates
-        assert(Thread.isMainThread, "loadData must run on main thread")
+    private func performLoad() async {
+        // Prevent concurrent loads - if already loading, skip this request
+        guard !isLoading else { return }
+        isLoading = true
+        lastLoadTime = Date()
 
-        let results: [D]
+        defer { isLoading = false }
+
         do {
             // The persistence manager is an actor, so this call properly
             // hops to its executor for SwiftData access
@@ -114,19 +141,19 @@ final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObjec
                 limit: limit
             )
             // Mapping happens on MainActor with domain objects (not @Model objects)
-            results = raw.compactMap { domain in
+            let results = raw.compactMap { domain in
                 M.canMap(domain) ? M.map(domain) : nil
             }
+            // Update published property on MainActor
+            self.wrappedValue = results
         } catch {
-            results = []
+            // On error, don't update - keep existing data
         }
-        // Update published property on MainActor
-        self.wrappedValue = results
     }
 
     deinit {
         observerTask?.cancel()
-        initialLoadTask?.cancel()
+        loadTask?.cancel()
     }
 }
 

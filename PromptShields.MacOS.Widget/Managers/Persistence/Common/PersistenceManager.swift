@@ -54,6 +54,8 @@ actor PersistenceManagerImpl: PersistenceManager {
                                                      UserPersistentModel.self,
                                                      UserPreferencesPersistentModel.self,
                                                      ProfilePersistentModel.self]
+
+    /// Shared singleton instance. Thread-safe lazy initialization.
     static let shared: PersistenceManagerImpl = {
         let persistenceStack = PersistenceStack(modelTypes: entity,
                                                 migrationPlan: ChannelsMigrationPlan.self)
@@ -65,8 +67,11 @@ actor PersistenceManagerImpl: PersistenceManager {
     private let cleanupInterval: TimeInterval = 300 // 5 minutes
 
     func insert<D: Domain>(domains: [D]) throws {
-        domains.forEach {
-            let persistent = $0.toPersistentModel(context: modelContext)
+        // Rollback any pending changes before starting new batch
+        modelContext.rollback()
+
+        for domain in domains {
+            let persistent = domain.toPersistentModel(context: modelContext)
             modelContext.insert(persistent)
         }
         try modelContext.save()
@@ -80,17 +85,20 @@ actor PersistenceManagerImpl: PersistenceManager {
         return D.fromPersistentModel(persistent)
     }
 
-    // MARK: - Memory Management
+    // MARK: - Query Methods
 
     func query<D: Domain>(predicate: Predicate<D.P>? = nil, sortDescriptors: [SortDescriptor<D.P>] = [], limit: Int?) async throws -> [D] where D.M == D.M {
         var fetchDescriptor = FetchDescriptor(predicate: predicate, sortBy: sortDescriptors)
         if let limit {
             fetchDescriptor.fetchLimit = limit
         }
+
+        // Ensure we have the latest data
+        modelContext.processPendingChanges()
+
         let result = try modelContext.fetch(fetchDescriptor)
-        return result.compactMap {
-            let persistent = $0
-            return D.fromPersistentModel(persistent)
+        return result.compactMap { persistent in
+            D.fromPersistentModel(persistent)
         }
     }
 
@@ -108,11 +116,14 @@ actor PersistenceManagerImpl: PersistenceManager {
     }
 
     func syncLocalWithRemote<D: Domain>(domains: [D]) async throws {
-        let pks = domains.map { try? $0.model.uuid.sha512 }
+        // Build a set of UUIDs we're looking for
+        let uuidsToFind = Set(domains.map { $0.model.uuid })
 
-        let existingItems: [D] = try await query(predicate: #Predicate<D.P> { item in
-            pks.contains(item.ik)
-        })
+        // Fetch all items and filter in memory
+        // Note: We avoid using #Predicate with generic types as it causes
+        // SwiftData keypath resolution issues at runtime
+        let allItems: [D] = try await query()
+        let existingItems = allItems.filter { uuidsToFind.contains($0.model.uuid) }
 
         let existingDict = Dictionary(grouping: existingItems, by: { $0.model.uuid })
 
@@ -127,6 +138,7 @@ actor PersistenceManagerImpl: PersistenceManager {
                 itemsToInsert.append(domain)
             }
         }
+
         if !itemsToUpdate.isEmpty {
             try await update(domains: itemsToUpdate)
         }

@@ -16,7 +16,7 @@ struct SuggestionsView: View {
         mapping: DefaultMapping<SuggestionGroup>.self
     )
     @State private var isLoadingNextPage: Bool = false
-    @State private var isLoading: Bool = false
+    @State private var isLoading: Bool = true
 
     @Environment(\.suggestionDomainService) private var suggestionDomainService
 
@@ -102,18 +102,24 @@ struct SuggestionsView: View {
 
     private var emptyStateView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "textformat.abc.dottedunderline")
-                .font(.system(size: 48))
-                .foregroundColor(.secondary)
+            if isLoading {
+                HStack(alignment: .center) {
+                    ProgressView()
+                }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            } else {
+                Image(systemName: "textformat.abc.dottedunderline")
+                    .font(.system(size: 48))
+                    .foregroundColor(.secondary)
 
-            Text("No Suggestions")
-                .font(.title2)
-                .fontWeight(.medium)
+                Text("No Suggestions")
+                    .font(.title2)
+                    .fontWeight(.medium)
 
-            Text("Start typing in any text field to see writing suggestions.")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+                Text("Start typing in any text field to see writing suggestions.")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

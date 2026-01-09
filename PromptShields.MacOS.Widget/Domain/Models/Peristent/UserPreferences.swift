@@ -23,7 +23,7 @@ struct UserPreferences: Domain {
 
     struct UserPreferencesModel: Model {
         let uuid: UID
-        var enabledSuggestionTypes: [String]
+        var enabledSuggestionTypes: [String]?
     }
 
     let identifier: ModelIdentifier?
@@ -63,7 +63,7 @@ struct UserPreferences: Domain {
 @Model
 final class UserPreferencesPersistentModel: UpdatablePersistentModel {
     var uuid: String = ""
-    var enabledSuggestionTypes: [String] = []
+    var enabledSuggestionTypes: [String]?
 
     var pk: String?
     var ik: String?

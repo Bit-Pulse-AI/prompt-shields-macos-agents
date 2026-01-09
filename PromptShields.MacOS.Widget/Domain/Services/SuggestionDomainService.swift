@@ -96,7 +96,25 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
     func fetchSuggestionTypes() async throws {
         let suggestionResult = try await suggestionNetworkService.fetchSuggestionTypes()
         let suggestionTypes = suggestionResult.toDomain()
+
+        // Delete and insert in sequence - actor serializes these operations
         try await persistenceManager.deleteEntity(entity: SuggestionType.self)
         try await persistenceManager.insert(domains: suggestionTypes)
+
+        // Update user preferences if needed
+        guard let preferenceId = try? await userDomainService.currentUser.model.preferenceId else {
+            return
+        }
+
+        do {
+            var preference: UserPreferences = try await persistenceManager.fetchItem(uid: preferenceId)
+
+            if preference.model.enabledSuggestionTypes == nil {
+                preference.model.enabledSuggestionTypes = suggestionTypes.compactMap { $0.model.suggestionType }
+                try await persistenceManager.update(domain: preference)
+            }
+        } catch {
+            // Preference not found or update failed - not critical, continue
+        }
     }
 }
