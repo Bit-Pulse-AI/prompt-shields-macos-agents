@@ -30,14 +30,10 @@ struct AuthView: View {
                 ProgressView()
             } else {
                 Button {
-                    Task {
-                        await MainActor.run {
-                            mainState.isBusy = true
-                        }
+                    Task { @MainActor in
+                        mainState.isBusy = true
                         await authenticateRegisterUser()
-                        await MainActor.run {
-                            mainState.isBusy = false
-                        }
+                        mainState.isBusy = false
                     }
                 } label: {
                     Text("Log me in")
@@ -48,6 +44,7 @@ struct AuthView: View {
                 alignment: .center)
     }
 
+    @MainActor
     func authenticateRegisterUser() async {
         do {
             let user = try await userDomainService.login()
@@ -55,13 +52,9 @@ struct AuthView: View {
 
             let shaId = try user.model.uuid.sha512
             if profile.model.acceptedTerms == shaId {
-                await MainActor.run {
-                    mainState.authState = .loggedIn
-                }
+                mainState.authState = .loggedIn
             } else {
-                await MainActor.run {
-                    mainState.authState = .acceptTerms
-                }
+                mainState.authState = .acceptTerms
             }
         } catch {
             logger.debug("Error encountered \(error)")

@@ -177,12 +177,15 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
                             description: String?,
                             localData: @Sendable @escaping (Organisation) -> Void,
                             remoteData: @Sendable @escaping (Result<Organisation, Error>) -> Void) {
-        Task {
+        // Use @MainActor Task to ensure callbacks are delivered on main thread
+        // and SwiftData operations are properly serialized through the actor
+        Task { @MainActor in
             do {
                 let originalName = organisation.model.name
                 let originalDescription = organisation.model.description
 
-                // Update locally first
+                // Update locally first - persistenceManager is an actor, 
+                // so this properly hops to its executor
                 var updatedOrganisation = organisation
                 updatedOrganisation.model.name = name
                 updatedOrganisation.model.description = description
@@ -217,9 +220,12 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
                             tenant: Tenant,
                             localData: @Sendable @escaping () -> Void,
                             remoteData: @Sendable @escaping (Result<Void, Error>) -> Void) {
-        Task {
+        // Use @MainActor Task to ensure callbacks are delivered on main thread
+        // and SwiftData operations are properly serialized through the actor
+        Task { @MainActor in
             do {
-                // Delete locally first
+                // Delete locally first - persistenceManager is an actor,
+                // so this properly hops to its executor
                 try await persistenceManager.delete(domain: organisation)
                 localData()
 

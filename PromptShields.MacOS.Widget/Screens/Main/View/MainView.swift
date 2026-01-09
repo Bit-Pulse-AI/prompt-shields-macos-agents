@@ -74,20 +74,17 @@ struct MainView: View {
     }
 
     private func logout() {
-        Task {
+        Task { @MainActor in
             shouldShowProgressView = true
             try? await userDomainService.logout()
-            try await userDomainService.deleteAll()
-            await MainActor.run {
-                globalMainStateModel.authState = .loggedOut(nil)
-                shouldShowProgressView = false
-            }
+            try? await userDomainService.deleteAll()
+            globalMainStateModel.authState = .loggedOut(nil)
             shouldShowProgressView = false
         }
     }
 
     private func acceptTermsAndConditions() {
-        Task {
+        Task { @MainActor in
             do {
                 shouldShowProgressView = true
                 let currentUser = try await userDomainService.currentUser(refresh: true)
@@ -95,19 +92,14 @@ struct MainView: View {
 
                 let shaId = try currentUser.model.uuid.sha512
                 if profile.model.acceptedTerms == shaId {
-                    await MainActor.run {
-                        globalMainStateModel.authState = .loggedIn
-                    }
+                    globalMainStateModel.authState = .loggedIn
                 } else {
-                    await MainActor.run {
-                        globalMainStateModel.authState = .acceptTerms
-                    }
+                    globalMainStateModel.authState = .acceptTerms
                 }
             } catch {
-                await MainActor.run {
-                    isAlertPresented = true
-                }
+                isAlertPresented = true
             }
+            shouldShowProgressView = false
         }
     }
 
@@ -116,17 +108,12 @@ struct MainView: View {
     }
 
     private func handleTokenRefreshFailure() {
-        Task {
+        Task { @MainActor in
             do {
                 try await userDomainService.logout()
-
-                await MainActor.run {
-                    globalMainStateModel.authState = .loggedOut(AuthError.tokenRefreshFailed)
-                }
+                globalMainStateModel.authState = .loggedOut(AuthError.tokenRefreshFailed)
             } catch {
-                await MainActor.run {
-                    globalMainStateModel.authState = .loggedOut(error)
-                }
+                globalMainStateModel.authState = .loggedOut(error)
             }
         }
     }

@@ -57,7 +57,7 @@ struct SubscriptionIntegrationView: View {
                 }
                 if let checkoutURL {
                     CheckoutWebView(url: checkoutURL) { _ in
-                        Task {
+                        Task { @MainActor in
                             await refreshAfterCheckout()
                         }
                     }
@@ -78,7 +78,7 @@ struct SubscriptionIntegrationView: View {
             }
         }.alert("Notice", isPresented: $showCancelDialog) {
             Button("OK", role: .destructive) {
-                Task {
+                Task { @MainActor in
                     isLoading = true
                     do {
                         let profile = try await profileDomainService.currentProfile.model
@@ -86,10 +86,10 @@ struct SubscriptionIntegrationView: View {
                         let subscriptionId = profile.defaultSubscriptionId
                         try await subscriptionDomainService.cancel(organisationId: organisationId, subscriptionId: subscriptionId)
                         try await loadCurrentSubscription()
-                        isLoading = false
                     } catch {
-                        isLoading = false
+                        // Error handled silently
                     }
+                    isLoading = false
                 }
             }
             Button("Cancel", role: .cancel) {
@@ -111,14 +111,14 @@ struct SubscriptionIntegrationView: View {
                 HStack {
                     let monthlyPlan = PricingPlan(subscriptionTier: .bronze, billingPeriod: .monthly, features: ["Monthly premium offering"])
                     PricingPlanCard(plan: monthlyPlan) {
-                        Task {
+                        Task { @MainActor in
                             await subscribeUser(subscriptionTier: monthlyPlan.subscriptionTier, billingPeriod: monthlyPlan.billingPeriod)
                         }
                     }
                     Spacer()
                     let yearlyPlan = PricingPlan(subscriptionTier: .bronze, billingPeriod: .yearly, features: ["Yearly premium deal!"])
                     PricingPlanCard(plan: yearlyPlan) {
-                        Task {
+                        Task { @MainActor in
                             await subscribeUser(subscriptionTier: yearlyPlan.subscriptionTier, billingPeriod: yearlyPlan.billingPeriod)
                         }
                     }
@@ -129,9 +129,7 @@ struct SubscriptionIntegrationView: View {
                     Text("Membership will end on \(membershipEndDate)")
                 } else {
                     Button("Cancel subscription") {
-                        Task {
-                            showCancelDialog = true
-                        }
+                        showCancelDialog = true
                     }
                 }
 
@@ -147,6 +145,7 @@ struct SubscriptionIntegrationView: View {
         }
     }
 
+    @MainActor
     private func subscribeUser(subscriptionTier: SubscriptionTier, billingPeriod: BillingPeriod) async {
         isLoading = true
         do {
@@ -164,14 +163,11 @@ struct SubscriptionIntegrationView: View {
                 successURL: webBillingSuccessURL,
                 cancelURL: webBillingCancelURL
             )
-            await MainActor.run {
-                self.checkoutURL = checkout.url
-                self.showingSubscriptionDetail = true
-            }
+            self.checkoutURL = checkout.url
+            self.showingSubscriptionDetail = true
         } catch {
             logger.debug("error \(error)")
         }
-
         isLoading = false
     }
 

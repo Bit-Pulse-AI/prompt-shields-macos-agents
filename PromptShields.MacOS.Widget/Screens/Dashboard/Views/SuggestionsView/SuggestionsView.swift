@@ -61,59 +61,43 @@ struct SuggestionsView: View {
         }
     }
 
+    @MainActor
     private func loadInitialData() async {
-        await MainActor.run {
-            isLoading = true
-        }
+        isLoading = true
         do {
             let suggestionGroup = try await suggestionDomainService.fetchCurrentSuggestionGroup()
             let totalSuggestions = suggestionGroup.model.suggestionCount
-            guard currentSuggestions.count < totalSuggestions && totalSuggestions > 0  else {
-                await MainActor.run {
-                    isLoading = false
-                }
+            guard currentSuggestions.count < totalSuggestions && totalSuggestions > 0 else {
+                isLoading = false
                 return
             }
             let numberOfItemsPerPage = min(suggestionsPerPage, totalSuggestions - currentSuggestions.count)
             try await suggestionDomainService.fetchSuggestionTypes()
             try await suggestionDomainService.list(offset: 0, limit: numberOfItemsPerPage)
         } catch {
-            await MainActor.run {
-                isLoading = false
-            }
             logger.debug("Error fetching user details \(error)")
         }
         try? await Task.sleep(for: .seconds(1))
-        await MainActor.run {
-            isLoading = false
-        }
+        isLoading = false
     }
 
+    @MainActor
     private func loadNextPageIfNeeded() async {
+        isLoadingNextPage = true
         do {
-            await MainActor.run {
-                isLoadingNextPage = true
-            }
             let suggestionGroup = try await suggestionDomainService.fetchCurrentSuggestionGroup()
             let totalSuggestions = suggestionGroup.model.suggestionCount
-            guard currentSuggestions.count < totalSuggestions && totalSuggestions > 0  else {
-                await MainActor.run {
-                    isLoading = false
-                }
+            guard currentSuggestions.count < totalSuggestions && totalSuggestions > 0 else {
+                isLoadingNextPage = false
                 return
             }
             let numberOfItemsPerPage = min(suggestionsPerPage, totalSuggestions - currentSuggestions.count)
             try await suggestionDomainService.list(offset: currentSuggestions.count, limit: numberOfItemsPerPage)
         } catch {
-            await MainActor.run {
-                isLoading = false
-            }
             logger.debug("Error fetching next page \(error)")
         }
         try? await Task.sleep(for: .seconds(1))
-        await MainActor.run {
-            isLoadingNextPage = false
-        }
+        isLoadingNextPage = false
     }
 
     private var emptyStateView: some View {

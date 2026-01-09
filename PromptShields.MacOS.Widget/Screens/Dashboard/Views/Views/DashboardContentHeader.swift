@@ -45,17 +45,11 @@ struct DashboardContentHeaderView: View {
                 // Toggle Button
                 Button {
                     if dashboardState.isActive {
-                        Task {
-                            accessibilityManager.stopTimer()
-                        }
+                        accessibilityManager.stopTimer()
                     } else {
-                        Task {
-                            await MainActor.run {
-                                overlayState.elementInfo = nil
-                                overlayState.actionToolState = .idle
-                            }
-                            accessibilityManager.startTimer()
-                        }
+                        overlayState.elementInfo = nil
+                        overlayState.actionToolState = .idle
+                        accessibilityManager.startTimer()
                     }
                 } label: {
                     HStack(spacing: 8) {

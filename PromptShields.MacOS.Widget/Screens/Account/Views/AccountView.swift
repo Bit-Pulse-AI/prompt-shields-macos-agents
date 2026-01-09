@@ -66,6 +66,7 @@ struct AccountView: View {
         }
     }
 
+    @MainActor
     func fetchUserDetails() async {
         do {
             let currentUser = try await userDomainService.currentUser
@@ -175,13 +176,10 @@ struct AccountView: View {
     // Logic
 
     private func logout() {
-        Task {
+        Task { @MainActor in
             isLoading = true
-            try await userDomainService.logout()
-            await MainActor.run {
-                mainState.authState = .loggedOut(nil)
-                isLoading = false
-            }
+            try? await userDomainService.logout()
+            mainState.authState = .loggedOut(nil)
             isLoading = false
         }
     }

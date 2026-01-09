@@ -33,6 +33,7 @@ struct DefaultMapping<T>: QueryableMapping {
 
 // MARK: - Observable Queryable (merged)
 /// Single component that performs background data operations and publishes updates on main thread
+/// All SwiftData access is properly isolated to the PersistenceManager actor
 @MainActor
 final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObject where M.SourceType == D, M.TargetType == D {
     // Query configuration
@@ -45,6 +46,10 @@ final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObjec
     // Tasks
     private var observerTask: Task<Void, Never>?
     private var initialLoadTask: Task<Void, Never>?
+
+    // Debounce state to prevent rapid reloads from notification storms
+    private var lastLoadTime: Date = .distantPast
+    private let minimumLoadInterval: TimeInterval = 0.1
 
     // Published data consumed by SwiftUI
     @Published private(set) var wrappedValue: [D] = []
@@ -62,39 +67,60 @@ final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObjec
         self.persistenceManager = persistenceManager
         self.mapping = mapping
 
-        setupObservers()
+        // Defer observer setup to ensure @MainActor context is fully established
+        // Using Task.detached with explicit @MainActor ensures proper actor isolation
+        Task { @MainActor [weak self] in
+            self?.setupObservers()
+        }
     }
 
     private func setupObservers() {
-        // Observe model context saves off the main actor and reload
+        // Observe model context saves and reload with debouncing
+        // Explicitly run on MainActor to ensure proper SwiftUI integration
         observerTask = Task { @MainActor [weak self] in
             for await _ in NotificationCenter.default.notifications(named: ModelContext.didSave) {
-                try? Task.checkCancellation()
-                await self?.loadData()
+                guard !Task.isCancelled else { break }
+
+                // Debounce rapid notifications to prevent SwiftData contention
+                guard let self = self else { continue }
+                let now = Date()
+                guard now.timeIntervalSince(self.lastLoadTime) >= self.minimumLoadInterval else {
+                    continue
+                }
+                self.lastLoadTime = now
+
+                await self.loadData()
             }
         }
 
-        // Initial load
-        initialLoadTask = Task { [weak self] in
+        // Initial load - explicitly on MainActor
+        initialLoadTask = Task { @MainActor [weak self] in
             await self?.loadData()
         }
     }
 
     @MainActor
     private func loadData() async {
+        // Ensure we're on MainActor for SwiftUI state updates
+        assert(Thread.isMainThread, "loadData must run on main thread")
+
         let results: [D]
         do {
+            // The persistence manager is an actor, so this call properly
+            // hops to its executor for SwiftData access
             let raw: [D] = try await self.persistenceManager.query(
                 predicate: self.predicate,
                 sortDescriptors: self.sortDescriptors,
                 limit: limit
             )
+            // Mapping happens on MainActor with domain objects (not @Model objects)
             results = raw.compactMap { domain in
                 M.canMap(domain) ? M.map(domain) : nil
             }
         } catch {
             results = []
         }
+        // Update published property on MainActor
         self.wrappedValue = results
     }
 

@@ -80,8 +80,8 @@ struct SettingsView: View {
                                         }
                                         var newPreferences = preferences
                                         newPreferences.model.enabledSuggestionTypes = newTypes
-                                        Task { @Sendable in
-                                            try await updatePreferences(newPreferences)
+                                        Task { @MainActor in
+                                            try? await updatePreferences(newPreferences)
                                         }
                                     }
                         ))
@@ -97,17 +97,17 @@ struct SettingsView: View {
         .cornerRadius(12)
     }
 
+    @MainActor
     private func loadData() async {
         isLoading = true
         do {
             let preferences = try await userPreferencesDomainService.currentUserPreferences
             self.preferences = preferences
             try await suggestionDomainService.fetchSuggestionTypes()
-            isLoading = false
         } catch {
             logger.debug("Error fetching user details \(error)")
-            isLoading = false
         }
+        isLoading = false
     }
 
     @MainActor

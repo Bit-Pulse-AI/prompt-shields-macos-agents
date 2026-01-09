@@ -135,7 +135,7 @@ struct ActionView: View {
 
             HStack(spacing: 8) {
                 Button {
-                    Task {
+                    Task { @MainActor in
                         await replaceText()
                     }
                 } label: {
@@ -183,7 +183,7 @@ struct ActionView: View {
                         isProcessing = true
                         overlayStateModel?.actionToolState = .loading
 
-                        Task {
+                        Task { @MainActor in
                             await processSuggestion(suggestionType: suggestionType)
                         }
                     } label: {
