@@ -39,6 +39,8 @@ protocol PersistenceManager: Sendable {
     func deleteEntity<D: Domain>(entity: D.Type) async throws
     func delete<D: Domain>(domains: [D]) async throws
     func delete<D: Domain>(domain: D) async throws
+    /// Atomically deletes all items of the entity type and inserts new items in a single transaction
+    func deleteAllAndInsert<D: Domain>(domains: [D]) async throws
     func logout() async throws
 }
 
@@ -67,9 +69,6 @@ actor PersistenceManagerImpl: PersistenceManager {
     private let cleanupInterval: TimeInterval = 300 // 5 minutes
 
     func insert<D: Domain>(domains: [D]) throws {
-        // Rollback any pending changes before starting new batch
-        modelContext.rollback()
-
         for domain in domains {
             let persistent = domain.toPersistentModel(context: modelContext)
             modelContext.insert(persistent)
@@ -232,6 +231,21 @@ actor PersistenceManagerImpl: PersistenceManager {
 
     func deleteEntity<D: Domain>(entity: D.Type) async throws {
         try modelContext.delete(model: entity.P)
+        try modelContext.save()
+    }
+
+    func deleteAllAndInsert<D: Domain>(domains: [D]) async throws {
+        // Delete all existing items of this entity type
+        try modelContext.delete(model: D.P.self)
+        
+        // Insert all new items
+        for domain in domains {
+            let persistent = domain.toPersistentModel(context: modelContext)
+            modelContext.insert(persistent)
+        }
+        
+        // Single save for both operations - atomic transaction
+        try modelContext.save()
     }
 
     private func fetchItem<P: PersistentModel>(persistentIdentifier: PersistentIdentifier) -> P? {

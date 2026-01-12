@@ -97,9 +97,8 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         let suggestionResult = try await suggestionNetworkService.fetchSuggestionTypes()
         let suggestionTypes = suggestionResult.toDomain()
 
-        // Delete and insert in sequence - actor serializes these operations
-        try await persistenceManager.deleteEntity(entity: SuggestionType.self)
-        try await persistenceManager.insert(domains: suggestionTypes)
+        // Atomic delete and insert - prevents duplicates from race conditions
+        try await persistenceManager.deleteAllAndInsert(domains: suggestionTypes)
 
         // Update user preferences to populate all types as enabled if nil
         guard let preferenceId = try? await userDomainService.currentUser.model.preferenceId else {
