@@ -55,20 +55,24 @@ struct SettingsView: View {
                                isOn:
                                 Binding(
                                     get: {
-                                        let suggestionTypes = preferences
-                                            .model
-                                            .enabledSuggestionTypes
-                                        return ((suggestionTypes?.contains(suggestionType.model.suggestionType)) != nil)
+                                        let enabledTypes = preferences.model.enabledSuggestionTypes
+                                        // If nil, all types are considered enabled
+                                        guard let enabledTypes = enabledTypes else { return true }
+                                        return enabledTypes.contains(suggestionType.model.suggestionType)
                                     },
                                     set: { newValue in
-                                        var newTypes = preferences.model.enabledSuggestionTypes
+                                        // Get current enabled types, or all types if nil
+                                        var newTypes = preferences.model.enabledSuggestionTypes ?? suggestionTypes.map { $0.model.suggestionType }
+
+                                        let typeId = suggestionType.model.suggestionType
                                         if newValue {
-                                            newTypes?.append(suggestionType.model.suggestionType)
+                                            if !newTypes.contains(typeId) {
+                                                newTypes.append(typeId)
+                                            }
                                         } else {
-                                            newTypes?.removeAll(where: {
-                                                $0 == suggestionType.model.suggestionType
-                                            })
+                                            newTypes.removeAll { $0 == typeId }
                                         }
+
                                         var newPreferences = preferences
                                         newPreferences.model.enabledSuggestionTypes = newTypes
                                         Task { @MainActor in
@@ -92,11 +96,17 @@ struct SettingsView: View {
     private func loadData() async {
         isLoading = true
         do {
+            // Fetch suggestion types first - this may update preferences if nil
+            try await suggestionDomainService.fetchSuggestionTypes()
+
+            // Explicitly refresh queryable to pick up newly written data
+            await suggestionTypesQueryable.refresh()
+
+            // Then fetch the (potentially updated) preferences
             let preferences = try await userPreferencesDomainService.currentUserPreferences()
             self.preferences = preferences
-            try await suggestionDomainService.fetchSuggestionTypes()
         } catch {
-            logger.debug("Error fetching user details \(error)")
+            logger.debug("Error fetching data: \(error)")
         }
         isLoading = false
     }

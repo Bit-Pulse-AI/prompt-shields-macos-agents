@@ -101,7 +101,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         try await persistenceManager.deleteEntity(entity: SuggestionType.self)
         try await persistenceManager.insert(domains: suggestionTypes)
 
-        // Update user preferences if needed
+        // Update user preferences to populate all types as enabled if nil
         guard let preferenceId = try? await userDomainService.currentUser.model.preferenceId else {
             return
         }
@@ -109,8 +109,11 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         do {
             var preference: UserPreferences = try await persistenceManager.fetchItem(uid: preferenceId)
 
+            // If enabledSuggestionTypes is nil, populate with all available types
+            // This makes all types enabled by default on first load
             if preference.model.enabledSuggestionTypes == nil {
-                preference.model.enabledSuggestionTypes = suggestionTypes.compactMap { $0.model.suggestionType }
+                let allTypeIds = suggestionTypes.compactMap { $0.model.suggestionType }
+                preference.model.enabledSuggestionTypes = allTypeIds
                 try await persistenceManager.update(domain: preference)
             }
         } catch {

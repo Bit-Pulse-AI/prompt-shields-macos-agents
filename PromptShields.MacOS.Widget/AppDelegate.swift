@@ -71,6 +71,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // No action needed
     }
 
+    /// Called when the user clicks the dock icon
+    /// Returns true if you want the default behavior (reopen windows), false to handle it yourself
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            // No visible windows, show the main window
+            openMainWindow()
+        } else {
+            // Has visible windows, bring them to front
+            if let mainWindow = NSApp.windows.first(where: {
+                $0.identifier?.rawValue.hasPrefix(MainApp.mainWindow) ?? false
+            }) {
+                mainWindow.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
+        return false // We handled it ourselves
+    }
+
     // MARK: - Window Configuration
 
     /// Configures all overlay and action windows to ensure they display properly

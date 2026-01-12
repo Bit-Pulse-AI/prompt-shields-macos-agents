@@ -34,9 +34,6 @@ struct DefaultMapping<T>: QueryableMapping {
 // MARK: - Observable Queryable (merged)
 /// Single component that performs background data operations and publishes updates on main thread
 /// All SwiftData access is properly isolated to the PersistenceManager actor
-/// 
-/// IMPORTANT: This class does NOT auto-load data on init to avoid SwiftData race conditions.
-/// Use the `.onAppear` modifier to call `refresh()` when the view appears.
 @MainActor
 final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObject where M.SourceType == D, M.TargetType == D {
     // Query configuration
@@ -48,18 +45,22 @@ final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObjec
 
     // Tasks
     private var observerTask: Task<Void, Never>?
-    private var loadTask: Task<Void, Never>?
+    private var pendingLoadTask: Task<Void, Never>?
 
-    // State management to prevent concurrent loads
+    // State management
     private var isLoading: Bool = false
     private var isObserving: Bool = false
+    private var needsReloadAfterCurrentLoad: Bool = false
 
     // Debounce state to prevent rapid reloads from notification storms
     private var lastLoadTime: Date = .distantPast
-    private let minimumLoadInterval: TimeInterval = 0.3
+    private let minimumLoadInterval: TimeInterval = 0.2
 
     // Published data consumed by SwiftUI
     @Published private(set) var wrappedValue: [D] = []
+
+    /// Indicates if initial load has completed
+    @Published private(set) var hasLoaded: Bool = false
 
     init(
         predicate: Predicate<D.P>? = nil,
@@ -74,17 +75,23 @@ final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObjec
         self.persistenceManager = persistenceManager
         self.mapping = mapping
 
-        // Auto-start observing on next run loop iteration
-        // This ensures we're fully initialized before accessing SwiftData
+        // Start observing immediately on next run loop
         Task { @MainActor [weak self] in
-            // Wait for any pending view setup to complete
-            try? await Task.sleep(for: .milliseconds(100))
             self?.startObservingIfNeeded()
         }
     }
 
     /// Manually trigger a refresh. Safe to call multiple times.
+    /// This will wait for any in-progress load to complete before loading again.
     func refresh() async {
+        if isLoading {
+            // Mark that we need another load after current one finishes
+            needsReloadAfterCurrentLoad = true
+            // Wait for current load to finish
+            while isLoading {
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
         await performLoad()
     }
 
@@ -101,7 +108,7 @@ final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObjec
 
         // Start notification observer
         observerTask = Task { @MainActor [weak self] in
-            // Perform initial load
+            // Perform initial load immediately
             await self?.performLoad()
 
             // Then listen for changes
@@ -111,26 +118,51 @@ final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObjec
 
                 // Debounce rapid notifications
                 let now = Date()
-                guard now.timeIntervalSince(self.lastLoadTime) >= self.minimumLoadInterval else {
+                if now.timeIntervalSince(self.lastLoadTime) < self.minimumLoadInterval {
+                    // Schedule a delayed load instead of skipping entirely
+                    self.scheduleDelayedLoad()
                     continue
                 }
-
-                // Small delay to let SwiftData settle after save
-                try? await Task.sleep(for: .milliseconds(150))
-                guard !Task.isCancelled else { break }
 
                 await self.performLoad()
             }
         }
     }
 
+    /// Schedules a load after a short delay, coalescing multiple requests
+    private func scheduleDelayedLoad() {
+        pendingLoadTask?.cancel()
+        pendingLoadTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            await self?.performLoad()
+        }
+    }
+
     private func performLoad() async {
-        // Prevent concurrent loads - if already loading, skip this request
-        guard !isLoading else { return }
+        // If already loading, mark that we need to reload after
+        if isLoading {
+            needsReloadAfterCurrentLoad = true
+            return
+        }
+
         isLoading = true
         lastLoadTime = Date()
+        needsReloadAfterCurrentLoad = false
 
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            hasLoaded = true
+
+            // If a reload was requested while we were loading, do it now
+            if needsReloadAfterCurrentLoad {
+                needsReloadAfterCurrentLoad = false
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(50))
+                    await self?.performLoad()
+                }
+            }
+        }
 
         do {
             // The persistence manager is an actor, so this call properly
@@ -153,7 +185,7 @@ final class ObservableQueryable<D: Domain, M: QueryableMapping>: ObservableObjec
 
     deinit {
         observerTask?.cancel()
-        loadTask?.cancel()
+        pendingLoadTask?.cancel()
     }
 }
 

@@ -37,12 +37,19 @@ struct ActionView: View {
     }
 
     private var suggestionTypes: [SuggestionType] {
-        let enabledFilters = currentUserPreferences?.model.enabledSuggestionTypes ?? []
-        return suggestionTypesQueryable.wrappedValue.filter {
+        let allTypes = suggestionTypesQueryable.wrappedValue
+        let enabledFilters = currentUserPreferences?.model.enabledSuggestionTypes
+
+        // If enabledSuggestionTypes is nil, all types are considered enabled
+        guard let enabledFilters = enabledFilters else {
+            return allTypes.sorted { $0.model.suggestionName < $1.model.suggestionName }
+        }
+
+        return allTypes.filter {
             enabledFilters.contains($0.model.suggestionType)
-        }.sorted(by: {
+        }.sorted {
             $0.model.suggestionName < $1.model.suggestionName
-        })
+        }
     }
 
     private var suggestionCategories: [String] {
@@ -66,6 +73,10 @@ struct ActionView: View {
             }
             .onChange(of: overlayStateModel.actionToolState) { oldState, newState in
                 handleStateChange(from: oldState, to: newState)
+            }
+            .task {
+                // Ensure suggestion types are loaded when view appears
+                await suggestionTypesQueryable.refresh()
             }
     }
 
@@ -187,13 +198,18 @@ struct ActionView: View {
                             await processSuggestion(suggestionType: suggestionType)
                         }
                     } label: {
-                        Text(suggestionType.model.suggestionName)
-                            .font(.callout)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(spacing: .zero) {
+                            Text(suggestionType.model.suggestionName)
+                                .font(.callout)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                            Spacer()
+                        }
                     }
                     .buttonStyle(.plain)
                     .disabled(isProcessing)
                     .padding(.vertical, 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Button {
                     overlayStateModel.actionToolState = .idle
@@ -232,16 +248,18 @@ struct ActionView: View {
                         HStack {
                             Text(suggestionCategoryName)
                                 .font(.callout)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.plain)
                     .disabled(isProcessing)
                     .padding(.vertical, 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
                 Text("No suggestions enabled")

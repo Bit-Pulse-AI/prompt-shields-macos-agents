@@ -42,10 +42,6 @@ struct AccountView: View {
                         emailSection
                     }.frame(maxWidth: .infinity)
                 }
-                RoundBox(title: "Subscription details") {
-                    subscriptionSection
-                        .frame(maxWidth: .infinity)
-                }
                 RoundBox(title: "Logout") {
                     HStack(alignment: .center) {
                         if isLoading {

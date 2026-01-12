@@ -67,6 +67,12 @@ struct SuggestionsView: View {
         do {
             let suggestionGroup = try await suggestionDomainService.fetchCurrentSuggestionGroup()
             let totalSuggestions = suggestionGroup.model.suggestionCount
+
+            // Explicitly refresh queryables to pick up any cached data
+            await suggestionsQueryable.refresh()
+            await suggestionsTypeQueryable.refresh()
+            await currentSuggestionGroupQueryable.refresh()
+
             guard currentSuggestions.count < totalSuggestions && totalSuggestions > 0 else {
                 isLoading = false
                 return
@@ -74,15 +80,22 @@ struct SuggestionsView: View {
             let numberOfItemsPerPage = min(suggestionsPerPage, totalSuggestions - currentSuggestions.count)
             try await suggestionDomainService.fetchSuggestionTypes()
             try await suggestionDomainService.list(offset: 0, limit: numberOfItemsPerPage)
+
+            // Refresh again after data is written
+            await suggestionsQueryable.refresh()
+            await suggestionsTypeQueryable.refresh()
         } catch {
             logger.debug("Error fetching user details \(error)")
         }
-        try? await Task.sleep(for: .seconds(1))
+
+        // Small delay to let UI settle
+        try? await Task.sleep(for: .milliseconds(300))
         isLoading = false
     }
 
     @MainActor
     private func loadNextPageIfNeeded() async {
+        guard !isLoadingNextPage else { return }
         isLoadingNextPage = true
         do {
             let suggestionGroup = try await suggestionDomainService.fetchCurrentSuggestionGroup()
@@ -93,10 +106,15 @@ struct SuggestionsView: View {
             }
             let numberOfItemsPerPage = min(suggestionsPerPage, totalSuggestions - currentSuggestions.count)
             try await suggestionDomainService.list(offset: currentSuggestions.count, limit: numberOfItemsPerPage)
+
+            // Explicitly refresh after data is written
+            await suggestionsQueryable.refresh()
         } catch {
             logger.debug("Error fetching next page \(error)")
         }
-        try? await Task.sleep(for: .seconds(1))
+
+        // Small delay to let UI settle
+        try? await Task.sleep(for: .milliseconds(300))
         isLoadingNextPage = false
     }
 

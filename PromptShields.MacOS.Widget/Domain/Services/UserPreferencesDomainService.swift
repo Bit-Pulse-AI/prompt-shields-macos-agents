@@ -55,8 +55,10 @@ struct UserPreferencesDomainServiceImpl: UserPreferencesDomainService {
     }
 
     func newPreferences() async throws -> UserPreferences {
+        // Initialize with nil to indicate "all types enabled" (not yet configured)
+        // When user explicitly toggles off a type, it will be removed from the list
         let preference = UserPreferences(model: .init(uuid: UUID().uuidString,
-                                                      enabledSuggestionTypes: []))
+                                                      enabledSuggestionTypes: nil))
         return try await persistenceManager.insert(domain: preference)
     }
 }

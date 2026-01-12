@@ -50,6 +50,7 @@ final class AccessibilityManagerImpl: ObservableObject {
 
     private let pollInterval: TimeInterval = 0.5
     private var timerTask: Task<Void, Never>?
+    private var permissionCheckTask: Task<Void, Never>?
     private let textFieldDetector = TextFieldDetector()
     private var previousText: String?
     private var previousRect: CGRect?
@@ -69,15 +70,55 @@ final class AccessibilityManagerImpl: ObservableObject {
     // MARK: - Initialization
 
     init() {
-        // Check initial permission state without prompting
+        // Initial permission check - may be stale immediately after launch
         hasAccessibilityPermission = AXIsProcessTrusted()
         setupSystemLockObservers()
 
-        logger.debug("AccessibilityManager initialized. Permissions: \(self.hasAccessibilityPermission)")
+        // Schedule additional permission checks after a delay
+        // This handles the case where permissions are granted but not yet visible
+        // (e.g., after app reinstall with existing system permissions)
+        startInitialPermissionPolling()
+
+        logger.debug("AccessibilityManager initialized. Initial permissions: \(self.hasAccessibilityPermission)")
+    }
+
+    /// Polls for permission state several times at startup to catch delayed permission visibility
+    private func startInitialPermissionPolling() {
+        permissionCheckTask = Task { @MainActor [weak self] in
+            // Check multiple times over the first few seconds
+            let checkIntervals: [Duration] = [.milliseconds(500), .seconds(1), .seconds(2), .seconds(5)]
+
+            for interval in checkIntervals {
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(for: interval)
+
+                guard let self = self else { return }
+
+                let currentState = AXIsProcessTrusted()
+
+                // Only update if permission was granted (never downgrade without user action)
+                if currentState && !self.hasAccessibilityPermission {
+                    self.logger.debug("Accessibility permissions detected after delay")
+                    self.hasAccessibilityPermission = true
+
+                    // If we were waiting for permissions, start monitoring
+                    if self.monitoringState == .awaitingPermissions {
+                        self.startMonitoring()
+                    }
+                }
+
+                // If already granted, no need to keep checking
+                if self.hasAccessibilityPermission {
+                    self.logger.debug("Permissions confirmed, stopping initial polling")
+                    return
+                }
+            }
+        }
     }
 
     deinit {
         timerTask?.cancel()
+        permissionCheckTask?.cancel()
     }
 
     // MARK: - Public API
@@ -136,16 +177,40 @@ final class AccessibilityManagerImpl: ObservableObject {
         logger.debug("Resuming monitoring after user interaction")
         }
 
-    /// Refreshes the permission state without prompting
+    /// Refreshes the permission state without prompting.
+    /// Call this when the app becomes active or when you suspect permissions may have changed.
     func refreshPermissionState() {
         let wasGranted = hasAccessibilityPermission
-        hasAccessibilityPermission = AXIsProcessTrusted()
+        let currentState = AXIsProcessTrusted()
+
+        logger.debug("Refreshing permission state: was=\(wasGranted), now=\(currentState)")
+
+        hasAccessibilityPermission = currentState
 
         // If permissions were just granted and we're waiting, start monitoring
-        if !wasGranted && hasAccessibilityPermission && monitoringState == .awaitingPermissions {
+        if !wasGranted && currentState && monitoringState == .awaitingPermissions {
             logger.debug("Permissions granted, starting monitoring")
+            Analytics.trackAsync(.accessibilityPermissionGranted)
             startMonitoring()
         }
+
+        // If permissions were revoked while monitoring, pause
+        if wasGranted && !currentState && monitoringState == .enabled {
+            logger.debug("Permissions revoked, pausing monitoring")
+            monitoringState = .awaitingPermissions
+            clearElementInfo()
+        }
+    }
+
+    /// Forces a fresh check of accessibility permissions from the system.
+    /// This bypasses any caching and queries the TCC database directly.
+    func forcePermissionCheck() -> Bool {
+        // AXIsProcessTrusted() queries the TCC database each time
+        let granted = AXIsProcessTrusted()
+        hasAccessibilityPermission = granted
+
+        logger.debug("Force permission check result: \(granted)")
+        return granted
     }
 
     // MARK: - Permission Handling
@@ -232,17 +297,19 @@ final class AccessibilityManagerImpl: ObservableObject {
         logger.debug("Stopped accessibility monitoring")
     }
 
-    // MARK: - System Lock Observers
+    // MARK: - System Observers
 
     private func setupSystemLockObservers() {
         let dnc = DistributedNotificationCenter.default()
+        let nc = NotificationCenter.default
 
+        // Screen lock/unlock observers
         dnc.addObserver(
             forName: .init("com.apple.screenIsLocked"),
             object: nil,
             queue: .main
         ) { [weak self] _ in
-        Task { @MainActor [weak self] in
+            Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 if self.monitoringState == .enabled {
                     self.savedMonitoringState = .enabled
@@ -250,7 +317,7 @@ final class AccessibilityManagerImpl: ObservableObject {
                     self.clearElementInfo()
                     self.logger.debug("Screen locked, pausing monitoring")
                 }
-        }
+            }
         }
 
         dnc.addObserver(
@@ -264,7 +331,33 @@ final class AccessibilityManagerImpl: ObservableObject {
                     self.monitoringState = .enabled
                     self.savedMonitoringState = nil
                     self.logger.debug("Screen unlocked, resuming monitoring")
-                    }
+                }
+            }
+        }
+
+        nc.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.refreshPermissionState()
+            }
+        }
+
+        nc.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                   app.bundleIdentifier == Bundle.main.bundleIdentifier {
+                    try? await Task.sleep(for: .milliseconds(250))
+                    self.refreshPermissionState()
+                }
             }
         }
     }
