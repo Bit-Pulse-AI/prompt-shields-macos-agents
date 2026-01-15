@@ -66,6 +66,8 @@ final class DefaultFocusedElementProvider: FocusedElementProvider {
     }
 
     private func getFocusedElement(forApp app: NSRunningApplication) -> AXUIElement? {
+        let bundleId = app.bundleIdentifier ?? ""
+        let isBrowser = AXUIElementSafeWrapper.isBrowser(bundleId: bundleId)
         let appElement = AXUIElementCreateApplication(app.processIdentifier)
 
         // Try to get focused UI element directly
@@ -82,12 +84,72 @@ final class DefaultFocusedElementProvider: FocusedElementProvider {
 
         let focusedElement = focused as! AXUIElement
 
-        // Verify it's a valid text element
+        // Verify it's a valid element
         guard AXUIElementSafeWrapper.isValidElement(focusedElement) else {
             return nil
         }
 
+        // For browsers, try to find the actual editable element within web content
+        if isBrowser {
+            // Check if we're in web content
+            if AXUIElementSafeWrapper.isWebContent(focusedElement) {
+                // Try to find the actual editable element
+                if let editableElement = AXUIElementSafeWrapper.findEditableElementInWebContent(focusedElement) {
+                    return editableElement
+                }
+            }
+
+            // Check if the focused element is editable
+            if AXUIElementSafeWrapper.isEditable(focusedElement) ||
+               AXUIElementSafeWrapper.isTextInputElement(focusedElement) {
+                return focusedElement
+            }
+
+            // Search within the focused element for editable content
+            if let editableElement = AXUIElementSafeWrapper.findEditableElementInWebContent(focusedElement) {
+                return editableElement
+            }
+
+            // Try to find web area and search within it
+            if let webArea = findWebArea(in: appElement) {
+                if let editableElement = AXUIElementSafeWrapper.getFocusedElementInWebContent(webArea) {
+                    return editableElement
+                }
+            }
+        }
+
         return focusedElement
+    }
+
+    /// Finds the web area element starting from an app element
+    private func findWebArea(in element: AXUIElement) -> AXUIElement? {
+        // Try to get the focused window first
+        var windowRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element,
+                                         kAXFocusedWindowAttribute as CFString,
+                                         &windowRef) == .success,
+           let window = AXUIElementSafeWrapper.asAXUIElement(windowRef) {
+            return findElementByRole(in: window, role: "AXWebArea", maxDepth: 15)
+        }
+        return nil
+    }
+
+    /// Finds an element by role in the accessibility tree
+    private func findElementByRole(in element: AXUIElement, role: String, maxDepth: Int, depth: Int = 0) -> AXUIElement? {
+        guard depth < maxDepth, AXUIElementSafeWrapper.isValidElement(element) else { return nil }
+
+        if let elementRole = AXUIElementSafeWrapper.getRole(from: element), elementRole == role {
+            return element
+        }
+
+        let children = AXUIElementSafeWrapper.getChildren(from: element)
+        for child in children {
+            if let found = findElementByRole(in: child, role: role, maxDepth: maxDepth, depth: depth + 1) {
+                return found
+            }
+        }
+
+        return nil
     }
 }
 
@@ -118,6 +180,7 @@ final class DefaultTextInjectionService: TextInjectionService {
 
         // Step 1: Activate the target application
         let targetBundleId = targetInfo?.applicationBundleId
+        let isBrowser = targetBundleId.map { AXUIElementSafeWrapper.isBrowser(bundleId: $0) } ?? false
         try activateTargetApplication(bundleId: targetBundleId)
 
         // Step 2: Get a fresh reference to the focused element
@@ -145,13 +208,22 @@ final class DefaultTextInjectionService: TextInjectionService {
         // Step 4: Focus the element
         focusElement(element)
 
-        // Step 5: Determine injection strategy based on whether we're replacing selected text
+        // Step 5: Determine injection strategy based on context
         let isSelectedText = targetInfo?.isSelectedText ?? false
 
         if isSelectedText {
-            try injectAsSelectedText(text, into: element)
+            // For browsers, prefer clipboard-based injection as it's more reliable
+            if isBrowser {
+                try injectAsSelectedTextForBrowser(text, into: element)
+            } else {
+                try injectAsSelectedText(text, into: element)
+            }
         } else {
-            try injectAsFullText(text, into: element)
+            if isBrowser {
+                try injectAsFullTextForBrowser(text, into: element)
+            } else {
+                try injectAsFullText(text, into: element)
+            }
         }
 
         logger.debug("Text injection completed successfully")
@@ -318,6 +390,86 @@ final class DefaultTextInjectionService: TextInjectionService {
         }
 
         return selectAllSent && pasteSent
+    }
+
+    // MARK: - Browser-Specific Injection Methods
+
+    /// Injects text as selected text replacement for browsers
+    /// Browsers often don't support direct accessibility attribute setting, so we use clipboard-first approach
+    private func injectAsSelectedTextForBrowser(_ text: String, into element: AXUIElement) throws {
+        // Strategy 1: Try clipboard paste (most reliable for browsers)
+        if tryClipboardPasteForSelectedText(text, into: element) {
+            logger.debug("Browser: Replaced selected text via clipboard paste")
+            return
+        }
+
+        // Strategy 2: Try direct selected text replacement (may work for some browsers)
+        let directResult = AXUIElementSetAttributeValue(
+            element,
+            kAXSelectedTextAttribute as CFString,
+            text as CFTypeRef
+        )
+
+        if directResult == .success {
+            logger.debug("Browser: Replaced selected text via kAXSelectedTextAttribute")
+            return
+        }
+
+        throw AccessibilityError.failedToInjectText
+    }
+
+    /// Injects text as full text replacement for browsers
+    private func injectAsFullTextForBrowser(_ text: String, into element: AXUIElement) throws {
+        // Strategy 1: Clipboard paste with select all (most reliable)
+        if tryClipboardPaste(text, into: element) {
+            logger.debug("Browser: Injected via clipboard paste")
+            return
+        }
+
+        // Strategy 2: Try direct value setting (rarely works for web content)
+        let directResult = AXUIElementSetAttributeValue(
+            element,
+            kAXValueAttribute as CFString,
+            text as CFTypeRef
+        )
+
+        if directResult == .success {
+            logger.debug("Browser: Injected via kAXValueAttribute")
+            return
+        }
+
+        // Strategy 3: Try select-all and replace
+        if trySelectAllAndReplace(text, in: element) {
+            logger.debug("Browser: Injected via select-all-replace")
+            return
+        }
+
+        throw AccessibilityError.failedToInjectText
+    }
+
+    /// Clipboard paste specifically for replacing selected text (no select-all)
+    private func tryClipboardPasteForSelectedText(_ text: String, into element: AXUIElement) -> Bool {
+        // Save clipboard
+        let pasteboard = NSPasteboard.general
+        let savedContents = pasteboard.string(forType: .string)
+
+        // Set new content
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+
+        // Just paste - the selection is already active
+        let pasteSent = sendKeyboardShortcut(keyCode: 0x09, command: true) // 'v'
+        Thread.sleep(forTimeInterval: 0.1)
+
+        // Restore clipboard
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            pasteboard.clearContents()
+            if let saved = savedContents {
+                pasteboard.setString(saved, forType: .string)
+            }
+        }
+
+        return pasteSent
     }
 
     private func sendKeyboardShortcut(keyCode: CGKeyCode, command: Bool) -> Bool {

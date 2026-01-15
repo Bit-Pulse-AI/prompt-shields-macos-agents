@@ -7,7 +7,6 @@ struct TermsAndConditionsView: View {
     let onDecline: () -> Void
 
     @EnvironmentObject private var globalMainStateModel: MainStateModel
-    @State private var reachedBottom = false
     @State private var viewportHeight: CGFloat = 0
     @State private var bottomSentinelMinY: CGFloat = .greatestFiniteMagnitude
 
@@ -17,23 +16,12 @@ struct TermsAndConditionsView: View {
     var body: some View {
         VStack(spacing: 12) {
             header
-
             termsScroller
-            if reachedBottom {
-                unlockHint
-            }
-
             actionButtons
         }
         .padding(16)
         .frame(minWidth: 640, minHeight: 600)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onChange(of: viewportHeight) { _, _ in
-            updateReachedBottom()
-        }
-        .onChange(of: bottomSentinelMinY) { _, _ in
-            updateReachedBottom()
-        }
     }
 
     // MARK: UI
@@ -43,7 +31,7 @@ struct TermsAndConditionsView: View {
             Text("Promptshields Terms & Conditions")
                 .font(.title3.weight(.semibold))
 
-            Text("Please read the full agreement. Accept and Decline will become available once you reach the end.")
+            Text("Please read the full agreement.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -84,11 +72,9 @@ struct TermsAndConditionsView: View {
             )
             .onAppear {
                 viewportHeight = outerGeo.size.height
-                updateReachedBottom()
             }
             .onChange(of: outerGeo.size.height) { newValue, _ in
                 viewportHeight = newValue
-                updateReachedBottom()
             }
             // Listen for sentinel position updates via preference
             .onPreferenceChange(BottomSentinelMinYKey.self) { minY in
@@ -96,17 +82,6 @@ struct TermsAndConditionsView: View {
             }
         }
         .frame(minHeight: 420)
-    }
-
-    private var unlockHint: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "checkmark.circle.fill")
-            Text("You’ve reached the end of the agreement.")
-        }
-        .font(.footnote)
-        .foregroundStyle(reachedBottom ? .green : .secondary)
-        .animation(.easeInOut(duration: 0.15), value: reachedBottom)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -123,19 +98,8 @@ struct TermsAndConditionsView: View {
             Button("Accept") {
                 onAccept()
             }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(ButtonStyleBlack())
-                .disabled(!reachedBottom)
-        }
-    }
-
-    // MARK: Logic
-
-    private func updateReachedBottom() {
-        guard viewportHeight > 0, bottomSentinelMinY.isFinite else { return }
-        let reached = bottomSentinelMinY <= (viewportHeight + bottomTolerance)
-        if reached != reachedBottom {
-            reachedBottom = reached
+            .keyboardShortcut(.defaultAction)
+            .buttonStyle(ButtonStyleBlack())
         }
     }
 }

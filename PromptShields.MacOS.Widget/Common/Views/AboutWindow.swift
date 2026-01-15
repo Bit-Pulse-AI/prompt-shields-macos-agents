@@ -72,7 +72,7 @@ struct AboutView: View {
 
             // Copyright and company info
             VStack(spacing: 4) {
-                Text("© 2025 Promptshields")
+                Text("© 2026 Promptshields")
                     .font(.caption)
                     .foregroundColor(.secondary)
 

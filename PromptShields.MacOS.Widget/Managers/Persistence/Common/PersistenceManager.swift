@@ -237,13 +237,13 @@ actor PersistenceManagerImpl: PersistenceManager {
     func deleteAllAndInsert<D: Domain>(domains: [D]) async throws {
         // Delete all existing items of this entity type
         try modelContext.delete(model: D.P.self)
-        
+
         // Insert all new items
         for domain in domains {
             let persistent = domain.toPersistentModel(context: modelContext)
             modelContext.insert(persistent)
         }
-        
+
         // Single save for both operations - atomic transaction
         try modelContext.save()
     }

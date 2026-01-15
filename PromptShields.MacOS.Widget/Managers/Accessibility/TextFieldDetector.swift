@@ -5,6 +5,7 @@ import ApplicationServices
 
 enum TextFieldDetectorError: Error {
     case nonSelectedError
+    case notEditableElement
 }
 final class TextFieldDetector: Sendable {
     private let textExtractor = TextExtractor()
@@ -80,19 +81,17 @@ final class TextFieldDetector: Sendable {
         )
     }
 
+    @MainActor
     private func getElementRect(_ element: AXUIElement) throws -> CGRect {
         guard let mainScreen = NSScreen.screens.first(where: { $0.frame.origin == .zero }) else {
             throw AccessibilityError.failedToGetFrame
         }
         let screenHeight = mainScreen.frame.height
-        var rectangle: CGRect? = .zero
+        var rectangle: CGRect?
 
-        // Get window clip
-        guard let windowClip = getWindowClipRect(for: element, screenHeight: screenHeight) else {
-            throw AccessibilityError.failedToGetFrame
-        }
+        // Get window clip - may fail for browser web content, so we'll handle that case
+        let windowClip = getWindowClipRect(for: element, screenHeight: screenHeight)
 
-        var textValue: CFTypeRef?
         var selRangeValue: CFTypeRef?
         if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selRangeValue) == .success,
            let rangeValue = selRangeValue, numberOfSelectedCharacters(from: rangeValue) > 0 {
@@ -107,38 +106,34 @@ final class TextFieldDetector: Sendable {
                 var selBounds = CGRect.zero
                 if AXValueGetValue(selBoundsAXValue as! AXValue, .cgRect, &selBounds) {
                     let flippedSel = flipRect(selBounds, screenHeight: screenHeight)
-                    let clipped = flippedSel.intersection(windowClip)
-                    if !clipped.isEmpty {
-                        rectangle = clipped
-                    }
-                }
-            }
-        } else if AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &textValue) == .success,
-           let textString = textValue as? String, !textString.isEmpty {
-            // Make range for entire text
-            var fullRange = CFRange(location: 0, length: textString.utf16.count)
-            if let rangeAXValue = AXValueCreate(.cfRange, &fullRange) {
-                var textBoundsValue: CFTypeRef?
-                if AXUIElementCopyParameterizedAttributeValue(
-                    element,
-                    kAXBoundsForRangeParameterizedAttribute as CFString,
-                    rangeAXValue,
-                    &textBoundsValue
-                ) == .success,
-                   let textBoundsAXValue = textBoundsValue {
-                    var textBounds = CGRect.zero
-                    if AXValueGetValue(textBoundsAXValue as! AXValue, .cgRect, &textBounds) {
-                        let flippedTextRect = flipRect(textBounds, screenHeight: screenHeight)
-                        let clipped = flippedTextRect.intersection(windowClip)
+                    // For browsers, window clip might fail - use bounds directly if valid
+                    if let windowClip = windowClip {
+                        let clipped = flippedSel.intersection(windowClip)
                         if !clipped.isEmpty {
                             rectangle = clipped
                         }
                     }
+                    // If no window clip or clipping resulted in empty rect, use the flipped bounds directly
+                    if rectangle == nil && flippedSel.width > 0 && flippedSel.height > 0 {
+                        rectangle = flippedSel
+                    }
                 }
             }
+        }
 
-            if let elemFrame = getElementFrameClippedToWindow(element, screenHeight: screenHeight) {
+        // Fallback: try element's direct frame
+        if rectangle == nil {
+            if let elemFrame = getElementFrameClippedToWindow(element, screenHeight: screenHeight), !elemFrame.isEmpty {
                 rectangle = elemFrame
+            } else if let directFrame = getElementDirectFrame(element, screenHeight: screenHeight), !directFrame.isEmpty {
+                rectangle = directFrame
+            }
+        }
+
+        // Last resort fallback for browsers: try to get frame from parent chain
+        if rectangle == nil {
+            if let parentFrame = getFrameFromParentChain(element, screenHeight: screenHeight) {
+                rectangle = parentFrame
             }
         }
 
@@ -146,6 +141,60 @@ final class TextFieldDetector: Sendable {
             throw AccessibilityError.failedToGetFrame
         }
         return CGRect(x: rectangle.origin.x - padding, y: rectangle.origin.y + rectangle.size.height + padding, width: rectangle.size.width + padding * 2, height: rectangle.size.height + padding * 2)
+    }
+
+    /// Gets the element's direct frame without window clipping
+    private func getElementDirectFrame(_ element: AXUIElement, screenHeight: CGFloat) -> CGRect? {
+        var posValue: CFTypeRef?
+        var sizeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &posValue) == .success,
+              let pos = posValue,
+              AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeValue) == .success,
+              let sz = sizeValue else {
+            return nil
+        }
+
+        var originTopLeft = CGPoint.zero
+        var size = CGSize.zero
+        AXValueGetValue(pos as! AXValue, .cgPoint, &originTopLeft)
+        AXValueGetValue(sz as! AXValue, .cgSize, &size)
+
+        guard size.width > 0 && size.height > 0 else {
+            return nil
+        }
+
+        return CGRect(
+            x: originTopLeft.x,
+            y: screenHeight - (originTopLeft.y + size.height),
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    /// Traverses parent chain to find a valid frame (useful for browser web content)
+    private func getFrameFromParentChain(_ element: AXUIElement, screenHeight: CGFloat) -> CGRect? {
+        var currentElement: AXUIElement? = element
+        var depth = 0
+        let maxDepth = 10
+
+        while let current = currentElement, depth < maxDepth {
+            // Try to get frame from this element
+            if let frame = getElementDirectFrame(current, screenHeight: screenHeight),
+               frame.width > 10 && frame.height > 10 { // Sanity check for reasonable size
+                return frame
+            }
+
+            // Move to parent
+            var parentRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(current, kAXParentAttribute as CFString, &parentRef) == .success,
+                  let parent = AXUIElementSafeWrapper.asAXUIElement(parentRef) else {
+                break
+            }
+            currentElement = parent
+            depth += 1
+        }
+
+        return nil
     }
 
     private func getApplicationInfo(for element: AXUIElement) throws -> (name: String, bundleId: String) {
@@ -167,28 +216,38 @@ final class TextFieldDetector: Sendable {
     @MainActor
     func getAXElementOrSelectionInfo(_ element: AXUIElement) throws -> ElementInfo {
         let applicationInfo = try getApplicationInfo(for: element)
+        let isBrowser = AXUIElementSafeWrapper.isBrowser(bundleId: applicationInfo.bundleId)
 
         // First check if there's selected text
         let selectedText = AXUIElementSafeWrapper.getSelectedText(from: element)
-        let isFromSelection = selectedText != nil
+        let isFromSelection = selectedText != nil && !selectedText!.isEmpty
+
+        // For non-browsers, require selected text
+        // For browsers, also detect editable fields without selection
         if !isFromSelection {
-            throw TextFieldDetectorError.nonSelectedError
+            // Check if this is an editable element (especially important for browsers)
+            let isEditable = AXUIElementSafeWrapper.isEditable(element) ||
+                            AXUIElementSafeWrapper.isTextInputElement(element)
+
+            if !isEditable {
+                throw TextFieldDetectorError.nonSelectedError
+            }
+
+            // For editable fields without selection, still require selected text for action
+            // This maintains the current behavior but allows the element to be tracked
+            if !isBrowser {
+                throw TextFieldDetectorError.nonSelectedError
+            }
         }
+
         let text: String
-        if let selectedText = selectedText {
+        if let selectedText = selectedText, !selectedText.isEmpty {
             // Use selected text directly
             text = selectedText
         } else {
-            // Use the safer version of text extraction for full element text
-            let textResult = self.textExtractor.getAllTextSafely(from: element)
-            switch textResult {
-            case .success(let extractedText):
-                text = extractedText
-            case .failure(let error):
-                // Log the error but don't fail the entire operation
-                logger.debug("Failed to extract text: \(error.localizedDescription)")
-                text = ""
-            }
+            // For editable fields without selection, we need to handle this case
+            // For now, require selection for the action to appear
+            throw TextFieldDetectorError.nonSelectedError
         }
 
         // Register the element in the registry and get its ID
@@ -197,9 +256,9 @@ final class TextFieldDetector: Sendable {
 
         return ElementInfo(
             text: text,
-                           applicationName: applicationInfo.name,
-                           applicationBundleId: applicationInfo.bundleId,
-                           frame: try getElementRect(element),
+            applicationName: applicationInfo.name,
+            applicationBundleId: applicationInfo.bundleId,
+            frame: try getElementRect(element),
             elementIdentifier: elementId,
             isSelectedText: isFromSelection
         )
@@ -207,18 +266,29 @@ final class TextFieldDetector: Sendable {
 
     // MARK: - Helpers
 
+    @MainActor
     private func getWindowClipRect(for element: AXUIElement, screenHeight: CGFloat) -> CGRect? {
+        // Try direct window attribute first
         var windowRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXWindowAttribute as CFString, &windowRef) == .success,
-              let windowElement = windowRef else {
+        var windowElement: AXUIElement?
+
+        if AXUIElementCopyAttributeValue(element, kAXWindowAttribute as CFString, &windowRef) == .success,
+           let window = AXUIElementSafeWrapper.asAXUIElement(windowRef) {
+            windowElement = window
+        } else {
+            // For browsers, traverse parent chain to find window
+            windowElement = findWindowInParentChain(element)
+        }
+
+        guard let window = windowElement else {
             return nil
         }
 
         var winPosValue: CFTypeRef?
         var winSizeValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(windowElement as! AXUIElement, kAXPositionAttribute as CFString, &winPosValue) == .success,
+        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &winPosValue) == .success,
               let winPos = winPosValue,
-              AXUIElementCopyAttributeValue(windowElement as! AXUIElement, kAXSizeAttribute as CFString, &winSizeValue) == .success,
+              AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &winSizeValue) == .success,
               let winSize = winSizeValue else {
             return nil
         }
@@ -236,32 +306,50 @@ final class TextFieldDetector: Sendable {
         )
     }
 
+    /// Finds a window element by traversing the parent chain
+    @MainActor
+    private func findWindowInParentChain(_ element: AXUIElement) -> AXUIElement? {
+        var currentElement: AXUIElement? = element
+        var depth = 0
+        let maxDepth = 20
+
+        while let current = currentElement, depth < maxDepth {
+            // Check if this element is a window
+            if let role = AXUIElementSafeWrapper.getRole(from: current), role == "AXWindow" {
+                return current
+            }
+
+            // Try the window attribute of this element
+            var windowRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(current, kAXWindowAttribute as CFString, &windowRef) == .success,
+               let window = AXUIElementSafeWrapper.asAXUIElement(windowRef) {
+                return window
+            }
+
+            // Move to parent
+            var parentRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(current, kAXParentAttribute as CFString, &parentRef) == .success,
+                  let parent = AXUIElementSafeWrapper.asAXUIElement(parentRef) else {
+                break
+            }
+            currentElement = parent
+            depth += 1
+        }
+
+        return nil
+    }
+
+    @MainActor
     private func getElementFrameClippedToWindow(_ element: AXUIElement, screenHeight: CGFloat) -> CGRect? {
-        var posValue: CFTypeRef?
-        var sizeValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &posValue) == .success,
-              let pos = posValue,
-              AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeValue) == .success,
-              let sz = sizeValue else {
+        guard let directFrame = getElementDirectFrame(element, screenHeight: screenHeight) else {
             return nil
         }
 
-        var originTopLeft = CGPoint.zero
-        var size = CGSize.zero
-        AXValueGetValue(pos as! AXValue, .cgPoint, &originTopLeft)
-        AXValueGetValue(sz as! AXValue, .cgSize, &size)
-
-        let elemBottomLeft = CGRect(
-            x: originTopLeft.x,
-            y: screenHeight - (originTopLeft.y + size.height),
-            width: size.width,
-            height: size.height
-        )
-
         if let windowClip = getWindowClipRect(for: element, screenHeight: screenHeight) {
-            return elemBottomLeft.intersection(windowClip)
+            let clipped = directFrame.intersection(windowClip)
+            return clipped.isEmpty ? directFrame : clipped
         } else {
-            return elemBottomLeft
+            return directFrame
         }
     }
 }

@@ -248,4 +248,246 @@ final class AXUIElementSafeWrapper {
             operation()
         }
     }
+
+    // MARK: - Role Detection
+
+    /// Common editable text roles in accessibility API
+    private static let editableRoles: Set<String> = [
+        "AXTextField",
+        "AXTextArea",
+        "AXComboBox",
+        "AXSearchField"
+    ]
+
+    /// Web content roles that may contain editable elements
+    private static let webContentRoles: Set<String> = [
+        "AXWebArea",
+        "AXGroup"
+    ]
+
+    /// Browser bundle identifiers
+    private static let browserBundleIds: Set<String> = [
+        "com.apple.Safari",
+        "com.google.Chrome",
+        "com.google.Chrome.canary",
+        "org.chromium.Chromium",
+        "com.microsoft.edgemac",
+        "com.brave.Browser",
+        "com.operasoftware.Opera",
+        "org.mozilla.firefox",
+        "com.vivaldi.Vivaldi",
+        "company.thebrowser.Browser" // Arc
+    ]
+
+    /// Gets the role of an AXUIElement
+    /// - Parameter element: The element to get the role from
+    /// - Returns: The role string or nil if unavailable
+    @MainActor
+    static func getRole(from element: AXUIElement) -> String? {
+        guard let roleRef = getAttributeValue(from: element, attribute: kAXRoleAttribute) else {
+            return nil
+        }
+        return roleRef as? String
+    }
+
+    /// Gets the subrole of an AXUIElement
+    /// - Parameter element: The element to get the subrole from
+    /// - Returns: The subrole string or nil if unavailable
+    @MainActor
+    static func getSubrole(from element: AXUIElement) -> String? {
+        guard let subroleRef = getAttributeValue(from: element, attribute: kAXSubroleAttribute) else {
+            return nil
+        }
+        return subroleRef as? String
+    }
+
+    static func asAXUIElement(_ value: CFTypeRef?) -> AXUIElement? {
+        guard let value else { return nil }
+        guard CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return unsafeBitCast(value, to: AXUIElement.self)
+    }
+
+    /// Checks if an element is editable
+    /// - Parameter element: The element to check
+    /// - Returns: True if the element is editable
+    @MainActor
+    static func isEditable(_ element: AXUIElement) -> Bool {
+        // Check explicit editable attribute (used by web content)
+        if let editableRef = getAttributeValue(from: element, attribute: "AXEditable"),
+           let editable = editableRef as? Bool, editable {
+            return true
+        }
+
+        // Check if element has an editable role
+        if let role = getRole(from: element), editableRoles.contains(role) {
+            return true
+        }
+
+        // Check for editable ancestor (contenteditable in web)
+        if let editableAncestorRef = getAttributeValue(from: element, attribute: "AXEditableAncestor"),
+           let _ = asAXUIElement(editableAncestorRef) {
+            return true
+        }
+
+        return false
+    }
+
+    /// Checks if an element is a text input element (editable or has text value support)
+    /// - Parameter element: The element to check
+    /// - Returns: True if the element supports text input
+    @MainActor
+    static func isTextInputElement(_ element: AXUIElement) -> Bool {
+        // Check if explicitly editable
+        if isEditable(element) {
+            return true
+        }
+
+        // Check if it has a value attribute that can potentially be modified
+        guard let role = getRole(from: element) else {
+            return false
+        }
+
+        // Standard text input roles
+        if editableRoles.contains(role) {
+            return true
+        }
+
+        // Check for text-related attributes that suggest editability
+        if getAttributeValue(from: element, attribute: kAXValueAttribute) != nil ||
+           getAttributeValue(from: element, attribute: kAXSelectedTextAttribute) != nil ||
+           getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) != nil {
+            // Has text-related attributes, verify it's a text element
+            let textRoles: Set<String> = ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField", "AXStaticText", "AXGroup"]
+            if textRoles.contains(role) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /// Checks if an application is a web browser
+    /// - Parameter bundleId: The bundle identifier of the application
+    /// - Returns: True if the application is a known browser
+    static func isBrowser(bundleId: String) -> Bool {
+        return browserBundleIds.contains(bundleId)
+    }
+
+    /// Checks if an element is web content (AXWebArea)
+    /// - Parameter element: The element to check
+    /// - Returns: True if the element is or is within web content
+    @MainActor
+    static func isWebContent(_ element: AXUIElement) -> Bool {
+        if let role = getRole(from: element), role == "AXWebArea" {
+            return true
+        }
+
+        // Check parent chain for web area
+        var currentElement: AXUIElement? = element
+        var depth = 0
+        let maxDepth = 15
+
+        while let current = currentElement, depth < maxDepth {
+            if let role = getRole(from: current), role == "AXWebArea" {
+                return true
+            }
+
+            guard let parentRef = getAttributeValue(from: current, attribute: kAXParentAttribute),
+                  let parent = asAXUIElement(parentRef) else {
+                break
+            }
+            currentElement = parent
+            depth += 1
+        }
+
+        return false
+    }
+
+    /// Finds the first editable element in a web content area
+    /// This traverses the accessibility tree to find text inputs within web content
+    /// - Parameters:
+    ///   - element: The starting element (typically focused element or web area)
+    ///   - maxDepth: Maximum depth to traverse
+    /// - Returns: The first editable element found, or nil
+    @MainActor
+    static func findEditableElementInWebContent(_ element: AXUIElement, maxDepth: Int = 25) -> AXUIElement? {
+        // If this element is editable, return it
+        if isEditable(element) {
+            return element
+        }
+
+        // Check if current element has focus and is a text element
+        if let role = getRole(from: element) {
+            // In browsers, focused text fields may have AXGroup role with AXEditable or focused text attributes
+            if role == "AXGroup" || role == "AXTextField" || role == "AXTextArea" {
+                // Check for focused state
+                if let focusedRef = getAttributeValue(from: element, attribute: kAXFocusedAttribute),
+                   let focused = focusedRef as? Bool, focused {
+                    // If it has text-related attributes, it's likely our target
+                    if getAttributeValue(from: element, attribute: kAXValueAttribute) != nil ||
+                       getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) != nil {
+                        return element
+                    }
+                }
+            }
+        }
+
+        return findEditableRecursive(element, depth: 0, maxDepth: maxDepth)
+    }
+
+    @MainActor
+    private static func findEditableRecursive(_ element: AXUIElement, depth: Int, maxDepth: Int) -> AXUIElement? {
+        guard depth < maxDepth, isValidElement(element) else { return nil }
+
+        // Check if this element is editable and focused
+        if isEditable(element) {
+            if let focusedRef = getAttributeValue(from: element, attribute: kAXFocusedAttribute),
+               let focused = focusedRef as? Bool, focused {
+                return element
+            }
+        }
+
+        // Check children
+        let children = getChildren(from: element)
+        for child in children {
+            // First check if child is focused - browsers often report the focused element directly
+            if let focusedRef = getAttributeValue(from: child, attribute: kAXFocusedAttribute),
+               let focused = focusedRef as? Bool, focused {
+                if isEditable(child) || isTextInputElement(child) {
+                    return child
+                }
+            }
+
+            // Recurse into child
+            if let found = findEditableRecursive(child, depth: depth + 1, maxDepth: maxDepth) {
+                return found
+            }
+        }
+
+        return nil
+    }
+
+    /// Gets the focused element within web content, including nested iframes and shadow DOM
+    /// - Parameter webArea: The web area element to search within
+    /// - Returns: The focused editable element, or nil if not found
+    @MainActor
+    static func getFocusedElementInWebContent(_ webArea: AXUIElement) -> AXUIElement? {
+        // First try the direct focused element approach
+        if let focusedRef = getAttributeValue(from: webArea, attribute: kAXFocusedUIElementAttribute) {
+            let focused = focusedRef as! AXUIElement
+            if isValidElement(focused) {
+                // Check if the focused element is editable or is a text input
+                if isEditable(focused) || isTextInputElement(focused) {
+                    return focused
+                }
+                // The focused element might be a container, search within it
+                if let editable = findEditableElementInWebContent(focused, maxDepth: 10) {
+                    return editable
+                }
+            }
+        }
+
+        // Fall back to searching the entire web area
+        return findEditableElementInWebContent(webArea, maxDepth: 25)
+    }
 }

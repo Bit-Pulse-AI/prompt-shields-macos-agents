@@ -442,6 +442,9 @@ final class AccessibilityManagerImpl: ObservableObject {
                 return nil
             }
 
+            let bundleId = frontApp.bundleIdentifier ?? ""
+            let isBrowser = AXUIElementSafeWrapper.isBrowser(bundleId: bundleId)
+
             guard let appElement = AXUIElementSafeWrapper.createApplicationElement(
                 processIdentifier: frontApp.processIdentifier
             ) else {
@@ -455,6 +458,28 @@ final class AccessibilityManagerImpl: ObservableObject {
             ) {
                 let focusedElement = focusedRef as! AXUIElement
                 if AXUIElementSafeWrapper.isValidElement(focusedElement) {
+                    // For browsers, check if we're in web content and need to find editable element
+                    if isBrowser {
+                        // Check if the focused element is web content
+                        if AXUIElementSafeWrapper.isWebContent(focusedElement) {
+                            // Try to find the actual editable element within web content
+                            if let editableElement = AXUIElementSafeWrapper.findEditableElementInWebContent(focusedElement) {
+                                return editableElement
+                            }
+                        }
+
+                        // Check if focused element is editable or a text input
+                        if AXUIElementSafeWrapper.isEditable(focusedElement) ||
+                           AXUIElementSafeWrapper.isTextInputElement(focusedElement) {
+                            return focusedElement
+                        }
+
+                        // Search within the focused element for editable content
+                        if let editableElement = AXUIElementSafeWrapper.findEditableElementInWebContent(focusedElement) {
+                            return editableElement
+                        }
+                    }
+
                     return focusedElement
                 }
             }
@@ -466,12 +491,44 @@ final class AccessibilityManagerImpl: ObservableObject {
             ) {
                 let windowElement = windowRef as! AXUIElement
                 if AXUIElementSafeWrapper.isValidElement(windowElement) {
+                    // For browsers, try to find web content first
+                    if isBrowser {
+                        if let webArea = self.findWebArea(in: windowElement) {
+                            if let editableElement = AXUIElementSafeWrapper.getFocusedElementInWebContent(webArea) {
+                                return editableElement
+                            }
+                        }
+                    }
+
                     return self.findFocusedInTree(windowElement, depth: 0, maxDepth: 20, visited: [])
-    }
+                }
             }
 
             return nil
         }
+    }
+
+    /// Finds the web area element in a window
+    private func findWebArea(in window: AXUIElement) -> AXUIElement? {
+        return findElementByRole(in: window, role: "AXWebArea", maxDepth: 15)
+    }
+
+    /// Finds an element by role in the accessibility tree
+    private func findElementByRole(in element: AXUIElement, role: String, maxDepth: Int, depth: Int = 0) -> AXUIElement? {
+        guard depth < maxDepth, AXUIElementSafeWrapper.isValidElement(element) else { return nil }
+
+        if let elementRole = AXUIElementSafeWrapper.getRole(from: element), elementRole == role {
+            return element
+        }
+
+        let children = AXUIElementSafeWrapper.getChildren(from: element)
+        for child in children {
+            if let found = findElementByRole(in: child, role: role, maxDepth: maxDepth, depth: depth + 1) {
+                return found
+            }
+        }
+
+        return nil
     }
 
     /// Recursively finds a focused text element in the UI tree

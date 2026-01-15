@@ -31,8 +31,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		7254B4202F0D1F0200CF28FF /* PromptShields.MacOS.Widget-Prod.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "PromptShields.MacOS.Widget-Prod.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		728DE8582DD1607A005CBE4B /* PromptShields.MacOS.Widget-Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "PromptShields.MacOS.Widget-Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		7254B4202F0D1F0200CF28FF /* Promptshields Assistant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Promptshields Assistant.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		728DE8582DD1607A005CBE4B /* Promptshields Assistant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Promptshields Assistant.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		729CD46F2D2C614F00D55B7C /* PromptShields.MacOS.WidgetTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PromptShields.MacOS.WidgetTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		729CD4792D2C614F00D55B7C /* PromptShields.MacOS.WidgetUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PromptShields.MacOS.WidgetUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		72FC8E7D2D3D5D6500BCB9CA /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.2.sdk/System/Library/Frameworks/Security.framework; sourceTree = DEVELOPER_DIR; };
@@ -135,8 +135,8 @@
 			children = (
 				729CD46F2D2C614F00D55B7C /* PromptShields.MacOS.WidgetTests.xctest */,
 				729CD4792D2C614F00D55B7C /* PromptShields.MacOS.WidgetUITests.xctest */,
-				728DE8582DD1607A005CBE4B /* PromptShields.MacOS.Widget-Dev.app */,
-				7254B4202F0D1F0200CF28FF /* PromptShields.MacOS.Widget-Prod.app */,
+				728DE8582DD1607A005CBE4B /* Promptshields Assistant.app */,
+				7254B4202F0D1F0200CF28FF /* Promptshields Assistant.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -173,7 +173,7 @@
 				7254B4152F0D1F0200CF28FF /* Auth0 */,
 			);
 			productName = PromptShields.MacOS.Widget;
-			productReference = 7254B4202F0D1F0200CF28FF /* PromptShields.MacOS.Widget-Prod.app */;
+			productReference = 7254B4202F0D1F0200CF28FF /* Promptshields Assistant.app */;
 			productType = "com.apple.product-type.application";
 		};
 		729CD45D2D2C614D00D55B7C /* PromptShields.MacOS.Widget-Dev */ = {
@@ -197,7 +197,7 @@
 				720379ED2DA002B500BA8C1D /* Auth0 */,
 			);
 			productName = PromptShields.MacOS.Widget;
-			productReference = 728DE8582DD1607A005CBE4B /* PromptShields.MacOS.Widget-Dev.app */;
+			productReference = 728DE8582DD1607A005CBE4B /* Promptshields Assistant.app */;
 			productType = "com.apple.product-type.application";
 		};
 		729CD46E2D2C614F00D55B7C /* PromptShields.MacOS.WidgetTests */ = {
@@ -452,7 +452,7 @@
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "ai.bit-pulse.PromptShields-MacOS-Widget";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Promptshields Assistant";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
@@ -482,6 +482,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_ASSET_PATHS = "\"PromptShields.MacOS.Widget/Preview Content\"";
 				DEVELOPMENT_TEAM = 7T82394985;
 				ENABLE_APP_SANDBOX = NO;
@@ -512,7 +513,7 @@
 				OTHER_SWIFT_FLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "ai.bit-pulse.PromptShields-MacOS-Widget";
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = "ai.bit-pulse.PromptShields-MacOS-Widget";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Promptshields Assistant";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
@@ -690,7 +691,7 @@
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "ai.bit-pulse.PromptShields-MacOS-Widget-Dev";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Promptshields Assistant";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
@@ -749,7 +750,7 @@
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "ai.bit-pulse.PromptShields-MacOS-Widget-Dev";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Promptshields Assistant";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
