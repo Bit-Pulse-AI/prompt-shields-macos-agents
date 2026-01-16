@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Request Models
 
-struct CreateSuggestionTypeRequest: Encodable {
+struct CreateSuggestionTypeRequest: SendableEncodable {
     let typeKey: String
     let name: String
     let description: String
@@ -24,7 +24,7 @@ struct CreateSuggestionTypeRequest: Encodable {
     }
 }
 
-struct UpdateSuggestionTypeRequest: Encodable {
+struct UpdateSuggestionTypeRequest: SendableEncodable {
     var name: String?
     var description: String?
     var category: String?

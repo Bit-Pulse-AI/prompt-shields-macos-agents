@@ -70,14 +70,14 @@ struct SuggestionTypeListView: View {
             await loadData()
         }
         .sheet(isPresented: $showingAddSheet) {
-            SuggestionTypeEditorView { savedType in
+            SuggestionTypeEditorView { _ in
                 Task {
                     await suggestionTypesQueryable.refresh()
                 }
             }
         }
         .sheet(item: $selectedSuggestionType) { suggestionType in
-            SuggestionTypeEditorView(suggestionType: suggestionType) { savedType in
+            SuggestionTypeEditorView(suggestionType: suggestionType) { _ in
                 Task {
                     await suggestionTypesQueryable.refresh()
                 }
