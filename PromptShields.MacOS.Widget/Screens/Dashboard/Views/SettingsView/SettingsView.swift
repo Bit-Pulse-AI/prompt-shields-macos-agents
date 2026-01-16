@@ -1,119 +1,134 @@
 import SwiftUI
 import os
 
+/// Settings view with editable suggestion types and user preferences
 struct SettingsView: View {
     @Environment(\.userDomainService) private var userDomainService
     @Environment(\.userPreferencesDomainService) private var userPreferencesDomainService
     @Environment(\.suggestionDomainService) private var suggestionDomainService
-    @State private var isLoading = false
-    @State private var preferences: UserPreferences?
-    @StateObject private var suggestionTypesQueryable = ObservableQueryable(
-        sortDescriptors: [SortDescriptor(\.suggestionName, order: .forward)],
-        mapping: DefaultMapping<SuggestionType>.self
-    )
-    private var suggestionTypes: [SuggestionType] {
-        suggestionTypesQueryable.wrappedValue.sorted { a, b in
-            a.model.suggestionName < b.model.suggestionName
-        }
-    }
+
+    @State private var selectedTab: SettingsTab = .suggestionTypes
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: SettingsView.self)
     )
 
-    var body: some View {
-        VStack(spacing: .zero) {
-            if !isLoading, let preferences = preferences {
-                ScrollView {
-                    VStack(spacing: 20) {
-                        suggestionTypesSection(preferences)
-                    }
-                    .padding()
-                }
-            } else {
-                VStack(spacing: .zero) {
-                    ProgressView()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+    private enum SettingsTab: String, CaseIterable {
+        case suggestionTypes = "Suggestion Types"
+        case preferences = "Preferences"
+
+        var icon: String {
+            switch self {
+            case .suggestionTypes: return "lightbulb"
+            case .preferences: return "gearshape"
             }
-        }
-        .task {
-            await loadData()
         }
     }
 
-    private func suggestionTypesSection(_ preferences: UserPreferences) -> some View {
+    var body: some View {
+        VStack(spacing: 0) {
+            // Tab selector
+            tabSelector
+
+            Divider()
+
+            // Content based on selected tab
+            switch selectedTab {
+            case .suggestionTypes:
+                SuggestionTypeListView()
+            case .preferences:
+                preferencesView
+            }
+        }
+    }
+
+    // MARK: - Tab Selector
+
+    private var tabSelector: some View {
+        HStack(spacing: 4) {
+            ForEach(SettingsTab.allCases, id: \.self) { tab in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = tab
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: tab.icon)
+                        Text(tab.rawValue)
+                    }
+                    .font(.subheadline)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
+                    .foregroundColor(selectedTab == tab ? .accentColor : .secondary)
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Preferences View
+
+    private var preferencesView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                generalPreferencesSection
+                aboutSection
+            }
+            .padding()
+        }
+    }
+
+    private var generalPreferencesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Suggestion Types")
+            Text("General")
                 .font(.headline)
 
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(suggestionTypes, id: \.model.uuid) { suggestionType in
-                    HStack {
-                        Toggle(suggestionType.model.suggestionName,
-                               isOn:
-                                Binding(
-                                    get: {
-                                        let enabledTypes = preferences.model.enabledSuggestionTypes
-                                        // If nil, all types are considered enabled
-                                        guard let enabledTypes = enabledTypes else { return true }
-                                        return enabledTypes.contains(suggestionType.model.suggestionType)
-                                    },
-                                    set: { newValue in
-                                        // Get current enabled types, or all types if nil
-                                        var newTypes = preferences.model.enabledSuggestionTypes ?? suggestionTypes.map { $0.model.suggestionType }
-
-                                        let typeId = suggestionType.model.suggestionType
-                                        if newValue {
-                                            if !newTypes.contains(typeId) {
-                                                newTypes.append(typeId)
-                                            }
-                                        } else {
-                                            newTypes.removeAll { $0 == typeId }
-                                        }
-
-                                        var newPreferences = preferences
-                                        newPreferences.model.enabledSuggestionTypes = newTypes
-                                        Task { @MainActor in
-                                            try? await updatePreferences(newPreferences)
-                                        }
-                                    }
-                        ))
-                        Spacer()
-                    }
+                // Add more preference options here as needed
+                HStack {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(.secondary)
+                    Text("More preference options coming soon")
+                        .font(.body)
+                        .foregroundColor(.secondary)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 350)
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
     }
 
-    @MainActor
-    private func loadData() async {
-        isLoading = true
-        do {
-            // Fetch suggestion types first - this may update preferences if nil
-            try await suggestionDomainService.fetchSuggestionTypes()
+    private var aboutSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("About")
+                .font(.headline)
 
-            // Explicitly refresh queryable to pick up newly written data
-            await suggestionTypesQueryable.refresh()
-
-            // Then fetch the (potentially updated) preferences
-            let preferences = try await userPreferencesDomainService.currentUserPreferences
-            self.preferences = preferences
-        } catch {
-            logger.debug("Error fetching data: \(error)")
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Version")
+                    Spacer()
+                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")
+                        .foregroundColor(.secondary)
+                }
+                HStack {
+                    Text("Build")
+                    Spacer()
+                    Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown")
+                        .foregroundColor(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        isLoading = false
-    }
-
-    @MainActor
-    private func updatePreferences(_ newPreferences: UserPreferences) async throws {
-        try await userPreferencesDomainService.savePreferences(preferences: newPreferences)
-        self.preferences = newPreferences
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(12)
     }
 }

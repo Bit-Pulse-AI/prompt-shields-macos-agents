@@ -8,7 +8,7 @@ struct SuggestionsView: View {
         mapping: DefaultMapping<Suggestion>.self
     )
     @StateObject private var suggestionsTypeQueryable = ObservableQueryable(
-        sortDescriptors: [SortDescriptor(\.suggestionName, order: .reverse)],
+        sortDescriptors: [SortDescriptor(\.sortOrder, order: .forward)],
         mapping: DefaultMapping<SuggestionType>.self
     )
     @StateObject private var currentSuggestionGroupQueryable = ObservableQueryable(
@@ -44,7 +44,7 @@ struct SuggestionsView: View {
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
-        category: String(describing: SettingsView.self)
+        category: String(describing: SuggestionsView.self)
     )
 
     var body: some View {
@@ -151,8 +151,9 @@ struct SuggestionsView: View {
             } else {
                 LazyVStack(spacing: 12) {
                     ForEach(currentSuggestions, id: \.identifier) { suggestion in
-                        DetailedSuggestionCard(suggestion: suggestion) { type in
-                            suggestionsTypes.first { $0.model.suggestionType == type }?.model.suggestionName ?? "n/a"
+                        DetailedSuggestionCard(suggestion: suggestion) { typeKey in
+                            // Find suggestion type by typeKey and return its display name
+                            suggestionsTypes.first { $0.model.typeKey == typeKey }?.displayName ?? typeKey
                         }
                         if currentSuggestions.last?.model.uuid == suggestion.model.uuid && currentSuggestions.count < suggestionsCount {
                             ProgressView()
