@@ -7,7 +7,7 @@ struct CreateSuggestionTypeRequest: SendableEncodable {
     let name: String
     let description: String
     let category: String
-    let systemPrompt: String
+    let promptTemplate: String
     let icon: String
     let isEnabled: Bool
     let sortOrder: Int
@@ -17,7 +17,7 @@ struct CreateSuggestionTypeRequest: SendableEncodable {
         case name
         case description
         case category
-        case systemPrompt = "system_prompt"
+        case promptTemplate = "prompt_template"
         case icon
         case isEnabled = "is_enabled"
         case sortOrder = "sort_order"
@@ -28,7 +28,7 @@ struct UpdateSuggestionTypeRequest: SendableEncodable {
     var name: String?
     var description: String?
     var category: String?
-    var systemPrompt: String?
+    var promptTemplate: String?
     var icon: String?
     var isEnabled: Bool?
     var sortOrder: Int?
@@ -37,7 +37,7 @@ struct UpdateSuggestionTypeRequest: SendableEncodable {
         case name
         case description
         case category
-        case systemPrompt = "system_prompt"
+        case promptTemplate = "prompt_template"
         case icon
         case isEnabled = "is_enabled"
         case sortOrder = "sort_order"
@@ -49,7 +49,7 @@ struct UpdateSuggestionTypeRequest: SendableEncodable {
         if let name { try container.encode(name, forKey: .name) }
         if let description { try container.encode(description, forKey: .description) }
         if let category { try container.encode(category, forKey: .category) }
-        if let systemPrompt { try container.encode(systemPrompt, forKey: .systemPrompt) }
+        if let promptTemplate { try container.encode(promptTemplate, forKey: .promptTemplate) }
         if let icon { try container.encode(icon, forKey: .icon) }
         if let isEnabled { try container.encode(isEnabled, forKey: .isEnabled) }
         if let sortOrder { try container.encode(sortOrder, forKey: .sortOrder) }

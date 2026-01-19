@@ -2,6 +2,7 @@ import SwiftUI
 import os
 
 /// View for creating or editing a suggestion type
+/// The prompt template wraps around the user's selected text using {{TEXT}} as a placeholder
 struct SuggestionTypeEditorView: View {
     // MARK: - Environment
 
@@ -14,7 +15,7 @@ struct SuggestionTypeEditorView: View {
     @State private var name: String
     @State private var description: String
     @State private var category: String
-    @State private var systemPrompt: String
+    @State private var promptTemplate: String
     @State private var icon: String
     @State private var isEnabled: Bool
     @State private var sortOrder: Int
@@ -57,7 +58,7 @@ struct SuggestionTypeEditorView: View {
         _name = State(initialValue: suggestionType?.model.name ?? "")
         _description = State(initialValue: suggestionType?.model.description ?? "")
         _category = State(initialValue: suggestionType?.model.category ?? "Custom")
-        _systemPrompt = State(initialValue: suggestionType?.model.systemPrompt ?? "")
+        _promptTemplate = State(initialValue: suggestionType?.model.promptTemplate ?? "")
         _icon = State(initialValue: suggestionType?.model.icon ?? "✨")
         _isEnabled = State(initialValue: suggestionType?.model.isEnabled ?? true)
         _sortOrder = State(initialValue: suggestionType?.model.sortOrder ?? 99)
@@ -215,35 +216,82 @@ struct SuggestionTypeEditorView: View {
 
     private var promptSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("System Prompt")
+            Text("Prompt Template")
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .foregroundColor(.secondary)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("This prompt will be sent to the AI model as system instructions")
+            VStack(alignment: .leading, spacing: 8) {
+                Text("This template wraps around your selected text. Use the placeholder to indicate where your text will be inserted.")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                TextEditor(text: $systemPrompt)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(minHeight: 150)
-                    .padding(8)
-                    .background(Color(NSColor.textBackgroundColor))
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                    )
+                // Placeholder insertion button
+                HStack {
+                    Button {
+                        insertPlaceholder()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "text.insert")
+                            Text("Insert Text Placeholder")
+                        }
+                        .font(.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(placeholderIsPresent ? Color.gray.opacity(0.3) : Color.accentColor.opacity(0.2))
+                        .foregroundColor(placeholderIsPresent ? .secondary : .accentColor)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(placeholderIsPresent)
 
-                Text("\(systemPrompt.count) / 5000 characters")
-                    .font(.caption2)
-                    .foregroundColor(systemPrompt.count > 5000 ? .red : .secondary)
+                    if placeholderIsPresent {
+                        Label("Placeholder added", systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
+
+                    Spacer()
+                }
+
+                PromptTemplateEditor(text: $promptTemplate)
+                    .frame(minHeight: 150)
+
+                HStack {
+                    Text("\(promptTemplate.count) / 5000 characters")
+                        .font(.caption2)
+                        .foregroundColor(promptTemplate.count > 5000 ? .red : .secondary)
+
+                    Spacer()
+
+                    if !placeholderIsPresent {
+                        Label("Add \(SuggestionType.textPlaceholder) to specify where your text will be inserted", systemImage: "info.circle")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                }
             }
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(10)
+    }
+
+    // MARK: - Placeholder Helpers
+
+    private var placeholderIsPresent: Bool {
+        promptTemplate.contains(SuggestionType.textPlaceholder)
+    }
+
+    private func insertPlaceholder() {
+        if !placeholderIsPresent {
+            // Insert at the end if not present
+            if promptTemplate.isEmpty {
+                promptTemplate = SuggestionType.textPlaceholder
+            } else {
+                promptTemplate += "\n\n\(SuggestionType.textPlaceholder)"
+            }
+        }
     }
 
     // MARK: - Settings Section
@@ -326,8 +374,8 @@ struct SuggestionTypeEditorView: View {
 
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !systemPrompt.trimmingCharacters(in: .whitespaces).isEmpty &&
-        systemPrompt.count <= 5000 &&
+        !promptTemplate.trimmingCharacters(in: .whitespaces).isEmpty &&
+        promptTemplate.count <= 5000 &&
         (isEditing || !typeKey.trimmingCharacters(in: .whitespaces).isEmpty)
     }
 
@@ -347,7 +395,7 @@ struct SuggestionTypeEditorView: View {
                 name: name.trimmingCharacters(in: .whitespaces),
                 description: description.trimmingCharacters(in: .whitespaces),
                 category: category,
-                systemPrompt: systemPrompt,
+                promptTemplate: promptTemplate,
                 icon: icon,
                 isDefault: existingSuggestionType?.model.isDefault ?? false,
                 isEnabled: isEnabled,

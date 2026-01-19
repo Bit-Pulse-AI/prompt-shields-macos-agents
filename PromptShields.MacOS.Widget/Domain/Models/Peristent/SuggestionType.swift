@@ -3,9 +3,14 @@ import SwiftData
 
 /// Represents a user-customizable suggestion type
 /// Suggestion types define how user text is processed by the LLM
+/// The promptTemplate field contains instructions that wrap around the user's text
+/// using {{TEXT}} as a placeholder for where the user's selected text will be injected
 struct SuggestionType: Domain {
     typealias M = SuggestionTypeModel
     typealias P = SuggestionTypePersistentModel
+
+    /// The placeholder used in prompt templates to indicate where user text should be injected
+    static let textPlaceholder = "{{TEXT}}"
 
     struct SuggestionTypeModel: Model {
         var uuid: UID
@@ -13,7 +18,7 @@ struct SuggestionType: Domain {
         let name: String
         var description: String
         let category: String
-        var systemPrompt: String
+        var promptTemplate: String
         var icon: String
         let isDefault: Bool
         var isEnabled: Bool
@@ -61,7 +66,7 @@ struct SuggestionType: Domain {
         persistent.name = model.name.encrypt
         persistent.descriptionText = model.description.encrypt
         persistent.category = model.category.encrypt
-        persistent.systemPrompt = model.systemPrompt.encrypt
+        persistent.promptTemplate = model.promptTemplate.encrypt
         persistent.icon = model.icon.encrypt
         persistent.isDefault = model.isDefault
         persistent.isEnabled = model.isEnabled
@@ -78,7 +83,7 @@ struct SuggestionType: Domain {
             name: persistent.name.decrypt,
             description: persistent.descriptionText.decrypt,
             category: persistent.category.decrypt,
-            systemPrompt: persistent.systemPrompt.decrypt,
+            promptTemplate: persistent.promptTemplate.decrypt,
             icon: persistent.icon.decrypt,
             isDefault: persistent.isDefault,
             isEnabled: persistent.isEnabled,
@@ -98,7 +103,7 @@ struct SuggestionTypeAPIResponse: APIResponse {
     let name: String
     let description: String
     let category: String
-    let systemPrompt: String
+    let promptTemplate: String
     let icon: String
     let isDefault: Bool
     let isEnabled: Bool
@@ -112,7 +117,7 @@ struct SuggestionTypeAPIResponse: APIResponse {
         case name
         case description
         case category
-        case systemPrompt = "system_prompt"
+        case promptTemplate = "prompt_template"
         case icon
         case isDefault = "is_default"
         case isEnabled = "is_enabled"
@@ -131,7 +136,7 @@ struct SuggestionTypeAPIResponse: APIResponse {
             name: name,
             description: description,
             category: category,
-            systemPrompt: systemPrompt,
+            promptTemplate: promptTemplate,
             icon: icon,
             isDefault: isDefault,
             isEnabled: isEnabled,
@@ -162,7 +167,7 @@ struct LegacySuggestionTypeAPIResponse: APIResponse {
             name: suggestionName,
             description: "",
             category: suggestionTypeCategory,
-            systemPrompt: "",
+            promptTemplate: "",
             icon: String(suggestionName.prefix(2)),
             isDefault: true,
             isEnabled: true,
@@ -185,7 +190,7 @@ final class SuggestionTypePersistentModel: UpdatablePersistentModel {
     var name: String = ""
     var descriptionText: String = ""
     var category: String = ""
-    var systemPrompt: String = ""
+    var promptTemplate: String = ""
     var icon: String = ""
     var isDefault: Bool = false
     var isEnabled: Bool = true
@@ -215,7 +220,7 @@ final class SuggestionTypePersistentModel: UpdatablePersistentModel {
         self.name = suggestion.name
         self.descriptionText = suggestion.descriptionText
         self.category = suggestion.category
-        self.systemPrompt = suggestion.systemPrompt
+        self.promptTemplate = suggestion.promptTemplate
         self.icon = suggestion.icon
         self.isDefault = suggestion.isDefault
         self.isEnabled = suggestion.isEnabled

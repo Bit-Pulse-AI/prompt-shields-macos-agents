@@ -172,7 +172,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
             name: suggestionType.model.name,
             description: suggestionType.model.description,
             category: suggestionType.model.category,
-            systemPrompt: suggestionType.model.systemPrompt,
+            promptTemplate: suggestionType.model.promptTemplate,
             icon: suggestionType.model.icon,
             isEnabled: suggestionType.model.isEnabled,
             sortOrder: suggestionType.model.sortOrder
@@ -195,7 +195,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
             name: suggestionType.model.name,
             description: suggestionType.model.description,
             category: suggestionType.model.category,
-            systemPrompt: suggestionType.model.systemPrompt,
+            promptTemplate: suggestionType.model.promptTemplate,
             icon: suggestionType.model.icon,
             isEnabled: suggestionType.model.isEnabled,
             sortOrder: suggestionType.model.sortOrder
