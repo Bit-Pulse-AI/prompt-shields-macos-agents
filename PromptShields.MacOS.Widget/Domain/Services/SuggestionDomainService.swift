@@ -85,7 +85,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         let suggestionGroupId = currentProfile.defaultSuggestionGroupId
         let teamId = currentProfile.defaultTeamId
         let suggestionsResult = try await suggestionNetworkService
-            .list(
+            .listSuggestions(
                 suggestionGroupId: suggestionGroupId,
                 teamId: teamId,
                 offset: offset,
@@ -99,12 +99,25 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         return try await persistenceManager.syncLocalWithRemote(domain: suggestionGroup.toDomain())
     }
 
+    func fetchSuggestionTypeGroup(suggestionTypeGroupId: String, teamId: String) async throws -> SuggestionTypeGroup {
+        let suggestionTypeGroup = try await suggestionNetworkService.fetchSuggestionTypeGroup(suggestionTypeGroupId: suggestionTypeGroupId, teamId: teamId)
+        return try await persistenceManager.syncLocalWithRemote(domain: suggestionTypeGroup.toDomain())
+    }
+
     func fetchCurrentSuggestionGroup() async throws -> SuggestionGroup {
         let currentProfile = try await profileDomainService.currentProfile.model
         let suggestionGroupId = currentProfile.defaultSuggestionGroupId
         let teamId = currentProfile.defaultTeamId
         let currentSuggestionGroup = try await fetchSuggestionGroup(suggestionGroupId: suggestionGroupId, teamId: teamId)
         return currentSuggestionGroup
+    }
+
+    func fetchCurrentSuggestionTypeGroup() async throws -> SuggestionTypeGroup {
+        let currentProfile = try await profileDomainService.currentProfile.model
+        let suggestionTypeGroupId = currentProfile.defaultSuggestionTypeGroupId
+        let teamId = currentProfile.defaultTeamId
+        let currentSuggestionTypeGroup = try await fetchSuggestionTypeGroup(suggestionTypeGroupId: suggestionTypeGroupId, teamId: teamId)
+        return currentSuggestionTypeGroup
     }
 
     // MARK: - Suggestion Type CRUD Operations
@@ -114,7 +127,9 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
         do {
             // Try the new endpoint first
-            let suggestionResult = try await suggestionNetworkService.listSuggestionTypes(offset: 0, limit: 100, enabledOnly: false)
+            let currentProfile = try await profileDomainService.currentProfile.model
+            let suggestionTypeGroupId = currentProfile.defaultSuggestionTypeGroupId
+            let suggestionResult = try await suggestionNetworkService.listSuggestionTypes(suggestionTypeGroupId: suggestionTypeGroupId, offset: 0, limit: 100, enabledOnly: false)
             let suggestionTypes = suggestionResult.toDomain()
 
             // Atomic delete and insert - prevents duplicates from race conditions
@@ -122,16 +137,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
             logger.debug("Fetched \(suggestionTypes.count) suggestion types from new endpoint")
         } catch {
-            logger.debug("New endpoint failed, falling back to legacy endpoint: \(error)")
-
-            // Fall back to legacy endpoint
-            let suggestionResult = try await suggestionNetworkService.fetchLegacySuggestionTypes()
-            let suggestionTypes = suggestionResult.toDomain()
-
-            // Atomic delete and insert - prevents duplicates from race conditions
-            try await persistenceManager.deleteAllAndInsert(domains: suggestionTypes)
-
-            logger.debug("Fetched \(suggestionTypes.count) suggestion types from legacy endpoint")
+            logger.debug("Endpoint failed: \(error)")
         }
 
         // Update user preferences to populate all types as enabled if nil
@@ -173,6 +179,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
             description: suggestionType.model.description,
             category: suggestionType.model.category,
             promptTemplate: suggestionType.model.promptTemplate,
+            suggestionTypeGroupId: suggestionType.model.suggestionTypeGroupId,
             icon: suggestionType.model.icon,
             isEnabled: suggestionType.model.isEnabled,
             sortOrder: suggestionType.model.sortOrder
@@ -191,20 +198,20 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
     func updateSuggestionType(_ suggestionType: SuggestionType) async throws -> SuggestionType {
         logger.debug("Updating suggestion type: \(suggestionType.model.uuid)")
 
+        let currentProfile = try await profileDomainService.currentProfile.model
+        let suggestionTypeGroupId = currentProfile.defaultSuggestionTypeGroupId
         let request = UpdateSuggestionTypeRequest(
             name: suggestionType.model.name,
             description: suggestionType.model.description,
             category: suggestionType.model.category,
             promptTemplate: suggestionType.model.promptTemplate,
+            suggestionTypeGroupId: suggestionType.model.suggestionTypeGroupId,
             icon: suggestionType.model.icon,
             isEnabled: suggestionType.model.isEnabled,
             sortOrder: suggestionType.model.sortOrder
         )
 
-        let response = try await suggestionNetworkService.updateSuggestionType(
-            id: suggestionType.model.uuid,
-            request: request
-        )
+        let response = try await suggestionNetworkService.updateSuggestionType(suggestionTypeGroupId, suggestionTypeId: suggestionType.model.uuid, request: request)
         let updatedType = response.toDomain()
 
         // Sync with local storage
@@ -215,10 +222,10 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
     }
 
     func deleteSuggestionType(_ suggestionType: SuggestionType) async throws {
-        logger.debug("Deleting suggestion type: \(suggestionType.model.uuid)")
-
+        let currentProfile = try await profileDomainService.currentProfile.model
+        let suggestionTypeGroupId = currentProfile.defaultSuggestionTypeGroupId
         // Delete from server
-        try await suggestionNetworkService.deleteSuggestionType(id: suggestionType.model.uuid)
+        try await suggestionNetworkService.deleteSuggestionType(suggestionTypeGroupId, suggestionTypeId: suggestionType.model.uuid)
 
         // Delete from local storage
         try await persistenceManager.delete(domain: suggestionType)
@@ -229,10 +236,9 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
     func toggleSuggestionType(_ suggestionType: SuggestionType, isEnabled: Bool) async throws -> SuggestionType {
         logger.debug("Toggling suggestion type \(suggestionType.model.uuid) to enabled: \(isEnabled)")
 
-        let response = try await suggestionNetworkService.toggleSuggestionType(
-            id: suggestionType.model.uuid,
-            isEnabled: isEnabled
-        )
+        let currentProfile = try await profileDomainService.currentProfile.model
+        let suggestionTypeGroupId = currentProfile.defaultSuggestionTypeGroupId
+        let response = try await suggestionNetworkService.toggleSuggestionType(suggestionTypeGroupId: suggestionTypeGroupId, suggestionTypeId: suggestionType.model.uuid, isEnabled: isEnabled)
         let updatedType = response.toDomain()
 
         // Sync with local storage
@@ -244,8 +250,9 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
     func resetSuggestionTypes() async throws -> Int {
         logger.debug("Resetting suggestion types to defaults")
-
-        let response = try await suggestionNetworkService.resetSuggestionTypes()
+        let currentProfile = try await profileDomainService.currentProfile.model
+        let suggestionTypeGroupId = currentProfile.defaultSuggestionTypeGroupId
+        let response = try await suggestionNetworkService.resetSuggestionTypes(suggestionTypeGroupId: suggestionTypeGroupId)
 
         // Refresh local storage
         try await fetchSuggestionTypes()

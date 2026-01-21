@@ -350,9 +350,9 @@ final class AccessibilityManagerImpl: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            Task { @MainActor [weak self] in
-                if app?.bundleIdentifier == Bundle.main.bundleIdentifier {
+                guard let self = self else { return }
+                if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication, app.bundleIdentifier == Bundle.main.bundleIdentifier {
+                Task { @MainActor [weak self] in
                     try? await Task.sleep(for: .milliseconds(250))
                     self?.refreshPermissionState()
                 }

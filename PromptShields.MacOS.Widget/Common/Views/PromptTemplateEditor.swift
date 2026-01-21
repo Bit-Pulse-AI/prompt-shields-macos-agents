@@ -70,14 +70,22 @@ struct PromptTemplateTextView: NSViewRepresentable {
 
             // Restore selection if possible
             if currentSelection.location + currentSelection.length <= textView.string.count {
-                textView.setSelectedRange(currentSelection)
+                Task {
+                    await MainActor.run {
+                        textView.setSelectedRange(currentSelection)
+                    }
+                }
             }
         }
     }
 
     private func updateTextViewContent(_ textView: NSTextView, with content: String) {
         let attributedString = createAttributedString(from: content)
-        textView.textStorage?.setAttributedString(attributedString)
+        Task {
+            await MainActor.run {
+                textView.textStorage?.setAttributedString(attributedString)
+            }
+        }
     }
 
     private func createAttributedString(from content: String) -> NSAttributedString {

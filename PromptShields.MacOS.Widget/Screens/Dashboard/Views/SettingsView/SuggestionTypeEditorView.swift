@@ -8,6 +8,7 @@ struct SuggestionTypeEditorView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.suggestionDomainService) private var suggestionDomainService
+    @Environment(\.profileDomainService) private var profileDomainService
 
     // MARK: - State
 
@@ -80,7 +81,7 @@ struct SuggestionTypeEditorView: View {
                     promptSection
                     settingsSection
 
-                    if isEditing && existingSuggestionType?.isDeletable == true {
+                    if isEditing {
                         deleteSection
                     }
                 }
@@ -127,6 +128,9 @@ struct SuggestionTypeEditorView: View {
 
     // MARK: - Basic Info Section
 
+    private let spacing: CGFloat = 10
+    private let minCell: CGFloat = 30
+
     private var basicInfoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Basic Information")
@@ -140,20 +144,25 @@ struct SuggestionTypeEditorView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                HStack(spacing: 8) {
-                    ForEach(commonIcons, id: \.self) { iconOption in
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: minCell), spacing: spacing)],
+                    spacing: spacing
+                ) {
+                    ForEach(commonIcons.enumerated().compactMap { $0.offset }, id: \.self) { index in
+                        let commonIcon = commonIcons[index]
                         Button {
-                            icon = iconOption
+                            icon = commonIcon
                         } label: {
-                            Text(iconOption)
+                            Text(commonIcon)
                                 .font(.title2)
                                 .padding(4)
-                                .background(icon == iconOption ? Color.accentColor.opacity(0.2) : Color.clear)
+                                .background(icon == commonIcon ? Color.accentColor.opacity(0.2) : Color.clear)
                                 .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
                     }
                 }
+                .padding()
             }
 
             // Name
@@ -198,12 +207,8 @@ struct SuggestionTypeEditorView: View {
                 Text("Category")
                     .font(.caption)
                     .foregroundColor(.secondary)
-
-                Picker("Category", selection: $category) {
-                    ForEach(categories, id: \.self) { cat in
-                        Text(cat).tag(cat)
-                    }
-                }
+                TextField("Category name", text: $category)
+                    .textFieldStyle(.roundedBorder)
                 .pickerStyle(.menu)
             }
         }
@@ -388,6 +393,9 @@ struct SuggestionTypeEditorView: View {
         isSaving = true
         errorMessage = nil
 
+        guard let profile = try? await profileDomainService.currentProfile else {
+            return
+        }
         do {
             let model = SuggestionType.SuggestionTypeModel(
                 uuid: existingSuggestionType?.model.uuid ?? UUID().uuidString,
@@ -396,6 +404,7 @@ struct SuggestionTypeEditorView: View {
                 description: description.trimmingCharacters(in: .whitespaces),
                 category: category,
                 promptTemplate: promptTemplate,
+                suggestionTypeGroupId: profile.model.defaultSuggestionTypeGroupId,
                 icon: icon,
                 isDefault: existingSuggestionType?.model.isDefault ?? false,
                 isEnabled: isEnabled,
@@ -411,12 +420,12 @@ struct SuggestionTypeEditorView: View {
 
             let savedType: SuggestionType
             if isEditing {
-                savedType = try await suggestionDomainService.updateSuggestionType(suggestionType)
+//                savedType = try await suggestionDomainService.updateSuggestionType(suggestionType)
             } else {
                 savedType = try await suggestionDomainService.createSuggestionType(suggestionType)
             }
 
-            onSave?(savedType)
+//            onSave?(savedType)
             dismiss()
         } catch {
             logger.error("Failed to save suggestion type: \(error)")
@@ -428,8 +437,9 @@ struct SuggestionTypeEditorView: View {
 
     @MainActor
     private func deleteSuggestionType() async {
-        guard let existingType = existingSuggestionType else { return }
-
+        guard let existingType = existingSuggestionType else {
+            return
+        }
         isSaving = true
         errorMessage = nil
 

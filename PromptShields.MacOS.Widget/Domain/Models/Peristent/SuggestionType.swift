@@ -19,6 +19,7 @@ struct SuggestionType: Domain {
         var description: String
         let category: String
         var promptTemplate: String
+        let suggestionTypeGroupId: String
         var icon: String
         let isDefault: Bool
         var isEnabled: Bool
@@ -52,11 +53,6 @@ struct SuggestionType: Domain {
         true // All types are now editable
     }
 
-    /// Whether this type can be deleted
-    var isDeletable: Bool {
-        !model.isDefault // Only custom types can be deleted
-    }
-
     // MARK: - Mapping Methods
 
     func toPersistentModel(context: ModelContext?) -> SuggestionTypePersistentModel {
@@ -84,6 +80,7 @@ struct SuggestionType: Domain {
             description: persistent.descriptionText.decrypt,
             category: persistent.category.decrypt,
             promptTemplate: persistent.promptTemplate.decrypt,
+            suggestionTypeGroupId: persistent.suggestionTypeGroupId.decrypt,
             icon: persistent.icon.decrypt,
             isDefault: persistent.isDefault,
             isEnabled: persistent.isEnabled,
@@ -104,6 +101,7 @@ struct SuggestionTypeAPIResponse: APIResponse {
     let description: String
     let category: String
     let promptTemplate: String
+    let suggestionTypeGroupId: String
     let icon: String
     let isDefault: Bool
     let isEnabled: Bool
@@ -116,6 +114,7 @@ struct SuggestionTypeAPIResponse: APIResponse {
         case typeKey = "type_key"
         case name
         case description
+        case suggestionTypeGroupId = "suggestion_type_group_id"
         case category
         case promptTemplate = "prompt_template"
         case icon
@@ -137,43 +136,13 @@ struct SuggestionTypeAPIResponse: APIResponse {
             description: description,
             category: category,
             promptTemplate: promptTemplate,
+            suggestionTypeGroupId: suggestionTypeGroupId,
             icon: icon,
             isDefault: isDefault,
             isEnabled: isEnabled,
             sortOrder: sortOrder,
             createdAt: dateFormatter.date(from: createdAt),
             updatedAt: updatedAt.flatMap { dateFormatter.date(from: $0) }
-        )
-        return SuggestionType(model: model)
-    }
-}
-
-/// Legacy API response for backward compatibility with /suggestion/types endpoint
-struct LegacySuggestionTypeAPIResponse: APIResponse {
-    let suggestionType: String
-    let suggestionName: String
-    let suggestionTypeCategory: String
-
-    enum CodingKeys: String, CodingKey {
-        case suggestionType = "type"
-        case suggestionName = "name"
-        case suggestionTypeCategory = "category"
-    }
-
-    func toDomain() -> SuggestionType {
-        let model = SuggestionType.SuggestionTypeModel(
-            uuid: suggestionType,
-            typeKey: suggestionType,
-            name: suggestionName,
-            description: "",
-            category: suggestionTypeCategory,
-            promptTemplate: "",
-            icon: String(suggestionName.prefix(2)),
-            isDefault: true,
-            isEnabled: true,
-            sortOrder: 0,
-            createdAt: nil,
-            updatedAt: nil
         )
         return SuggestionType(model: model)
     }
@@ -191,6 +160,7 @@ final class SuggestionTypePersistentModel: UpdatablePersistentModel {
     var descriptionText: String = ""
     var category: String = ""
     var promptTemplate: String = ""
+    var suggestionTypeGroupId: String = ""
     var icon: String = ""
     var isDefault: Bool = false
     var isEnabled: Bool = true

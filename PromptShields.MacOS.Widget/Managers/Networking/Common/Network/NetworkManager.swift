@@ -138,7 +138,7 @@ actor NetworkManagerImpl: NetworkManager {
     }
 
     private func logResponse(requestId: String, statusCode: Int, data: Data) {
-        #if DEBUG
+//        #if DEBUG
         do {
             let json = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)
             let jsonData = try JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
@@ -150,8 +150,8 @@ actor NetworkManagerImpl: NetworkManager {
             logger.debug("[\(requestId)] Response (\(statusCode)): \(response.prefix(500))")
             logger.debug("\(response)")
         }
-        #else
-        logger.debug("[\(requestId)] Response: \(statusCode)")
-        #endif
+//        #else
+//        logger.debug("[\(requestId)] Response: \(statusCode)")
+//        #endif
     }
 }

@@ -8,6 +8,7 @@ struct CreateSuggestionTypeRequest: SendableEncodable {
     let description: String
     let category: String
     let promptTemplate: String
+    let suggestionTypeGroupId: String
     let icon: String
     let isEnabled: Bool
     let sortOrder: Int
@@ -17,6 +18,7 @@ struct CreateSuggestionTypeRequest: SendableEncodable {
         case name
         case description
         case category
+        case suggestionTypeGroupId = "suggestion_type_group_id"
         case promptTemplate = "prompt_template"
         case icon
         case isEnabled = "is_enabled"
@@ -29,6 +31,7 @@ struct UpdateSuggestionTypeRequest: SendableEncodable {
     var description: String?
     var category: String?
     var promptTemplate: String?
+    let suggestionTypeGroupId: String?
     var icon: String?
     var isEnabled: Bool?
     var sortOrder: Int?
@@ -37,6 +40,7 @@ struct UpdateSuggestionTypeRequest: SendableEncodable {
         case name
         case description
         case category
+        case suggestionTypeGroupId = "suggestion_type_group_id"
         case promptTemplate = "prompt_template"
         case icon
         case isEnabled = "is_enabled"
@@ -66,22 +70,17 @@ struct ResetSuggestionTypesResponse: Decodable {
 protocol SuggestionNetworkService: NetworkService {
     func analyze(text: String, suggestionGroupId: String, teamId: String, suggestionType: String, application: String) async throws -> SuggestionAPIResponse
     func list(suggestionGroupId: String, teamId: String, offset: Int, limit: Int) async throws -> PaginatedResponse<SuggestionAPIResponse>
-    // Legacy suggestion analysis
     func analyze(text: String, llmProvider: String, suggestionGroupId: String, teamId: String, suggestionType: String, application: String) async throws -> SuggestionAPIResponse
-    func list(suggestionGroupId: String, llmProvider: String, teamId: String, offset: Int, limit: Int) async throws -> PaginatedResponse<SuggestionAPIResponse>
+    func listSuggestions(suggestionGroupId: String, llmProvider: String, teamId: String, offset: Int, limit: Int) async throws -> PaginatedResponse<SuggestionAPIResponse>
     func fetchSuggestionGroup(suggestionGroupId: String, teamId: String) async throws -> SuggestionGroupAPIResponse
-
-    // Legacy suggestion types endpoint (backward compatibility)
-    func fetchLegacySuggestionTypes() async throws -> ListResponse<LegacySuggestionTypeAPIResponse>
-
-    // New CRUD operations for suggestion types
-    func listSuggestionTypes(offset: Int, limit: Int, enabledOnly: Bool) async throws -> PaginatedResponse<SuggestionTypeAPIResponse>
-    func getSuggestionType(id: String) async throws -> SuggestionTypeAPIResponse
+    func fetchSuggestionTypeGroup(suggestionTypeGroupId: String, teamId: String) async throws -> SuggestionTypeGroupAPIResponse
+    func listSuggestionTypes(suggestionTypeGroupId: String, offset: Int, limit: Int, enabledOnly: Bool) async throws -> PaginatedResponse<SuggestionTypeAPIResponse>
+    func getSuggestionType(suggestionTypeGroupId: String) async throws -> SuggestionTypeAPIResponse
     func createSuggestionType(request: CreateSuggestionTypeRequest) async throws -> SuggestionTypeAPIResponse
-    func updateSuggestionType(id: String, request: UpdateSuggestionTypeRequest) async throws -> SuggestionTypeAPIResponse
-    func deleteSuggestionType(id: String) async throws
-    func toggleSuggestionType(id: String, isEnabled: Bool) async throws -> SuggestionTypeAPIResponse
-    func resetSuggestionTypes() async throws -> ResetSuggestionTypesResponse
+    func updateSuggestionType(_ suggestionTypeGroupId: String, suggestionTypeId: String, request payload: UpdateSuggestionTypeRequest) async throws -> SuggestionTypeAPIResponse
+    func deleteSuggestionType(_ suggestionTypeGroupId: String, suggestionTypeId: String) async throws
+    func toggleSuggestionType(suggestionTypeGroupId: String, suggestionTypeId: String, isEnabled: Bool) async throws -> SuggestionTypeAPIResponse
+    func resetSuggestionTypes(suggestionTypeGroupId: String) async throws -> ResetSuggestionTypesResponse
 }
 
 // MARK: - Implementation
@@ -94,7 +93,6 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
 
     private let suggestionPath = "suggestion"
     private let suggestionTypesPath = "suggestion-types"
-    private let suggestionGroupPath = "suggestion_group"
 
     // MARK: - Legacy Suggestion Analysis
 
@@ -117,9 +115,9 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
 
-    func fetchLegacySuggestionTypes() async throws -> ListResponse<LegacySuggestionTypeAPIResponse> {
+    func fetchSuggestionTypeGroup(suggestionTypeGroupId: String, teamId: String) async throws -> SuggestionTypeGroupAPIResponse {
         let request = try RequestBuilder().request(
-            url: "\(baseURL)/\(suggestionPath)/types",
+            url: "\(baseURL)/teams/\(teamId)/suggestion_type_group/\(suggestionTypeGroupId)",
             method: .GET,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
@@ -145,9 +143,19 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
 
+    func listSuggestions(suggestionGroupId: String, llmProvider: String, teamId: String, offset: Int, limit: Int) async throws -> PaginatedResponse<SuggestionAPIResponse> {
+        let request = try RequestBuilder().request(
+            url: "\(baseURL)/teams/\(teamId)/suggestion_group/\(suggestionGroupId)/suggestions",
+            method: .GET,
+            queryParameters: ["offset": "\(offset)", "limit": "\(limit)"],
+            headers: keychainManager.applicationJSONAuthorizedHeader
+        )
+        return try await networkManager.performWithAutoRefresh(request: request).decode()
+    }
+
     // MARK: - Suggestion Type CRUD Operations
 
-    func listSuggestionTypes(offset: Int, limit: Int, enabledOnly: Bool) async throws -> PaginatedResponse<SuggestionTypeAPIResponse> {
+    func listSuggestionTypes(suggestionTypeGroupId: String, offset: Int, limit: Int, enabledOnly: Bool) async throws -> PaginatedResponse<SuggestionTypeAPIResponse> {
         var queryParams: [String: String] = [
             "offset": "\(offset)",
             "limit": "\(limit)"
@@ -157,7 +165,7 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         }
 
         let request = try RequestBuilder().request(
-            url: "\(baseURL)/\(suggestionTypesPath)/",
+            url: "\(baseURL)/\(suggestionTypesPath)/\(suggestionTypeGroupId)",
             method: .GET,
             queryParameters: queryParams,
             headers: keychainManager.applicationJSONAuthorizedHeader
@@ -165,9 +173,9 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
 
-    func getSuggestionType(id: String) async throws -> SuggestionTypeAPIResponse {
+    func getSuggestionType(suggestionTypeGroupId: String) async throws -> SuggestionTypeAPIResponse {
         let request = try RequestBuilder().request(
-            url: "\(baseURL)/\(suggestionTypesPath)/\(id)",
+            url: "\(baseURL)/\(suggestionTypesPath)/\(suggestionTypeGroupId)",
             method: .GET,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
@@ -184,9 +192,9 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
 
-    func updateSuggestionType(id: String, request payload: UpdateSuggestionTypeRequest) async throws -> SuggestionTypeAPIResponse {
+    func updateSuggestionType(_ suggestionTypeGroupId: String, suggestionTypeId: String, request payload: UpdateSuggestionTypeRequest) async throws -> SuggestionTypeAPIResponse {
         let request = try RequestBuilder().request(
-            url: "\(baseURL)/\(suggestionTypesPath)/\(id)",
+            url: "\(baseURL)/\(suggestionTypesPath)/\(suggestionTypeGroupId)/suggestion_type_id/\(suggestionTypeId)",
             method: .PUT,
             body: payload,
             headers: keychainManager.applicationJSONAuthorizedHeader
@@ -194,18 +202,18 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
 
-    func deleteSuggestionType(id: String) async throws {
+    func deleteSuggestionType(_ suggestionTypeGroupId: String, suggestionTypeId: String) async throws {
         let request = try RequestBuilder().request(
-            url: "\(baseURL)/\(suggestionTypesPath)/\(id)",
+            url: "\(baseURL)/\(suggestionTypesPath)/\(suggestionTypeGroupId)/suggestion_type_id/\(suggestionTypeId)",
             method: .DELETE,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
         _ = try await networkManager.performWithAutoRefresh(request: request)
     }
 
-    func toggleSuggestionType(id: String, isEnabled: Bool) async throws -> SuggestionTypeAPIResponse {
+    func toggleSuggestionType(suggestionTypeGroupId: String, suggestionTypeId: String, isEnabled: Bool) async throws -> SuggestionTypeAPIResponse {
         let request = try RequestBuilder().request(
-            url: "\(baseURL)/\(suggestionTypesPath)/\(id)/toggle",
+            url: "\(baseURL)/\(suggestionTypesPath)/\(suggestionTypeGroupId)/suggestion_type_id/\(suggestionTypeId)/toggle",
             method: .PATCH,
             queryParameters: ["is_enabled": "\(isEnabled)"],
             headers: keychainManager.applicationJSONAuthorizedHeader
@@ -213,9 +221,9 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
 
-    func resetSuggestionTypes() async throws -> ResetSuggestionTypesResponse {
+    func resetSuggestionTypes(suggestionTypeGroupId: String) async throws -> ResetSuggestionTypesResponse {
         let request = try RequestBuilder().request(
-            url: "\(baseURL)/\(suggestionTypesPath)/reset",
+            url: "\(baseURL)/\(suggestionTypesPath)/\(suggestionTypeGroupId)/reset",
             method: .POST,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
