@@ -60,6 +60,7 @@ struct SuggestionType: Domain {
         persistent.uuid = model.uuid.encrypt
         persistent.typeKey = model.typeKey.encrypt
         persistent.name = model.name.encrypt
+        persistent.suggestionTypeGroupId = model.suggestionTypeGroupId.encrypt
         persistent.descriptionText = model.description.encrypt
         persistent.category = model.category.encrypt
         persistent.promptTemplate = model.promptTemplate.encrypt
@@ -190,6 +191,7 @@ final class SuggestionTypePersistentModel: UpdatablePersistentModel {
         self.name = suggestion.name
         self.descriptionText = suggestion.descriptionText
         self.category = suggestion.category
+        self.suggestionTypeGroupId = suggestion.suggestionTypeGroupId
         self.promptTemplate = suggestion.promptTemplate
         self.icon = suggestion.icon
         self.isDefault = suggestion.isDefault

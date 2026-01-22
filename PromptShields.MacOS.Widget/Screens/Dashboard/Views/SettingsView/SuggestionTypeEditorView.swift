@@ -420,12 +420,12 @@ struct SuggestionTypeEditorView: View {
 
             let savedType: SuggestionType
             if isEditing {
-//                savedType = try await suggestionDomainService.updateSuggestionType(suggestionType)
+                savedType = try await suggestionDomainService.updateSuggestionType(suggestionType)
             } else {
                 savedType = try await suggestionDomainService.createSuggestionType(suggestionType)
             }
 
-//            onSave?(savedType)
+            onSave?(savedType)
             dismiss()
         } catch {
             logger.error("Failed to save suggestion type: \(error)")

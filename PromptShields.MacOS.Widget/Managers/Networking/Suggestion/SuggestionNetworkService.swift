@@ -31,7 +31,6 @@ struct UpdateSuggestionTypeRequest: SendableEncodable {
     var description: String?
     var category: String?
     var promptTemplate: String?
-    let suggestionTypeGroupId: String?
     var icon: String?
     var isEnabled: Bool?
     var sortOrder: Int?
@@ -40,7 +39,6 @@ struct UpdateSuggestionTypeRequest: SendableEncodable {
         case name
         case description
         case category
-        case suggestionTypeGroupId = "suggestion_type_group_id"
         case promptTemplate = "prompt_template"
         case icon
         case isEnabled = "is_enabled"
@@ -194,7 +192,7 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
 
     func updateSuggestionType(_ suggestionTypeGroupId: String, suggestionTypeId: String, request payload: UpdateSuggestionTypeRequest) async throws -> SuggestionTypeAPIResponse {
         let request = try RequestBuilder().request(
-            url: "\(baseURL)/\(suggestionTypesPath)/\(suggestionTypeGroupId)/suggestion_type_id/\(suggestionTypeId)",
+            url: "\(baseURL)/\(suggestionTypesPath)/\(suggestionTypeGroupId)/suggestion-type-id/\(suggestionTypeId)",
             method: .PUT,
             body: payload,
             headers: keychainManager.applicationJSONAuthorizedHeader
@@ -204,7 +202,7 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
 
     func deleteSuggestionType(_ suggestionTypeGroupId: String, suggestionTypeId: String) async throws {
         let request = try RequestBuilder().request(
-            url: "\(baseURL)/\(suggestionTypesPath)/\(suggestionTypeGroupId)/suggestion_type_id/\(suggestionTypeId)",
+            url: "\(baseURL)/\(suggestionTypesPath)/\(suggestionTypeGroupId)/suggestion-type-id/\(suggestionTypeId)",
             method: .DELETE,
             headers: keychainManager.applicationJSONAuthorizedHeader
         )
@@ -213,7 +211,7 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
 
     func toggleSuggestionType(suggestionTypeGroupId: String, suggestionTypeId: String, isEnabled: Bool) async throws -> SuggestionTypeAPIResponse {
         let request = try RequestBuilder().request(
-            url: "\(baseURL)/\(suggestionTypesPath)/\(suggestionTypeGroupId)/suggestion_type_id/\(suggestionTypeId)/toggle",
+            url: "\(baseURL)/\(suggestionTypesPath)/\(suggestionTypeGroupId)/suggestion-type-id/\(suggestionTypeId)/toggle",
             method: .PATCH,
             queryParameters: ["is_enabled": "\(isEnabled)"],
             headers: keychainManager.applicationJSONAuthorizedHeader

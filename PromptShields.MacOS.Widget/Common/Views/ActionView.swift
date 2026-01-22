@@ -38,19 +38,8 @@ struct ActionView: View {
 
     private var suggestionTypes: [SuggestionType] {
         let allTypes = suggestionTypesQueryable.wrappedValue
-        let enabledFilters = currentUserPreferences?.model.enabledSuggestionTypes
-
-        // Filter to only enabled types (from both the type's isEnabled and user preferences)
         let enabledTypes = allTypes.filter { $0.model.isEnabled }
-
-        // If enabledSuggestionTypes preference is nil, all enabled types are shown
-        guard let enabledFilters = enabledFilters else {
-            return enabledTypes.sorted { $0.model.sortOrder < $1.model.sortOrder }
-        }
-
-        return enabledTypes.filter {
-            enabledFilters.contains($0.model.typeKey)
-        }.sorted {
+        return enabledTypes.sorted {
             $0.model.sortOrder < $1.model.sortOrder
         }
     }
@@ -59,11 +48,9 @@ struct ActionView: View {
         let categories = suggestionTypes.compactMap { $0.model.category }
         let uniqueCategories = Array(Set(categories))
 
-        // Sort categories in a logical order
-        let order = ["Writing Clarity", "Structure & Adaptation", "Security & Compliance", "Custom"]
         return uniqueCategories.sorted { a, b in
-            let aIndex = order.firstIndex(of: a) ?? Int.max
-            let bIndex = order.firstIndex(of: b) ?? Int.max
+            let aIndex = categories.firstIndex(of: a) ?? Int.max
+            let bIndex = categories.firstIndex(of: b) ?? Int.max
             return aIndex < bIndex
         }
     }
