@@ -19,8 +19,8 @@ protocol UserDomainService: Sendable {
     var currentUser: User { get async throws }
 
     func currentUser(refresh: Bool) async throws -> User
-    func login() async throws -> User
-    func logout() async throws
+    @MainActor func login() async throws -> User
+    @MainActor func logout() async throws
 }
 
 struct UserDomainServiceImpl: UserDomainService {
@@ -97,6 +97,7 @@ struct UserDomainServiceImpl: UserDomainService {
         }
     }
 
+    @MainActor
     func logout() async throws {
         try await userNetworkService.logout()
         try await deleteAll()

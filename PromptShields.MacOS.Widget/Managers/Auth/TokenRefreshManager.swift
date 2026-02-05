@@ -15,23 +15,7 @@ actor TokenRefreshManager {
 
     private init() {}
 
-    /// Attempts to refresh the access token using the stored refresh token
-    func refreshToken() async throws -> UserAPIResponse {
-        // Prevent multiple simultaneous refresh attempts
-        guard !isRefreshing else {
-            throw AuthError.tokenRefreshFailed
-        }
-
-        isRefreshing = true
-        defer { isRefreshing = false }
-
-        let keychainManager = KeychainManagerImpl.shared
-        let credentials = try keychainManager.loadUserCredentials()
-
-        guard let refreshToken = credentials.refreshToken else {
-            throw AuthError.noRefreshTokenAvailable
-        }
-
+    nonisolated func auth0Call(refreshToken: String, credentials: UserAPIResponse) async throws -> UserAPIResponse {
         return try await withCheckedThrowingContinuation { continuation in
             Auth0
                 .authentication()
@@ -58,5 +42,24 @@ actor TokenRefreshManager {
                     }
                 }
         }
+    }
+    /// Attempts to refresh the access token using the stored refresh token
+    func refreshToken() async throws -> UserAPIResponse {
+        // Prevent multiple simultaneous refresh attempts
+        guard !isRefreshing else {
+            throw AuthError.tokenRefreshFailed
+        }
+
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        let keychainManager = KeychainManagerImpl.shared
+        let credentials = try keychainManager.loadUserCredentials()
+
+        guard let refreshToken = credentials.refreshToken else {
+            throw AuthError.noRefreshTokenAvailable
+        }
+
+        return try await auth0Call(refreshToken: refreshToken, credentials: credentials)
     }
 }

@@ -304,7 +304,7 @@ final class AXUIElementSafeWrapper {
     static func asAXUIElement(_ value: CFTypeRef?) -> AXUIElement? {
         guard let value else { return nil }
         guard CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
-        return unsafeBitCast(value, to: AXUIElement.self)
+        return unsafeDowncast(value, to: AXUIElement.self)
     }
 
     /// Checks if an element is editable

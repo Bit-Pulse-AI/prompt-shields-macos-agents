@@ -224,8 +224,7 @@ final class AccessibilityManagerImpl: ObservableObject {
         Analytics.trackAsync(.accessibilityPermissionRequested)
 
         // Show the system permission prompt
-        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        let options = [key: true] as CFDictionary
+        let options = ["kAXTrustedCheckOptionPrompt": true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
         hasPromptedForPermissions = true
 
@@ -351,12 +350,11 @@ final class AccessibilityManagerImpl: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] notification in
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
             Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                   app.bundleIdentifier == Bundle.main.bundleIdentifier {
+                if app?.bundleIdentifier == Bundle.main.bundleIdentifier {
                     try? await Task.sleep(for: .milliseconds(250))
-                    self.refreshPermissionState()
+                    self?.refreshPermissionState()
                 }
             }
         }

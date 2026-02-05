@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		720379EE2DA002B500BA8C1D /* Auth0 in Frameworks */ = {isa = PBXBuildFile; productRef = 720379ED2DA002B500BA8C1D /* Auth0 */; };
+		723BD3762F34A7E100D16C55 /* Auth0 in Frameworks */ = {isa = PBXBuildFile; productRef = 723BD3752F34A7E100D16C55 /* Auth0 */; };
 		7254B4192F0D1F0200CF28FF /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72FC8E7D2D3D5D6500BCB9CA /* Security.framework */; };
 		7254B41A2F0D1F0200CF28FF /* Auth0 in Frameworks */ = {isa = PBXBuildFile; productRef = 7254B4152F0D1F0200CF28FF /* Auth0 */; };
 		72FC8E7E2D3D5D6500BCB9CA /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72FC8E7D2D3D5D6500BCB9CA /* Security.framework */; };
@@ -98,7 +98,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				72FC8E7E2D3D5D6500BCB9CA /* Security.framework in Frameworks */,
-				720379EE2DA002B500BA8C1D /* Auth0 in Frameworks */,
+				723BD3762F34A7E100D16C55 /* Auth0 in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -194,7 +194,7 @@
 			);
 			name = "PromptShields.MacOS.Widget-Dev";
 			packageProductDependencies = (
-				720379ED2DA002B500BA8C1D /* Auth0 */,
+				723BD3752F34A7E100D16C55 /* Auth0 */,
 			);
 			productName = PromptShields.MacOS.Widget;
 			productReference = 728DE8582DD1607A005CBE4B /* Promptshields Assistant.app */;
@@ -279,9 +279,9 @@
 			mainGroup = 729CD4552D2C614D00D55B7C;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				720379EA2D9FF53400BA8C1D /* XCRemoteSwiftPackageReference "Auth0" */,
 				723DCC402DD5C7FD0065B4D9 /* XCRemoteSwiftPackageReference "stripe-ios" */,
 				72A62E502E00DC2E0051D097 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				723BD3742F34A7E100D16C55 /* XCRemoteSwiftPackageReference "Auth0" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 729CD45F2D2C614D00D55B7C /* Products */;
@@ -649,6 +649,7 @@
 				MTL_FAST_MATH = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Release;
 		};
@@ -704,7 +705,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_UPCOMING_FEATURE_INFER_SENDABLE_FROM_CAPTURES = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				XROS_DEPLOYMENT_TARGET = 2.2;
 			};
@@ -763,7 +764,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_UPCOMING_FEATURE_INFER_SENDABLE_FROM_CAPTURES = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				XROS_DEPLOYMENT_TARGET = 2.2;
 			};
@@ -914,12 +915,12 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		720379EA2D9FF53400BA8C1D /* XCRemoteSwiftPackageReference "Auth0" */ = {
+		723BD3742F34A7E100D16C55 /* XCRemoteSwiftPackageReference "Auth0" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/auth0/Auth0.swift";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.10.0;
+				minimumVersion = 2.17.0;
 			};
 		};
 		723DCC402DD5C7FD0065B4D9 /* XCRemoteSwiftPackageReference "stripe-ios" */ = {
@@ -949,9 +950,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		720379ED2DA002B500BA8C1D /* Auth0 */ = {
+		723BD3752F34A7E100D16C55 /* Auth0 */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 720379EA2D9FF53400BA8C1D /* XCRemoteSwiftPackageReference "Auth0" */;
+			package = 723BD3742F34A7E100D16C55 /* XCRemoteSwiftPackageReference "Auth0" */;
 			productName = Auth0;
 		};
 		7254B4152F0D1F0200CF28FF /* Auth0 */ = {

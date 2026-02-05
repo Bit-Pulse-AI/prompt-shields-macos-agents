@@ -11,10 +11,10 @@ enum UserNetworkServiceError: Error {
 }
 
 protocol UserNetworkService: NetworkService {
-    func login() async throws -> UserAPIResponse
-    func logout() async throws
-    func updateUser(firstName: String?, lastName: String?) async throws -> UserAPIResponse
-    func getUser() async throws -> UserAPIResponse
+    @MainActor func login() async throws -> UserAPIResponse
+    @MainActor func logout() async throws
+    @MainActor func updateUser(firstName: String?, lastName: String?) async throws -> UserAPIResponse
+    @MainActor func getUser() async throws -> UserAPIResponse
     func refreshToken() async throws -> UserAPIResponse
 }
 
@@ -29,88 +29,88 @@ struct UserNetworkServiceImpl: UserNetworkService {
         category: String(describing: UserNetworkServiceImpl.self)
     )
 
-    func getUser() async throws -> UserAPIResponse {
+    nonisolated func getUser() async throws -> UserAPIResponse {
         let credentials = try keychainManager.loadUserCredentials()
+        let accessToken = credentials.accessToken
+        let existingRefreshToken = credentials.refreshToken
 
         return try await withCheckedThrowingContinuation { continuation in
             Auth0
                 .authentication()
-                .userInfo(withAccessToken: credentials.accessToken)
+                .userInfo(withAccessToken: accessToken)
                 .start { result in
-                    switch result {
-                    case .success(let userInfo):
-                        do {
-                            let userAPIResponse = try self.convertAuth0UserToAPIResponse(userInfo, accessToken: credentials.accessToken)
+                    Task { @MainActor in
+                        switch result {
+                        case .success(let userInfo):
+                            let userAPIResponse = Self.convertAuth0UserToAPIResponse(userInfo, accessToken: accessToken, existingRefreshToken: existingRefreshToken)
                             continuation.resume(returning: userAPIResponse)
-                        } catch {
+                        case .failure(let error):
                             continuation.resume(throwing: error)
                         }
-                    case .failure(let error):
-                        continuation.resume(throwing: error)
                     }
                 }
         }
     }
 
-    func updateUser(firstName: String?,
+    nonisolated func updateUser(firstName: String?,
                     lastName: String?) async throws -> UserAPIResponse {
         let credentials = try keychainManager.loadUserCredentials()
         let userId = credentials.id
+        let accessToken = credentials.accessToken
+        let existingRefreshToken = credentials.refreshToken
+
+        var metadata: [String: Any] = [:]
+        if let firstName {
+            metadata["given_name"] = firstName
+        }
+        if let lastName {
+            metadata["family_name"] = lastName
+        }
 
         return try await withCheckedThrowingContinuation { continuation in
-            var metadata: [String: Any] = [:]
-            if let firstName {
-                metadata["given_name"] = firstName
-            }
-            if let lastName {
-                metadata["family_name"] = lastName
-            }
             Auth0
-                .users(token: credentials.accessToken)
+                .users(token: accessToken)
                 .patch(userId,
                        userMetadata: metadata)
                 .start { result in
                     switch result {
                     case .success(let managementObject):
-                        do {
-                            guard let userInfo = UserInfo(json: managementObject) else {
-                                continuation.resume(throwing: UserNetworkServiceError.missingUserInfo)
-                                return
-                            }
-                            let userAPIResponse = try self.convertAuth0UserToAPIResponse(userInfo, accessToken: credentials.accessToken)
-                            continuation.resume(returning: userAPIResponse)
-                        } catch {
-                            continuation.resume(throwing: error)
+                        guard let userInfo = UserInfo(json: managementObject) else {
+                            continuation.resume(throwing: UserNetworkServiceError.missingUserInfo)
+                            return
                         }
+                        let userAPIResponse = Self.convertAuth0UserToAPIResponse(
+                            userInfo,
+                            accessToken: accessToken,
+                            existingRefreshToken: existingRefreshToken
+                        )
+                        continuation.resume(returning: userAPIResponse)
                     case .failure(let error):
-                        continuation.resume(throwing: error)
+                        continuation.resume(throwing: UserNetworkServiceError.missingUserInfo)
                     }
                 }
         }
     }
 
-    @MainActor
-    func logout() async throws {
+    nonisolated func logout() async throws {
+        let logger = self.logger
         return try await withCheckedThrowingContinuation { continuation in
             Auth0
                 .webAuth()
                 .clearSession { result in
                     switch result {
                     case .success:
-                        self.logger.debug("Session cleared successfully")
-                        Task {
-                            continuation.resume(returning: ())
-                        }
+                        logger.debug("Session cleared successfully")
+                        continuation.resume(returning: ())
                     case .failure(let error):
-                        self.logger.debug("Session error while clearing: \(error.localizedDescription)")
-                        continuation.resume(throwing: error)
+                        logger.debug("Session error while clearing: \(error.localizedDescription)")
+                        continuation.resume(throwing: UserNetworkServiceError.missingUserInfo)
                     }
                 }
         }
     }
 
-    @MainActor
-    func login() async throws -> UserAPIResponse {
+    nonisolated func login() async throws -> UserAPIResponse {
         return try await withCheckedThrowingContinuation { continuation in
             Auth0
                 .webAuth()
@@ -121,7 +121,7 @@ struct UserNetworkServiceImpl: UserNetworkService {
                         let credentials = try result.get()
                         continuation.resume(with: .success(try credentials.decode()))
                     } catch {
-                        continuation.resume(throwing: error)
+                        continuation.resume(throwing: UserNetworkServiceError.missingUserInfo)
                     }
                 }
         }
@@ -131,15 +131,16 @@ struct UserNetworkServiceImpl: UserNetworkService {
         return try await TokenRefreshManager.shared.refreshToken()
     }
 
-    private func convertAuth0UserToAPIResponse(_ userInfo: UserInfo, accessToken: String) throws -> UserAPIResponse {
+    private static func convertAuth0UserToAPIResponse(
+        _ userInfo: UserInfo,
+        accessToken: String,
+        existingRefreshToken: String?
+    ) -> UserAPIResponse {
         let userId = userInfo.sub
         let email = userInfo.email
         let firstName = userInfo.givenName ?? "n/a"
         let lastName = userInfo.familyName ?? "n/a"
         let photoURL = userInfo.picture?.absoluteString
-
-        // Get existing refresh token from stored credentials if available
-        let existingRefreshToken = try? keychainManager.loadUserCredentials().refreshToken
 
         return UserAPIResponse(id: userId,
                                firstName: firstName,
