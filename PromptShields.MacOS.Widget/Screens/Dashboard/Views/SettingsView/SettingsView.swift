@@ -1,5 +1,6 @@
 import SwiftUI
 import os
+import FoundationModels
 
 struct SettingsView: View {
     @Environment(\.userDomainService) private var userDomainService
@@ -27,6 +28,7 @@ struct SettingsView: View {
             if !isLoading, let preferences = preferences {
                 ScrollView {
                     VStack(spacing: 20) {
+                        localProcessingSection(preferences)
                         suggestionTypesSection(preferences)
                     }
                     .padding()
@@ -41,6 +43,55 @@ struct SettingsView: View {
         .task {
             await loadData()
         }
+    }
+
+    var isLocalAvailable: Bool {
+        if #available(macOS 26.0, *) {
+            return SystemLanguageModel.default.isAvailable
+        } else {
+            return false
+        }
+    }
+
+    private func localProcessingSection(_ preferences: UserPreferences) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Processing")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: Binding(
+                    get: {
+                        preferences.model.useLocalProcessing
+                    },
+                    set: { newValue in
+                        var newPreferences = preferences
+                        newPreferences.model.useLocalProcessing = newValue
+                        Task { @MainActor in
+                            try? await updatePreferences(newPreferences)
+                        }
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Use Apple Intelligence")
+                        Text("Process suggestions locally on your device using Apple's on-device AI model. Requires macOS with Apple Intelligence support.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(!isLocalAvailable)
+
+                if !isLocalAvailable {
+                    Text("Apple Intelligence is not available on this device.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(width: 350)
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(12)
     }
 
     private func suggestionTypesSection(_ preferences: UserPreferences) -> some View {

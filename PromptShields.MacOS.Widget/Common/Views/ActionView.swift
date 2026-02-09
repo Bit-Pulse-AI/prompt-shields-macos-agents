@@ -331,6 +331,7 @@ struct ActionView: View {
         Analytics.trackAsync(.suggestionProcessingStarted(type: suggestionTypeName))
 
         do {
+            let useLocal = currentUserPreferences?.model.useLocalProcessing ?? false
             let result = try await suggestionDomainService
                 .process(
                     text: overlayStateModel.elementInfo?.text ?? "",
@@ -338,7 +339,8 @@ struct ActionView: View {
                     suggestionGroupId: profileDomainService.currentProfile.model.defaultSuggestionGroupId,
                     teamId: profileDomainService.currentProfile.model.defaultTeamId,
                     suggestionType: suggestionTypeName,
-                    application: overlayStateModel.elementInfo?.applicationName ?? "n/a"
+                    application: overlayStateModel.elementInfo?.applicationName ?? "n/a",
+                    useLocal: useLocal
                 )
 
             try Task.checkCancellation()

@@ -23,7 +23,8 @@ protocol SuggestionDomainService: Sendable {
                  suggestionGroupId: String,
                  teamId: String,
                  suggestionType: String,
-                 application: String) async throws -> Suggestion
+                 application: String,
+                 useLocal: Bool) async throws -> Suggestion
     func fetchSuggestionTypes() async throws
     func fetchCurrentSuggestionGroup() async throws -> SuggestionGroup
     func list(offset: Int,
@@ -50,13 +51,15 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
                  suggestionGroupId: String,
                  teamId: String,
                  suggestionType: String,
-                 application: String) async throws -> Suggestion {
+                 application: String,
+                 useLocal: Bool) async throws -> Suggestion {
         let suggestionResult = try await suggestionNetworkService.analyze(text: text,
                                                                           llmProvider: llmProvider,
                                                                           suggestionGroupId: suggestionGroupId,
                                                                           teamId: teamId,
                                                                           suggestionType: suggestionType,
-                                                                          application: application)
+                                                                          application: application,
+                                                                          useLocal: useLocal)
         return suggestionResult.toDomain()
     }
 

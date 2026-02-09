@@ -24,6 +24,7 @@ struct UserPreferences: Domain {
     struct UserPreferencesModel: Model {
         let uuid: UID
         var enabledSuggestionTypes: [String]?
+        var useLocalProcessing: Bool
     }
 
     let identifier: ModelIdentifier?
@@ -46,13 +47,15 @@ struct UserPreferences: Domain {
         persistent.ik = try? model.uuid.sha512
         persistent.uuid = model.uuid
         persistent.enabledSuggestionTypes = model.enabledSuggestionTypes
+        persistent.useLocalProcessing = model.useLocalProcessing
         return persistent
     }
 
     static func fromPersistentModel(_ persistent: UserPreferencesPersistentModel) -> UserPreferences {
         let model = UserPreferencesModel(
             uuid: persistent.uuid,
-            enabledSuggestionTypes: persistent.enabledSuggestionTypes
+            enabledSuggestionTypes: persistent.enabledSuggestionTypes,
+            useLocalProcessing: persistent.useLocalProcessing
         )
         return UserPreferences(model: model, identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
     }
@@ -64,6 +67,7 @@ struct UserPreferences: Domain {
 final class UserPreferencesPersistentModel: UpdatablePersistentModel {
     var uuid: String = ""
     var enabledSuggestionTypes: [String]?
+    var useLocalProcessing: Bool = false
 
     var pk: String?
     var ik: String?
@@ -74,5 +78,6 @@ final class UserPreferencesPersistentModel: UpdatablePersistentModel {
         self.uuid = preferences.uuid
         self.ik = preferences.ik
         self.enabledSuggestionTypes = preferences.enabledSuggestionTypes
+        self.useLocalProcessing = preferences.useLocalProcessing
     }
 }
