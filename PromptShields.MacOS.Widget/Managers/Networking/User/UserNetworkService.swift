@@ -13,7 +13,6 @@ enum UserNetworkServiceError: Error {
 protocol UserNetworkService: NetworkService {
     @MainActor func login() async throws -> UserAPIResponse
     @MainActor func logout() async throws
-    @MainActor func updateUser(firstName: String?, lastName: String?) async throws -> UserAPIResponse
     @MainActor func getUser() async throws -> UserAPIResponse
     func refreshToken() async throws -> UserAPIResponse
 }
@@ -39,54 +38,20 @@ struct UserNetworkServiceImpl: UserNetworkService {
                 .authentication()
                 .userInfo(withAccessToken: accessToken)
                 .start { result in
-                    Task { @MainActor in
-                        switch result {
-                        case .success(let userInfo):
-                            let userAPIResponse = Self.convertAuth0UserToAPIResponse(userInfo, accessToken: accessToken, existingRefreshToken: existingRefreshToken)
-                            continuation.resume(returning: userAPIResponse)
-                        case .failure(let error):
-                            continuation.resume(throwing: error)
-                        }
-                    }
-                }
-        }
-    }
-
-    nonisolated func updateUser(firstName: String?,
-                    lastName: String?) async throws -> UserAPIResponse {
-        let credentials = try keychainManager.loadUserCredentials()
-        let userId = credentials.id
-        let accessToken = credentials.accessToken
-        let existingRefreshToken = credentials.refreshToken
-
-        var metadata: [String: Any] = [:]
-        if let firstName {
-            metadata["given_name"] = firstName
-        }
-        if let lastName {
-            metadata["family_name"] = lastName
-        }
-
-        return try await withCheckedThrowingContinuation { continuation in
-            Auth0
-                .users(token: accessToken)
-                .patch(userId,
-                       userMetadata: metadata)
-                .start { result in
                     switch result {
-                    case .success(let managementObject):
-                        guard let userInfo = UserInfo(json: managementObject) else {
-                            continuation.resume(throwing: UserNetworkServiceError.missingUserInfo)
-                            return
+                    case .success(let userInfo):
+                        let userAPIResponse = Self.convertAuth0UserToAPIResponse(userInfo, accessToken: accessToken, existingRefreshToken: existingRefreshToken)
+                        Task {
+                            await MainActor.run {
+                                continuation.resume(returning: userAPIResponse)
+                            }
                         }
-                        let userAPIResponse = Self.convertAuth0UserToAPIResponse(
-                            userInfo,
-                            accessToken: accessToken,
-                            existingRefreshToken: existingRefreshToken
-                        )
-                        continuation.resume(returning: userAPIResponse)
                     case .failure(let error):
-                        continuation.resume(throwing: UserNetworkServiceError.missingUserInfo)
+                        Task {
+                            await MainActor.run {
+                                continuation.resume(throwing: error)
+                            }
+                        }
                     }
                 }
         }
@@ -95,33 +60,53 @@ struct UserNetworkServiceImpl: UserNetworkService {
     nonisolated func logout() async throws {
         let logger = self.logger
         return try await withCheckedThrowingContinuation { continuation in
-            Auth0
-                .webAuth()
-                .clearSession { result in
-                    switch result {
-                    case .success:
-                        logger.debug("Session cleared successfully")
-                        continuation.resume(returning: ())
-                    case .failure(let error):
-                        logger.debug("Session error while clearing: \(error.localizedDescription)")
-                        continuation.resume(throwing: UserNetworkServiceError.missingUserInfo)
+            Task { @MainActor in
+                Auth0
+                    .webAuth()
+                    .clearSessionIsolated { result in
+                        switch result {
+                        case .success:
+                            logger.debug("Session cleared successfully")
+
+                            Task {
+                                await MainActor.run {
+                                    continuation.resume(returning: ())
+                                }
+                            }
+                        case .failure(let error):
+                            logger.debug("Session error while clearing: \(error.localizedDescription)")
+
+                            Task {
+                                await MainActor.run {
+                                    continuation.resume(throwing: UserNetworkServiceError.missingUserInfo)
+                                }
+                            }
+                        }
                     }
-                }
+            }
         }
     }
 
-    nonisolated func login() async throws -> UserAPIResponse {
+    @MainActor
+    func login() async throws -> UserAPIResponse {
         return try await withCheckedThrowingContinuation { continuation in
             Auth0
-                .webAuth()
+                .webAuth(session: .shared, bundle: .main)
                 .audience(auth0audience)
-                .scope("openid profile email offline_access")
-                .start { result in
+                .scope("openid profile email offline_access").start { result in
                     do {
                         let credentials = try result.get()
-                        continuation.resume(with: .success(try credentials.decode()))
+                        Task {
+                            try await MainActor.run {
+                                continuation.resume(with: .success(try credentials.decode()))
+                            }
+                        }
                     } catch {
-                        continuation.resume(throwing: UserNetworkServiceError.missingUserInfo)
+                        Task {
+                            await MainActor.run {
+                                continuation.resume(throwing: error)
+                            }
+                        }
                     }
                 }
         }
@@ -174,5 +159,12 @@ private extension Credentials {
                                photoURL: photoURL,
                                createdAt: Date(),
                                updatedAt: Date())
+    }
+}
+
+extension WebAuth {
+    @MainActor
+    func clearSessionIsolated(callback: @escaping (WebAuthResult<Void>) -> Void) {
+        clearSession(federated: false, callback: callback)
     }
 }

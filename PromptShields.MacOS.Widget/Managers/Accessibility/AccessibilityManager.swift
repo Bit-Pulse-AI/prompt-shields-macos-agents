@@ -224,7 +224,7 @@ final class AccessibilityManagerImpl: ObservableObject {
         Analytics.trackAsync(.accessibilityPermissionRequested)
 
         // Show the system permission prompt
-        let options = ["kAXTrustedCheckOptionPrompt": true] as CFDictionary
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
         hasPromptedForPermissions = true
 

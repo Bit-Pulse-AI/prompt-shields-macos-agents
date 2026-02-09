@@ -35,10 +35,18 @@ actor TokenRefreshManager {
                             createdAt: credentials.createdAt,
                             updatedAt: Date()
                         )
-                        continuation.resume(returning: updatedResponse)
+                        Task {
+                            await MainActor.run {
+                                continuation.resume(returning: updatedResponse)
+                            }
+                        }
                     case .failure(let error):
                         self.logger.debug("Token refresh failed: \(error.localizedDescription)")
-                        continuation.resume(throwing: AuthError.tokenRefreshFailed)
+                        Task {
+                            await MainActor.run {
+                                continuation.resume(throwing: error)
+                            }
+                        }
                     }
                 }
         }
