@@ -20,7 +20,6 @@ struct ProfileDomainServiceKey: EnvironmentKey {
 
 protocol ProfileDomainService: Sendable {
     var currentProfile: Profile { get async throws }
-    func getProfile() async throws -> Profile
     func currentProfile(refresh: Bool) async throws -> Profile
     func acceptTermsAndConditions() async throws -> Profile
 }
@@ -48,8 +47,8 @@ struct ProfileDomainServiceImpl: ProfileDomainService {
                     domain: try await getProfile()
                 )
         } else {
-            let profileId = try await userDomainService.currentUser.model.profileId
             do {
+                let profileId = try await userDomainService.currentUser.model.profileId
                 return try await persistenceManager.fetchItem {
                     $0.model.uuid == profileId
                 }
@@ -65,14 +64,13 @@ struct ProfileDomainServiceImpl: ProfileDomainService {
     }
 
     func getProfile() async throws -> Profile {
-        let result = try await profileNetworkService.getProfile()
-        return result.toDomain()
+        return try await profileNetworkService.getProfile().toDomain()
     }
 
     func acceptTermsAndConditions() async throws -> Profile {
         let result = try await profileNetworkService.acceptTermsAndConditions()
         let profile = result.toDomain()
-        var updatedProfile = try await currentProfile(refresh: true)
+        var updatedProfile = try await currentProfile
         updatedProfile.model.acceptedTerms = profile.model.acceptedTerms
         updatedProfile.model.acceptedTermsDate = profile.model.acceptedTermsDate
         try await persistenceManager.update(domain: updatedProfile)

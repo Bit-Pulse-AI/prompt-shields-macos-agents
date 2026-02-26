@@ -9,12 +9,12 @@ struct Profile: Domain {
         let uuid: UID
         var acceptedTerms: String?
         var acceptedTermsDate: Date?
+        let userId: String
         let defaultTenantId: UID
         let defaultOrganisationId: UID
         let defaultSubscriptionId: UID
         let defaultSuggestionGroupId: UID
         let defaultTeamId: UID
-        let defaultProjectId: UID
     }
 
     let identifier: ModelIdentifier?
@@ -40,7 +40,6 @@ struct Profile: Domain {
         persistent.defaultSubscriptionId = model.defaultSubscriptionId.encrypt
         persistent.defaultSuggestionGroupId = model.defaultSuggestionGroupId.encrypt
         persistent.defaultTeamId = model.defaultTeamId.encrypt
-        persistent.defaultProjectId = model.defaultProjectId.encrypt
         persistent.acceptedTerms = model.acceptedTerms?.encrypt
         persistent.acceptedTermsDate = model.acceptedTermsDate
         return persistent
@@ -50,12 +49,12 @@ struct Profile: Domain {
         let model = ProfileModel(
             uuid: persistent.uuid.decrypt, acceptedTerms: persistent.acceptedTerms,
             acceptedTermsDate: persistent.acceptedTermsDate,
+            userId: persistent.userId.decrypt,
             defaultTenantId: persistent.defaultTenantId.decrypt,
             defaultOrganisationId: persistent.defaultOrganisationId.decrypt,
             defaultSubscriptionId: persistent.defaultSubscriptionId.decrypt,
             defaultSuggestionGroupId: persistent.defaultSuggestionGroupId.decrypt,
-            defaultTeamId: persistent.defaultTeamId.decrypt,
-            defaultProjectId: persistent.defaultProjectId.decrypt
+            defaultTeamId: persistent.defaultTeamId.decrypt
         )
         return Profile(model: model,
                        identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
@@ -71,18 +70,18 @@ struct ProfileAPIResponse: APIResponse {
     let defaultSubscriptionId: UID
     let defaultSuggestionGroupId: UID
     let defaultTeamId: UID
-    let defaultProjectId: UID
+    let userId: String
     let acceptedTerms: String?
     let acceptedTermsDate: String?
 
     enum CodingKeys: String, CodingKey {
         case id
+        case userId = "user_id"
         case defaultTenantId = "default_tenant_id"
         case defaultOrganisationId = "default_organisation_id"
         case defaultSubscriptionId = "default_subscription_id"
         case defaultSuggestionGroupId = "default_suggestion_group_id"
         case defaultTeamId = "default_team_id"
-        case defaultProjectId = "default_project_id"
         case acceptedTerms = "accepted_terms"
         case acceptedTermsDate = "accepted_date"
     }
@@ -97,12 +96,12 @@ struct ProfileAPIResponse: APIResponse {
             uuid: id,
             acceptedTerms: acceptedTerms,
             acceptedTermsDate: acceptedTermsDate,
+            userId: userId,
             defaultTenantId: defaultTenantId,
             defaultOrganisationId: defaultOrganisationId,
             defaultSubscriptionId: defaultSubscriptionId,
             defaultSuggestionGroupId: defaultSuggestionGroupId,
-            defaultTeamId: defaultTeamId,
-            defaultProjectId: defaultProjectId
+            defaultTeamId: defaultTeamId
         )
         return Profile(model: model)
     }
@@ -121,7 +120,6 @@ final class ProfilePersistentModel: UpdatablePersistentModel {
     var defaultSubscriptionId: UID = ""
     var defaultSuggestionGroupId: UID = ""
     var defaultTeamId: UID = ""
-    var defaultProjectId: UID = ""
     var acceptedTerms: String?
     var acceptedTermsDate: Date?
 
@@ -135,7 +133,6 @@ final class ProfilePersistentModel: UpdatablePersistentModel {
         self.defaultSubscriptionId = other.defaultSubscriptionId
         self.defaultSuggestionGroupId = other.defaultSuggestionGroupId
         self.defaultTeamId = other.defaultTeamId
-        self.defaultProjectId = other.defaultProjectId
         self.acceptedTerms = other.acceptedTerms
         self.acceptedTermsDate = other.acceptedTermsDate
     }

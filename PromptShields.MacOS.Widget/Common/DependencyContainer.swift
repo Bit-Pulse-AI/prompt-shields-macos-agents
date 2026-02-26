@@ -110,7 +110,6 @@ final class DependencyContainer: DependencyContainerProtocol, @unchecked Sendabl
         registerSingleton(NetworkManager.self, instance: NetworkManagerImpl.shared)
 
         // Network Services - new instance per injection
-        register(LLMNetworkService.self) { LLMNetworkServiceImpl() }
         register(SuggestionNetworkService.self) { SuggestionNetworkServiceImpl() }
         register(ProfileNetworkService.self) { ProfileNetworkServiceImpl() }
         register(UserNetworkService.self) { UserNetworkServiceImpl() }
@@ -126,7 +125,6 @@ final class DependencyContainer: DependencyContainerProtocol, @unchecked Sendabl
         register(TeamDomainService.self) { TeamDomainServiceImpl() }
         register(UserPreferencesDomainService.self) { UserPreferencesDomainServiceImpl() }
         register(SuggestionDomainService.self) { SuggestionDomainServiceImpl() }
-        register(LLMDomainService.self) { LLMDomainServiceImpl() }
     }
 
     // MARK: - Testing Support

@@ -48,7 +48,7 @@ struct AuthView: View {
     func authenticateRegisterUser() async {
         do {
             let user = try await userDomainService.login()
-            let profile = try await profileDomainService.currentProfile(refresh: true)
+            let profile = try await profileDomainService.currentProfile
 
             let shaId = try user.model.uuid.sha512
             if profile.model.acceptedTerms == shaId {

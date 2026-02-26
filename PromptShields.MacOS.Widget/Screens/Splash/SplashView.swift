@@ -30,12 +30,11 @@ struct SplashView: View {
         }
     }
 
-    func checkAuth() {
+    private func checkAuth() {
         Task { @MainActor in
             do {
-                let user = try await userDomainService.currentUser(refresh: true)
-                let profile = try await profileDomainService.currentProfile(refresh: true)
-                let shaId = try user.model.uuid.sha512
+                let profile = try await profileDomainService.currentProfile
+                let shaId = try profile.model.userId.sha512
                 if profile.model.acceptedTerms == shaId {
                     mainState.authState = .loggedIn
                 } else {

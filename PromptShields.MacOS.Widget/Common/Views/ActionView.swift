@@ -102,7 +102,7 @@ struct ActionView: View {
         Button {
             isProcessing = true
             Task { @MainActor in
-                currentUserPreferences = try await userPreferencesDomainService.currentUserPreferences()
+                currentUserPreferences = try await userPreferencesDomainService.currentUserPreferences
                 overlayStateModel.actionToolState = .category
                 isProcessing = false
             }
@@ -334,7 +334,6 @@ struct ActionView: View {
             let result = try await suggestionDomainService
                 .process(
                     text: overlayStateModel.elementInfo?.text ?? "",
-                    llmProvider: LLMProvider.AZURE_PROMPTSHIELDS.rawValue,
                     suggestionGroupId: profileDomainService.currentProfile.model.defaultSuggestionGroupId,
                     teamId: profileDomainService.currentProfile.model.defaultTeamId,
                     suggestionType: suggestionTypeName,

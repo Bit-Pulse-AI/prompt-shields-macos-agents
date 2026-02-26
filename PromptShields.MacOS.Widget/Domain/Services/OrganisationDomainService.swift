@@ -27,31 +27,13 @@ struct OrganisationDomainServiceKey: EnvironmentKey {
 protocol OrganisationDomainService: Sendable {
     var currentOrganisation: Organisation { get async throws }
     func currentOrganisation(refresh: Bool) async throws -> Organisation
-
-    func createOrganisation(tenant: Tenant,
-                            name: String,
-                            description: String?) async throws -> Organisation
-
-    func getOrganisations(tenant: Tenant) async throws -> [Organisation]
-
-    func updateOrganisation(organisation: Organisation,
-                            tenant: Tenant,
-                            name: String,
-                            description: String?,
-                            localData: @Sendable @escaping (Organisation) -> Void,
-                            remoteData: @Sendable @escaping (Result<Organisation, Error>) -> Void)
-
-    func deleteOrganisation(organisation: Organisation,
-                            tenant: Tenant,
-                            localData: @Sendable @escaping () -> Void,
-                            remoteData: @Sendable @escaping (Result<Void, Error>) -> Void)
 }
 
 struct OrganisationDomainServiceImpl: OrganisationDomainService {
     @Inject
     private var persistenceManager: PersistenceManager
     @Inject
-    private var organisationNetworkService: OrganisationNetworkService
+    private var organisationDomainService: OrganisationDomainService
     @Inject
     private var tenantDomainService: TenantDomainService
     @Inject
@@ -88,159 +70,7 @@ struct OrganisationDomainServiceImpl: OrganisationDomainService {
         }
     }
 
-    func createOrganisation(tenant: Tenant,
-                            name: String,
-                            description: String?) async throws -> Organisation {
-        do {
-            // Create organisation locally first
-            let organisationModel = Organisation.OrganisationModel(
-                uuid: UUID().uuidString,
-                name: name,
-                description: description,
-                subscriptions: [],
-                tenantUID: tenant.model.uuid,
-                createdAt: Date(),
-                modifiedAt: Date()
-            )
-
-            let organisation = try await persistenceManager.insert(domain: Organisation(model: organisationModel))
-
-            // Sync with backend
-            do {
-                let remoteOrganisation = try await organisationNetworkService.create(tenantId: tenant.model.uuid, name: name, description: description)
-
-                // Update organisation with remote data
-                var updatedOrganisation = organisation
-                updatedOrganisation.model.uuid = remoteOrganisation.id
-                try await persistenceManager.update(domain: updatedOrganisation)
-
-                return updatedOrganisation
-            } catch {
-                // Rollback on network failure
-                try await persistenceManager.delete(domain: organisation)
-                throw error
-            }
-        } catch {
-            throw error
-        }
-    }
-
     func getOrganisation(tenantId: String, organisationId: String) async throws -> Organisation {
-        try await organisationNetworkService.read(tenantId: tenantId, organisationId: organisationId).toDomain()
-    }
-
-    func getOrganisations(tenant: Tenant) async throws -> [Organisation] {
-        do {
-            // Get local organisations first
-            let localOrganisations: [Organisation] = try await persistenceManager.query(
-                sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)]
-            )
-
-            // Sync with backend
-            do {
-                let remoteOrganisations = try await organisationNetworkService.list(tenantId: tenant.model.uuid)
-
-                // Update local organisations with remote data
-                var updatedOrganisations: [Organisation] = []
-                for remoteOrganisation in remoteOrganisations.items {
-                    let dateFormatter = ISO8601DateFormatter()
-                    let organisationModel = Organisation.OrganisationModel(
-                        uuid: remoteOrganisation.id,
-                        name: remoteOrganisation.name,
-                        description: remoteOrganisation.description,
-                        subscriptions: [],
-                        tenantUID: tenant.model.uuid,
-                        createdAt: dateFormatter.date(from: remoteOrganisation.createdAt) ?? Date(),
-                        modifiedAt: dateFormatter.date(from: remoteOrganisation.updatedAt) ?? Date()
-                    )
-
-                    let organisation = try await persistenceManager.insert(domain: Organisation(model: organisationModel))
-                    updatedOrganisations.append(organisation)
-                }
-
-                return updatedOrganisations
-            } catch {
-                if !localOrganisations.isEmpty {
-                    return localOrganisations
-                } else {
-                    throw error
-                }
-            }
-        } catch {
-            throw error
-        }
-    }
-
-    func updateOrganisation(organisation: Organisation,
-                            tenant: Tenant,
-                            name: String,
-                            description: String?,
-                            localData: @Sendable @escaping (Organisation) -> Void,
-                            remoteData: @Sendable @escaping (Result<Organisation, Error>) -> Void) {
-        // Use @MainActor Task to ensure callbacks are delivered on main thread
-        // and SwiftData operations are properly serialized through the actor
-        Task { @MainActor in
-            do {
-                let originalName = organisation.model.name
-                let originalDescription = organisation.model.description
-
-                // Update locally first - persistenceManager is an actor, 
-                // so this properly hops to its executor
-                var updatedOrganisation = organisation
-                updatedOrganisation.model.name = name
-                updatedOrganisation.model.description = description
-                updatedOrganisation.model.modifiedAt = Date()
-                try await persistenceManager.update(domain: updatedOrganisation)
-                localData(updatedOrganisation)
-
-                // Sync with backend
-                do {
-                    let remoteOrganisation = try await organisationNetworkService.update(tenantId: tenant.model.uuid, organisationId: organisation.model.uuid, name: name, description: description)
-
-                    // Update with remote data
-                    updatedOrganisation.model.uuid = remoteOrganisation.id
-                    updatedOrganisation.model.name = remoteOrganisation.name
-                    try await persistenceManager.update(domain: updatedOrganisation)
-
-                    remoteData(.success(updatedOrganisation))
-                } catch {
-                    // Rollback on network failure
-                    updatedOrganisation.model.name = originalName
-                    updatedOrganisation.model.description = originalDescription
-                    try await persistenceManager.update(domain: updatedOrganisation)
-                    remoteData(.failure(error))
-                }
-            } catch {
-                remoteData(.failure(error))
-            }
-        }
-    }
-
-    func deleteOrganisation(organisation: Organisation,
-                            tenant: Tenant,
-                            localData: @Sendable @escaping () -> Void,
-                            remoteData: @Sendable @escaping (Result<Void, Error>) -> Void) {
-        // Use @MainActor Task to ensure callbacks are delivered on main thread
-        // and SwiftData operations are properly serialized through the actor
-        Task { @MainActor in
-            do {
-                // Delete locally first - persistenceManager is an actor,
-                // so this properly hops to its executor
-                try await persistenceManager.delete(domain: organisation)
-                localData()
-
-                // Sync with backend
-                do {
-                    try await organisationNetworkService.delete(tenantId: tenant.model.uuid, organisationId: organisation.model.uuid)
-                    remoteData(.success(()))
-                } catch {
-                    // Rollback on network failure
-                    try await persistenceManager.insert(domain: organisation)
-                    remoteData(.failure(error))
-                }
-            } catch {
-                remoteData(.failure(error))
-            }
-        }
+        try await organisationDomainService.currentOrganisation
     }
 }

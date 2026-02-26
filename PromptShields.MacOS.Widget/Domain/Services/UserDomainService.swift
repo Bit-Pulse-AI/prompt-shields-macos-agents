@@ -31,7 +31,7 @@ struct UserDomainServiceImpl: UserDomainService {
     @Inject
     private var userNetworkService: UserNetworkService
     @Inject
-    private var profileDomainService: ProfileDomainService
+    private var profileNetworkService: ProfileNetworkService
     @Inject
     private var preferenceDomainService: UserPreferencesDomainService
 
@@ -105,8 +105,8 @@ struct UserDomainServiceImpl: UserDomainService {
 
     private func getUser() async throws -> User {
         let result = try await userNetworkService.getUser()
-        let profile = try await profileDomainService.getProfile()
-        let preferences = try await preferenceDomainService.currentUserPreferences()
+        let profile = try await profileNetworkService.getProfile()
+        let preferences = try await preferenceDomainService.currentUserPreferences
         return result.toDomain(profileId: profile.model.uuid, preferenceId: preferences.model.uuid)
     }
 

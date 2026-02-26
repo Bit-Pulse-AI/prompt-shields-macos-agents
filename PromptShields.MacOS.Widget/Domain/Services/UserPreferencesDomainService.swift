@@ -16,8 +16,8 @@ struct UserPreferencesDomainServiceKey: EnvironmentKey {
 }
 
 protocol UserPreferencesDomainService: Sendable {
+    var currentUserPreferences: UserPreferences { get async throws }
     func newPreferences() async throws -> UserPreferences
-    func currentUserPreferences() async throws -> UserPreferences
 }
 
 struct UserPreferencesDomainServiceImpl: UserPreferencesDomainService {
@@ -33,20 +33,22 @@ struct UserPreferencesDomainServiceImpl: UserPreferencesDomainService {
         category: String(describing: UserDomainServiceImpl.self)
     )
 
-    func currentUserPreferences() async throws -> UserPreferences {
-        let currentUser = try await userDomainService.currentUser
-        let preferenceId = currentUser.model.preferenceId
-        do {
-            return try await persistenceManager.fetchItem {
-                $0.model.uuid == preferenceId
+    var currentUserPreferences: UserPreferences {
+        get async throws {
+            let currentUser = try await userDomainService.currentUser
+            let preferenceId = currentUser.model.preferenceId
+            do {
+                return try await persistenceManager.fetchItem {
+                    $0.model.uuid == preferenceId
+                }
+            } catch PersistenceManagerError.missingModel {
+                return try await persistenceManager
+                    .syncLocalWithRemote(
+                        domain: try await newPreferences()
+                    )
+            } catch {
+                throw error
             }
-        } catch PersistenceManagerError.missingModel {
-            return try await persistenceManager
-                .syncLocalWithRemote(
-                    domain: try await newPreferences()
-                )
-        } catch {
-            throw error
         }
     }
 

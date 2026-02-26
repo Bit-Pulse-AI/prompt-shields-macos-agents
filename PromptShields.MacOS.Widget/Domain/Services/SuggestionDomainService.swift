@@ -19,7 +19,6 @@ struct SuggestionDomainServiceKey: EnvironmentKey {
 protocol SuggestionDomainService: Sendable {
     @discardableResult
     func process(text: String,
-                 llmProvider: String,
                  suggestionGroupId: String,
                  teamId: String,
                  suggestionType: String,
@@ -46,13 +45,11 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
     @discardableResult
     func process(text: String,
-                 llmProvider: String,
                  suggestionGroupId: String,
                  teamId: String,
                  suggestionType: String,
                  application: String) async throws -> Suggestion {
         let suggestionResult = try await suggestionNetworkService.analyze(text: text,
-                                                                          llmProvider: llmProvider,
                                                                           suggestionGroupId: suggestionGroupId,
                                                                           teamId: teamId,
                                                                           suggestionType: suggestionType,
@@ -72,7 +69,6 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         let suggestionsResult = try await suggestionNetworkService
             .list(
                 suggestionGroupId: suggestionGroupId,
-                llmProvider: LLMProvider.AZURE_PROMPTSHIELDS.rawValue,
                 teamId: teamId,
                 offset: offset,
                 limit: limit)

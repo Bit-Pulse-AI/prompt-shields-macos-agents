@@ -114,26 +114,7 @@ struct AccountView: View {
         HStack {
             RoundCirclePortraitView(url: $accountPhoto)
                 .frame(width: 80, height: 80)
-//            Button {
-//                changePhoto()
-//            } label: {
-//                Text("Change photo")
-//            }
-//            .buttonStyle(accountButtonStyle)
-//            Button {
-//                deletePhoto()
-//            } label: {
-//                Text("Delete photo")
-//            }
-//            .buttonStyle(accountDeleteButtonStyle)
         }.frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    var subscriptionSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SubscriptionIntegrationView()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     var deleteAccount: some View {

@@ -103,7 +103,7 @@ struct SettingsView: View {
             await suggestionTypesQueryable.refresh()
 
             // Then fetch the (potentially updated) preferences
-            let preferences = try await userPreferencesDomainService.currentUserPreferences()
+            let preferences = try await userPreferencesDomainService.currentUserPreferences
             self.preferences = preferences
         } catch {
             logger.debug("Error fetching data: \(error)")

@@ -14,14 +14,6 @@ struct Subscription: Domain {
         var organisationUID: UID
         var createdAt: Date
         var modifiedAt: Date
-        var stripeSubscriptionId: String?
-        var stripeCustomerId: String?
-        var stripeBillingPeriod: String?
-        var stripePeriodStart: Date?
-        var stripePeriodEnd: Date?
-        var cancelAtPeriodEnd: Bool?
-        var cancelledAt: Date?
-        var stripeStatus: String?
     }
 
     let identifier: ModelIdentifier?
@@ -45,14 +37,6 @@ struct Subscription: Domain {
         persistent.tier = model.tier.encrypt
         persistent.createdAt = model.createdAt
         persistent.modifiedAt = model.modifiedAt
-        persistent.stripeSubscriptionId = model.stripeSubscriptionId
-        persistent.stripeCustomerId = model.stripeCustomerId
-        persistent.stripeBillingPeriod = model.stripeBillingPeriod
-        persistent.stripePeriodStart = model.stripePeriodStart?.string
-        persistent.stripePeriodEnd = model.stripePeriodEnd?.string
-        persistent.cancelAtPeriodEnd = model.cancelAtPeriodEnd
-        persistent.cancelledAt = model.cancelledAt
-        persistent.stripeStatus = model.stripeStatus
         return persistent
     }
 
@@ -63,15 +47,7 @@ struct Subscription: Domain {
             tier: persistent.tier.decrypt,
             organisationUID: persistent.organisationUID,
             createdAt: persistent.createdAt,
-            modifiedAt: persistent.modifiedAt,
-            stripeSubscriptionId: persistent.stripeSubscriptionId,
-            stripeCustomerId: persistent.stripeCustomerId,
-            stripeBillingPeriod: persistent.stripeBillingPeriod,
-            stripePeriodStart: persistent.stripePeriodStart?.date,
-            stripePeriodEnd: persistent.stripePeriodEnd?.date,
-            cancelAtPeriodEnd: persistent.cancelAtPeriodEnd,
-            cancelledAt: persistent.cancelledAt,
-            stripeStatus: persistent.stripeStatus
+            modifiedAt: persistent.modifiedAt
         )
         return Subscription(model: model, identifier: ModelIdentifier(persistentIdentifier: persistent.persistentModelID))
     }
@@ -86,14 +62,6 @@ struct SubscriptionAPIResponse: APIResponse {
     let origanisationUID: String
     let createdAt: String
     let updatedAt: String
-    let stripeSubscriptionId: String?
-    let stripeCustomerId: String?
-    let stripeBillingPeriod: String?
-    let stripePeriodStart: String?
-    let stripePeriodEnd: String?
-    let cancelAtPeriodEnd: Bool?
-    let cancelledAt: String?
-    let stripeStatus: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -102,37 +70,17 @@ struct SubscriptionAPIResponse: APIResponse {
         case origanisationUID = "organisation_id"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
-        case stripeSubscriptionId = "stripe_subscription_id"
-        case stripeCustomerId = "stripe_customer_id"
-        case stripeBillingPeriod = "billing_period"
-        case stripePeriodStart = "current_period_start"
-        case stripePeriodEnd = "current_period_end"
-        case cancelAtPeriodEnd = "cancel_at_period_end"
-        case cancelledAt = "cancelled_at"
-        case stripeStatus = "stripe_status"
     }
 
     func toDomain() -> Subscription {
         let dateFormatter = ISO8601DateFormatter()
-        var cancelledAt: Date?
-        if let safe_cancelledAt = self.cancelledAt {
-            cancelledAt = dateFormatter.date(from: safe_cancelledAt)
-        }
         let model = Subscription.SubscriptionModel(
             uuid: id,
             name: name,
             tier: tier,
             organisationUID: origanisationUID,
             createdAt: dateFormatter.date(from: createdAt) ?? Date(),
-            modifiedAt: dateFormatter.date(from: updatedAt) ?? Date(),
-            stripeSubscriptionId: stripeSubscriptionId,
-            stripeCustomerId: stripeCustomerId,
-            stripeBillingPeriod: stripeBillingPeriod,
-            stripePeriodStart: stripePeriodStart?.date,
-            stripePeriodEnd: stripePeriodEnd?.date,
-            cancelAtPeriodEnd: cancelAtPeriodEnd,
-            cancelledAt: cancelledAt,
-            stripeStatus: stripeStatus
+            modifiedAt: dateFormatter.date(from: updatedAt) ?? Date()
         )
         return Subscription(model: model)
     }

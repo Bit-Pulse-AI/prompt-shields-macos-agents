@@ -1,8 +1,8 @@
 import Foundation
 
 protocol SuggestionNetworkService: NetworkService {
-    func analyze(text: String, llmProvider: String, suggestionGroupId: String, teamId: String, suggestionType: String, application: String) async throws -> SuggestionAPIResponse
-    func list(suggestionGroupId: String, llmProvider: String, teamId: String, offset: Int, limit: Int) async throws -> PaginatedResponse<SuggestionAPIResponse>
+    func analyze(text: String, suggestionGroupId: String, teamId: String, suggestionType: String, application: String) async throws -> SuggestionAPIResponse
+    func list(suggestionGroupId: String, teamId: String, offset: Int, limit: Int) async throws -> PaginatedResponse<SuggestionAPIResponse>
     func fetchSuggestionTypes() async throws -> ListResponse<SuggestionTypeAPIResponse>
     func fetchSuggestionGroup(suggestionGroupId: String, teamId: String) async throws -> SuggestionGroupAPIResponse
 }
@@ -17,7 +17,6 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
     private let suggestionGroupPath = "suggestion_group"
 
     func analyze(text: String,
-                 llmProvider: String,
                  suggestionGroupId: String,
                  teamId: String,
                  suggestionType: String,
@@ -25,7 +24,6 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         let payload = SuggestionRequest(body: text,
                                         suggestionGroupId: suggestionGroupId,
                                         suggestionType: suggestionType,
-                                        llmProvider: llmProvider,
                                         teamId: teamId,
                                         application: application)
         let request = try RequestBuilder().request(
@@ -46,7 +44,7 @@ struct SuggestionNetworkServiceImpl: SuggestionNetworkService {
         return try await networkManager.performWithAutoRefresh(request: request).decode()
     }
 
-    func list(suggestionGroupId: String, llmProvider: String, teamId: String, offset: Int, limit: Int) async throws -> PaginatedResponse<SuggestionAPIResponse> {
+    func list(suggestionGroupId: String, teamId: String, offset: Int, limit: Int) async throws -> PaginatedResponse<SuggestionAPIResponse> {
         let request = try RequestBuilder().request(
             url: "\(baseURL)/teams/\(teamId)/suggestion_group/\(suggestionGroupId)/suggestions",
             method: .GET,

@@ -87,7 +87,7 @@ struct MainView: View {
         Task { @MainActor in
             do {
                 shouldShowProgressView = true
-                let currentUser = try await userDomainService.currentUser(refresh: true)
+                let currentUser = try await userDomainService.currentUser
                 let profile = try await profileDomainService.acceptTermsAndConditions()
 
                 let shaId = try currentUser.model.uuid.sha512
