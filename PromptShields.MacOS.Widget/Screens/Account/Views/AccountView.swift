@@ -155,7 +155,7 @@ struct AccountView: View {
     private func logout() {
         Task { @MainActor in
             isLoading = true
-            try? await userDomainService.logout()
+            try? await AuthenticationManagerImpl.shared.logout()
             mainState.authState = .loggedOut(nil)
             isLoading = false
         }

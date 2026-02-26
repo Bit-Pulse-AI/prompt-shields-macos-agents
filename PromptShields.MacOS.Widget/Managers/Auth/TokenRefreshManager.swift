@@ -2,7 +2,9 @@ import Foundation
 import os
 import Auth0
 
-/// Manages token refresh operations independently to avoid circular dependencies
+/// Manages token refresh operations with proper request coalescing.
+/// When multiple callers request a refresh concurrently, only one
+/// Auth0 call is made and all callers receive the same result.
 actor TokenRefreshManager {
     static let shared = TokenRefreshManager()
 
@@ -11,56 +13,45 @@ actor TokenRefreshManager {
         category: String(describing: TokenRefreshManager.self)
     )
 
+    private var pendingContinuations: [CheckedContinuation<UserAPIResponse, Error>] = []
     private var isRefreshing = false
 
     private init() {}
 
-    nonisolated func auth0Call(refreshToken: String, credentials: UserAPIResponse) async throws -> UserAPIResponse {
-        return try await withCheckedThrowingContinuation { continuation in
-            Auth0
-                .authentication()
-                .renew(withRefreshToken: refreshToken)
-                .start { result in
-                    switch result {
-                    case .success(let newCredentials):
-                        // Create updated UserAPIResponse with new access token but keeping user info
-                        let updatedResponse = UserAPIResponse(
-                            id: credentials.id,
-                            firstName: credentials.firstName,
-                            lastName: credentials.lastName,
-                            email: credentials.email,
-                            accessToken: newCredentials.accessToken,
-                            refreshToken: newCredentials.refreshToken ?? refreshToken, // Keep old refresh token if new one not provided
-                            photoURL: credentials.photoURL,
-                            createdAt: credentials.createdAt,
-                            updatedAt: Date()
-                        )
-                        Task {
-                            await MainActor.run {
-                                continuation.resume(returning: updatedResponse)
-                            }
-                        }
-                    case .failure(let error):
-                        self.logger.debug("Token refresh failed: \(error.localizedDescription)")
-                        Task {
-                            await MainActor.run {
-                                continuation.resume(throwing: error)
-                            }
-                        }
-                    }
-                }
-        }
-    }
-    /// Attempts to refresh the access token using the stored refresh token
+    /// Refreshes the access token using the stored refresh token.
+    /// Concurrent calls are coalesced into a single Auth0 request.
     func refreshToken() async throws -> UserAPIResponse {
-        // Prevent multiple simultaneous refresh attempts
-        guard !isRefreshing else {
-            throw AuthError.tokenRefreshFailed
+        if isRefreshing {
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingContinuations.append(continuation)
+            }
         }
 
         isRefreshing = true
-        defer { isRefreshing = false }
 
+        do {
+            let result = try await performRefresh()
+            resumeAll(with: .success(result))
+            return result
+        } catch {
+            resumeAll(with: .failure(error))
+            throw error
+        }
+    }
+
+    // MARK: - Private
+
+    private func resumeAll(with result: Result<UserAPIResponse, Error>) {
+        let waiting = pendingContinuations
+        pendingContinuations.removeAll()
+        isRefreshing = false
+
+        for continuation in waiting {
+            continuation.resume(with: result)
+        }
+    }
+
+    private nonisolated func performRefresh() async throws -> UserAPIResponse {
         let keychainManager = KeychainManagerImpl.shared
         let credentials = try keychainManager.loadUserCredentials()
 
@@ -68,6 +59,29 @@ actor TokenRefreshManager {
             throw AuthError.noRefreshTokenAvailable
         }
 
-        return try await auth0Call(refreshToken: refreshToken, credentials: credentials)
+        return try await withCheckedThrowingContinuation { continuation in
+            Auth0
+                .authentication()
+                .renew(withRefreshToken: refreshToken)
+                .start { result in
+                    switch result {
+                    case .success(let newCredentials):
+                        let updated = UserAPIResponse(
+                            id: credentials.id,
+                            firstName: credentials.firstName,
+                            lastName: credentials.lastName,
+                            email: credentials.email,
+                            accessToken: newCredentials.accessToken,
+                            refreshToken: newCredentials.refreshToken ?? refreshToken,
+                            photoURL: credentials.photoURL,
+                            createdAt: credentials.createdAt,
+                            updatedAt: Date()
+                        )
+                        continuation.resume(returning: updated)
+                    case .failure(let error):
+                        continuation.resume(throwing: error)
+                    }
+                }
+        }
     }
 }

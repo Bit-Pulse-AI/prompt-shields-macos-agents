@@ -12,10 +12,9 @@ struct MainView: View {
     @StateObject private var globalMainStateModel = MainStateModel()
     @State private var shouldShowProgressView: Bool = false
     @State private var isAlertPresented: Bool = false
-    @State private var alertMessage: String = ""
 
-    @Environment(\.userDomainService) private var userDomainService
     @Environment(\.profileDomainService) private var profileDomainService
+    @Environment(\.userDomainService) private var userDomainService
 
     var body: some View {
         VStack {
@@ -76,8 +75,7 @@ struct MainView: View {
     private func logout() {
         Task { @MainActor in
             shouldShowProgressView = true
-            try? await userDomainService.logout()
-            try? await userDomainService.deleteAll()
+            try? await AuthenticationManagerImpl.shared.logout()
             globalMainStateModel.authState = .loggedOut(nil)
             shouldShowProgressView = false
         }
@@ -109,12 +107,8 @@ struct MainView: View {
 
     private func handleTokenRefreshFailure() {
         Task { @MainActor in
-            do {
-                try await userDomainService.logout()
-                globalMainStateModel.authState = .loggedOut(AuthError.tokenRefreshFailed)
-            } catch {
-                globalMainStateModel.authState = .loggedOut(error)
-            }
+            try? await AuthenticationManagerImpl.shared.logout()
+            globalMainStateModel.authState = .loggedOut(AuthError.tokenRefreshFailed)
         }
     }
 }

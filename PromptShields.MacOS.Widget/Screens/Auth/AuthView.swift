@@ -1,19 +1,15 @@
 import SwiftUI
 import os
 
-final class AuthStateModel: ObservableObject {
-    @Published var isBusy: Bool = false
-}
-
 struct AuthView: View {
     @EnvironmentObject private var mainState: MainStateModel
-    @Environment(\.userDomainService) private var userDomainService
-    @Environment(\.profileDomainService) private var profileDomainService
 
-    private let loginButtonStyle = AccountButtonStyle(foregroundColor: Color.primary,
-                                                      backgroundColor: .white,
-                                                      borderColor: .border,
-                                                      cornerRadius: 8)
+    private let loginButtonStyle = AccountButtonStyle(
+        foregroundColor: Color.primary,
+        backgroundColor: .white,
+        borderColor: .border,
+        cornerRadius: 8
+    )
 
     private let logger: os.Logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
@@ -32,7 +28,7 @@ struct AuthView: View {
                 Button {
                     Task { @MainActor in
                         mainState.isBusy = true
-                        await authenticateRegisterUser()
+                        await performLogin()
                         mainState.isBusy = false
                     }
                 } label: {
@@ -45,19 +41,12 @@ struct AuthView: View {
     }
 
     @MainActor
-    func authenticateRegisterUser() async {
+    private func performLogin() async {
         do {
-            let user = try await userDomainService.login()
-            let profile = try await profileDomainService.currentProfile
-
-            let shaId = try user.model.uuid.sha512
-            if profile.model.acceptedTerms == shaId {
-                mainState.authState = .loggedIn
-            } else {
-                mainState.authState = .acceptTerms
-            }
+            let state = try await AuthenticationManagerImpl.shared.login()
+            mainState.authState = state
         } catch {
-            logger.debug("Error encountered \(error)")
+            logger.debug("Login failed: \(error.localizedDescription)")
         }
     }
 }

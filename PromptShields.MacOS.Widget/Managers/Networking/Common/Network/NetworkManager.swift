@@ -144,9 +144,11 @@ actor NetworkManagerImpl: NetworkManager {
             let jsonData = try JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
             let response = String(decoding: jsonData, as: UTF8.self)
             logger.debug("[\(requestId)] Response (\(statusCode)): \(response.prefix(500))")
+            logger.debug("\(response)")
         } catch {
             let response = String(decoding: data, as: UTF8.self)
             logger.debug("[\(requestId)] Response (\(statusCode)): \(response.prefix(500))")
+            logger.debug("\(response)")
         }
         #else
         logger.debug("[\(requestId)] Response: \(statusCode)")

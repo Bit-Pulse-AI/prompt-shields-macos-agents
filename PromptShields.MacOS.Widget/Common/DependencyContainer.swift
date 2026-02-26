@@ -108,6 +108,7 @@ final class DependencyContainer: DependencyContainerProtocol, @unchecked Sendabl
         registerSingleton(PersistenceManager.self, instance: PersistenceManagerImpl.shared)
         registerSingleton(KeychainManager.self, instance: KeychainManagerImpl.shared)
         registerSingleton(NetworkManager.self, instance: NetworkManagerImpl.shared)
+//        registerSingleton(AuthenticationManager.self, instance: AuthenticationManagerImpl.shared)
 
         // Network Services - new instance per injection
         register(SuggestionNetworkService.self) { SuggestionNetworkServiceImpl() }

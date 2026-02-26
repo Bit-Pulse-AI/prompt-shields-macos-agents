@@ -9,7 +9,6 @@ struct Profile: Domain {
         let uuid: UID
         var acceptedTerms: String?
         var acceptedTermsDate: Date?
-        let userId: String
         let defaultTenantId: UID
         let defaultOrganisationId: UID
         let defaultSubscriptionId: UID
@@ -49,7 +48,6 @@ struct Profile: Domain {
         let model = ProfileModel(
             uuid: persistent.uuid.decrypt, acceptedTerms: persistent.acceptedTerms,
             acceptedTermsDate: persistent.acceptedTermsDate,
-            userId: persistent.userId.decrypt,
             defaultTenantId: persistent.defaultTenantId.decrypt,
             defaultOrganisationId: persistent.defaultOrganisationId.decrypt,
             defaultSubscriptionId: persistent.defaultSubscriptionId.decrypt,
@@ -70,13 +68,11 @@ struct ProfileAPIResponse: APIResponse {
     let defaultSubscriptionId: UID
     let defaultSuggestionGroupId: UID
     let defaultTeamId: UID
-    let userId: String
     let acceptedTerms: String?
     let acceptedTermsDate: String?
 
     enum CodingKeys: String, CodingKey {
         case id
-        case userId = "user_id"
         case defaultTenantId = "default_tenant_id"
         case defaultOrganisationId = "default_organisation_id"
         case defaultSubscriptionId = "default_subscription_id"
@@ -96,7 +92,6 @@ struct ProfileAPIResponse: APIResponse {
             uuid: id,
             acceptedTerms: acceptedTerms,
             acceptedTermsDate: acceptedTermsDate,
-            userId: userId,
             defaultTenantId: defaultTenantId,
             defaultOrganisationId: defaultOrganisationId,
             defaultSubscriptionId: defaultSubscriptionId,
