@@ -9,7 +9,7 @@ struct ActionView: View {
     @Environment(\.profileDomainService) private var profileDomainService
 
     @StateObject private var suggestionTypesQueryable = ObservableQueryable(
-        sortDescriptors: [SortDescriptor(\.suggestionName, order: .reverse)],
+        sortDescriptors: [SortDescriptor(\.sortOrder, order: .forward)],
         mapping: DefaultMapping<SuggestionType>.self
     )
     @State private var currentUserPreferences: UserPreferences?
@@ -38,27 +38,21 @@ struct ActionView: View {
 
     private var suggestionTypes: [SuggestionType] {
         let allTypes = suggestionTypesQueryable.wrappedValue
-        let enabledFilters = currentUserPreferences?.model.enabledSuggestionTypes
-
-        // If enabledSuggestionTypes is nil, all types are considered enabled
-        guard let enabledFilters = enabledFilters else {
-            return allTypes.sorted { $0.model.suggestionName < $1.model.suggestionName }
-        }
-
-        return allTypes.filter {
-            enabledFilters.contains($0.model.suggestionType)
-        }.sorted {
-            $0.model.suggestionName < $1.model.suggestionName
+        let enabledTypes = allTypes.filter { $0.model.isEnabled }
+        return enabledTypes.sorted {
+            $0.model.sortOrder < $1.model.sortOrder
         }
     }
 
     private var suggestionCategories: [String] {
-        let set = suggestionTypes.compactMap {
-            $0.model.suggestionTypeCategory
+        let categories = suggestionTypes.compactMap { $0.model.category }
+        let uniqueCategories = Array(Set(categories))
+
+        return uniqueCategories.sorted { a, b in
+            let aIndex = categories.firstIndex(of: a) ?? Int.max
+            let bIndex = categories.firstIndex(of: b) ?? Int.max
+            return aIndex < bIndex
         }
-        return Array(Set(set)).sorted(by: {
-            $0 < $1
-        })
     }
 
     var body: some View {
@@ -188,7 +182,7 @@ struct ActionView: View {
             .padding(.bottom, 4)
 
             if suggestionTypes.count > 0 {
-                ForEach(suggestionTypes.filter { $0.model.suggestionTypeCategory == category }, id: \.model.suggestionType) { suggestionType in
+                ForEach(suggestionTypes.filter { $0.model.category == category }, id: \.model.typeKey) { suggestionType in
                     Button { [weak overlayStateModel] in
                         guard !isProcessing else { return }
                         isProcessing = true
@@ -199,7 +193,7 @@ struct ActionView: View {
                         }
                     } label: {
                         HStack(spacing: .zero) {
-                            Text(suggestionType.model.suggestionName)
+                            Text(suggestionType.displayName)
                                 .font(.callout)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .contentShape(Rectangle())
@@ -322,13 +316,13 @@ struct ActionView: View {
     private func processSuggestion(suggestionType: SuggestionType) async {
         defer { isProcessing = false }
 
-        let suggestionTypeName = suggestionType.model.suggestionType
-        let suggestionCategory = suggestionType.model.suggestionTypeCategory
+        let suggestionTypeKey = suggestionType.model.typeKey
+        let suggestionCategory = suggestionType.model.category
         let startTime = Date()
 
         // Track suggestion type selected and processing started
-        Analytics.trackAsync(.suggestionTypeSelected(type: suggestionTypeName, category: suggestionCategory))
-        Analytics.trackAsync(.suggestionProcessingStarted(type: suggestionTypeName))
+        Analytics.trackAsync(.suggestionTypeSelected(type: suggestionTypeKey, category: suggestionCategory))
+        Analytics.trackAsync(.suggestionProcessingStarted(type: suggestionTypeKey))
 
         do {
             let result = try await suggestionDomainService
@@ -336,24 +330,24 @@ struct ActionView: View {
                     text: overlayStateModel.elementInfo?.text ?? "",
                     suggestionGroupId: profileDomainService.currentProfile.model.defaultSuggestionGroupId,
                     teamId: profileDomainService.currentProfile.model.defaultTeamId,
-                    suggestionType: suggestionTypeName,
+                    suggestionType: suggestionTypeKey,
                     application: overlayStateModel.elementInfo?.applicationName ?? "n/a"
                 )
 
             try Task.checkCancellation()
 
             let duration = Date().timeIntervalSince(startTime)
-            Analytics.trackAsync(.suggestionProcessingCompleted(type: suggestionTypeName, duration: duration))
+            Analytics.trackAsync(.suggestionProcessingCompleted(type: suggestionTypeKey, duration: duration))
 
             actionText = result.model.suggestedText
             overlayStateModel.actionToolState = .action
         } catch is CancellationError {
             logger.debug("LLM processing was cancelled")
-            Analytics.trackAsync(.suggestionProcessingFailed(type: suggestionTypeName, error: "cancelled"))
+            Analytics.trackAsync(.suggestionProcessingFailed(type: suggestionTypeKey, error: "cancelled"))
             resetState()
         } catch {
             logger.debug("Error processing LLM request: \(error)")
-            Analytics.trackAsync(.suggestionProcessingFailed(type: suggestionTypeName, error: error.localizedDescription))
+            Analytics.trackAsync(.suggestionProcessingFailed(type: suggestionTypeKey, error: error.localizedDescription))
             resetState()
         }
     }

@@ -158,7 +158,8 @@ struct RequestBuilder {
                throw NetworkError(message: "Invalid URL: \(url)")
            }
 
-           if method == .GET, let queryParameters = queryParameters {
+           // Add query parameters for GET, DELETE, and PATCH methods
+           if let queryParameters = queryParameters, !queryParameters.isEmpty {
                urlComponents.queryItems = queryParameters.map {
                    URLQueryItem(name: $0.key, value: $0.value)
                }

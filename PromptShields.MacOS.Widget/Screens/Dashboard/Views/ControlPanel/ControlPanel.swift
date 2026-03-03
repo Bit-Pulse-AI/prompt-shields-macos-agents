@@ -155,20 +155,6 @@ struct ControlPanelView: View {
 
             HStack(spacing: 16) {
                 StatCardView(
-                    title: "Suggestions Today",
-                    value: "\(currentSuggestions.count)",
-                    icon: "textformat.abc.dottedunderline",
-                    color: .blue
-                )
-
-                StatCardView(
-                    title: "Active Applications",
-                    value: hasCurrentApplication ? "1" : "0",
-                    icon: "app.badge",
-                    color: .green
-                )
-
-                StatCardView(
                     title: "Status",
                     value: monitoringStatusText,
                     icon: accessibilityManager.monitoringState == .enabled ? "checkmark.circle.fill" : "xmark.circle.fill",
