@@ -7,8 +7,7 @@ enum ActionToolState: Equatable {
     case idle
     case loading
     case action
-    case options(String)
-    case category
+    case options
 }
 
 enum ResultAction {

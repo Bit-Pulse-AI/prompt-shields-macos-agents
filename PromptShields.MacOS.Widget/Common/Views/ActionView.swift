@@ -31,7 +31,7 @@ struct ActionView: View {
         switch overlayStateModel.actionToolState {
         case .idle:
             return false
-        case .loading, .action, .options, .category:
+        case .loading, .action, .options:
             return true
         }
     }
@@ -83,10 +83,8 @@ struct ActionView: View {
             loadingView
         case .action:
             actionResultView
-        case .options(let category):
-            optionsView(category: category)
-        case .category:
-            categoryView
+        case .options:
+            optionsView
         }
     }
 
@@ -97,7 +95,7 @@ struct ActionView: View {
             isProcessing = true
             Task { @MainActor in
                 currentUserPreferences = try await userPreferencesDomainService.currentUserPreferences
-                overlayStateModel.actionToolState = .category
+                overlayStateModel.actionToolState = .options
                 isProcessing = false
             }
         } label: {
@@ -164,25 +162,10 @@ struct ActionView: View {
         .cornerRadius(8)
     }
 
-    private func optionsView(category: String) -> some View {
+    private var optionsView: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
-                Button { [weak overlayStateModel] in
-                    overlayStateModel?.actionToolState = .category
-                } label: {
-                    Image(systemName: "arrow.backward")
-                        .font(.caption)
-                }
-                .buttonStyle(.plain)
-
-                Text(category)
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.bottom, 4)
-
             if suggestionTypes.count > 0 {
-                ForEach(suggestionTypes.filter { $0.model.category == category }, id: \.model.typeKey) { suggestionType in
+                ForEach(suggestionTypes, id: \.model.typeKey) { suggestionType in
                     Button { [weak overlayStateModel] in
                         guard !isProcessing else { return }
                         isProcessing = true
@@ -226,57 +209,6 @@ struct ActionView: View {
         .background(.white)
         .cornerRadius(8)
     }
-
-    private var categoryView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Categories")
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 4)
-
-            if suggestionCategories.count > 0 {
-                ForEach(suggestionCategories, id: \.self) { suggestionCategoryName in
-                    Button { [weak overlayStateModel] in
-                        overlayStateModel?.actionToolState = .options(suggestionCategoryName)
-                    } label: {
-                        HStack {
-                            Text(suggestionCategoryName)
-                                .font(.callout)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isProcessing)
-                    .padding(.vertical, 2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            } else {
-                Text("No suggestions enabled")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Button {
-                overlayStateModel.actionToolState = .idle
-            } label: {
-                Text("Close suggestions")
-                    .font(.caption)
-            }
-            .buttonStyle(ButtonStyleRed())
-            .frame(maxWidth: .infinity)
-            .padding(.top, 12)
-        }
-        .padding(12)
-        .frame(minWidth: 150)
-        .frame(minHeight: 50)
-        .background(.white)
-        .cornerRadius(8)
-    }
-
     // MARK: - State Management
 
     private func handleStateChange(from oldState: ActionToolState, to newState: ActionToolState) {
@@ -299,7 +231,7 @@ struct ActionView: View {
         switch state {
         case .idle:
             return false
-        case .loading, .action, .options, .category:
+        case .loading, .action, .options:
             return true
         }
     }
