@@ -9,7 +9,6 @@ struct CreateSuggestionTypeRequest: SendableEncodable {
     let category: String
     let promptTemplate: String
     let suggestionTypeGroupId: String
-    let icon: String
     let isEnabled: Bool
     let sortOrder: Int
 
@@ -20,7 +19,6 @@ struct CreateSuggestionTypeRequest: SendableEncodable {
         case category
         case suggestionTypeGroupId = "suggestion_type_group_id"
         case promptTemplate = "prompt_template"
-        case icon
         case isEnabled = "is_enabled"
         case sortOrder = "sort_order"
     }

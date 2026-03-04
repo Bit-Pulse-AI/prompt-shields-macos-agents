@@ -180,7 +180,6 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
             category: suggestionType.model.category,
             promptTemplate: suggestionType.model.promptTemplate,
             suggestionTypeGroupId: suggestionType.model.suggestionTypeGroupId,
-            icon: suggestionType.model.icon,
             isEnabled: suggestionType.model.isEnabled,
             sortOrder: suggestionType.model.sortOrder
         )
@@ -205,7 +204,6 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
             description: suggestionType.model.description,
             category: suggestionType.model.category,
             promptTemplate: suggestionType.model.promptTemplate,
-            icon: suggestionType.model.icon,
             isEnabled: suggestionType.model.isEnabled,
             sortOrder: suggestionType.model.sortOrder
         )

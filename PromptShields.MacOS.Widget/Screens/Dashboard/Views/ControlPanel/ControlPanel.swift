@@ -70,14 +70,6 @@ struct ControlPanelView: View {
                     permissionBanner
                 }
 
-                // Welcome Section
-                if UserDefaults.standard.bool(forKey: "shouldHideWelcome") != true {
-                    welcomeSection
-                }
-
-                // Quick Stats
-                quickStatsSection
-
                 // Monitoring Control
                 monitoringControlSection
             }
@@ -119,49 +111,6 @@ struct ControlPanelView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.orange.opacity(0.3), lineWidth: 1)
         )
-    }
-
-    // MARK: - Welcome Section
-
-    private var welcomeSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Welcome to PromptShields Assistant")
-                .font(.title2)
-                .fontWeight(.bold)
-
-            Text("Your AI-powered writing assistant that helps you write better across all applications.")
-                .font(.body)
-                .foregroundColor(.secondary)
-
-            if accessibilityManager.monitoringState == .disabled {
-                Button("Enable Monitoring") {
-                    accessibilityManager.enableMonitoring()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-            }
-        }
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(12)
-    }
-
-    // MARK: - Quick Stats Section
-
-    private var quickStatsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Quick Stats")
-                .font(.headline)
-
-            HStack(spacing: 16) {
-                StatCardView(
-                    title: "Status",
-                    value: monitoringStatusText,
-                    icon: accessibilityManager.monitoringState == .enabled ? "checkmark.circle.fill" : "xmark.circle.fill",
-                    color: monitoringStatusColor
-                )
-            }
-        }
     }
 
     // MARK: - Monitoring Control Section

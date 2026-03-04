@@ -44,17 +44,6 @@ struct ActionView: View {
         }
     }
 
-    private var suggestionCategories: [String] {
-        let categories = suggestionTypes.compactMap { $0.model.category }
-        let uniqueCategories = Array(Set(categories))
-
-        return uniqueCategories.sorted { a, b in
-            let aIndex = categories.firstIndex(of: a) ?? Int.max
-            let bIndex = categories.firstIndex(of: b) ?? Int.max
-            return aIndex < bIndex
-        }
-    }
-
     var body: some View {
         contentView
             .onAppear {
@@ -71,7 +60,16 @@ struct ActionView: View {
             .task {
                 // Ensure suggestion types are loaded when view appears
                 await suggestionTypesQueryable.refresh()
+                await loadUserPreferences()
             }
+    }
+
+    private func loadUserPreferences() async {
+        do {
+            currentUserPreferences = try await userPreferencesDomainService.currentUserPreferences
+        } catch {
+            logger.error("Failed loading user preferences")
+        }
     }
 
     @ViewBuilder
@@ -94,7 +92,6 @@ struct ActionView: View {
         Button {
             isProcessing = true
             Task { @MainActor in
-                currentUserPreferences = try await userPreferencesDomainService.currentUserPreferences
                 overlayStateModel.actionToolState = .options
                 isProcessing = false
             }
@@ -164,46 +161,58 @@ struct ActionView: View {
 
     private var optionsView: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if suggestionTypes.count > 0 {
-                ForEach(suggestionTypes, id: \.model.typeKey) { suggestionType in
-                    Button { [weak overlayStateModel] in
-                        guard !isProcessing else { return }
-                        isProcessing = true
-                        overlayStateModel?.actionToolState = .loading
+            ScrollView {
+                LazyVStack {
+                    if suggestionTypes.count > 0 {
+                        ForEach(suggestionTypes, id: \.model.typeKey) { suggestionType in
+                            Button { [weak overlayStateModel] in
+                                guard !isProcessing else { return }
+                                isProcessing = true
+                                overlayStateModel?.actionToolState = .loading
 
-                        Task { @MainActor in
-                            await processSuggestion(suggestionType: suggestionType)
+                                Task { @MainActor in
+                                    await processSuggestion(suggestionType: suggestionType)
+                                }
+                            } label: {
+                                VStack(spacing: .zero) {
+                                    Text(suggestionType.displayName)
+                                        .font(.headline)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .contentShape(Rectangle())
+                                        .foregroundStyle(.black)
+
+                                    Text(suggestionType.displayDescription)
+                                        .font(.subheadline)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .contentShape(Rectangle())
+                                        .multilineTextAlignment(.leading)
+                                        .lineLimit(10)
+                                }.frame(maxWidth: 200)
+                            }
+                            .buttonStyle(HoverHighlightButtonStyle())
+                            .disabled(isProcessing)
+                            .padding(.vertical, 2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                    } label: {
-                        HStack(spacing: .zero) {
-                            Text(suggestionType.displayName)
-                                .font(.callout)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                            Spacer()
-                        }
+                    } else {
+                        Text("No suggestions enabled")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(isProcessing)
-                    .padding(.vertical, 2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Button {
-                    overlayStateModel.actionToolState = .idle
-                } label: {
-                    Text("Close suggestions")
-                        .font(.caption)
-                }
-                .buttonStyle(ButtonStyleRed())
-                .frame(maxWidth: .infinity)
-                .padding(.top, 12)
-            } else {
-                Text("No suggestions enabled")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
+            .frame(maxHeight: 300)
+            Button {
+                overlayStateModel.actionToolState = .idle
+            } label: {
+                Text("Close suggestions")
+                    .font(.caption)
+            }
+            .buttonStyle(ButtonStyleRed())
+            .frame(maxWidth: .infinity)
+            .padding(.top, 12)
         }
-        .padding(12)
+        .padding(8)
         .frame(minWidth: 150)
         .frame(minHeight: 50)
         .background(.white)
@@ -329,5 +338,30 @@ struct ActionView: View {
     private func rejectSuggestion() {
         Analytics.trackAsync(.suggestionRejected(type: "text_replacement"))
         resetState()
+    }
+}
+
+struct HoverHighlightButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HoverHighlightButton(configuration: configuration)
+    }
+}
+
+private struct HoverHighlightButton: View {
+    let configuration: ButtonStyle.Configuration
+    @State private var isHovered = false
+
+    var body: some View {
+        configuration.label
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isHovered ? Color.primary.opacity(0.08) : Color.clear)
+            )
+            .animation(.easeInOut(duration: 0.12), value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+            }
     }
 }

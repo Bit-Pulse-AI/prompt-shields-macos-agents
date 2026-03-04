@@ -17,7 +17,6 @@ struct SuggestionTypeEditorView: View {
     @State private var description: String
     @State private var category: String
     @State private var promptTemplate: String
-    @State private var icon: String
     @State private var isEnabled: Bool
     @State private var sortOrder: Int
 
@@ -37,15 +36,6 @@ struct SuggestionTypeEditorView: View {
         category: String(describing: SuggestionTypeEditorView.self)
     )
 
-    private let categories = [
-        "Writing Clarity",
-        "Structure & Adaptation",
-        "Security & Compliance",
-        "Custom"
-    ]
-
-    private let commonIcons = ["💡", "✂️", "📝", "🔤", "🌍", "👤", "🔗", "⚡", "📄", "🧹", "🛡️", "⚠️", "✅", "✨", "🎯", "🔧", "📊", "🎨"]
-
     // MARK: - Initialization
 
     init(suggestionType: SuggestionType? = nil, onSave: ((SuggestionType) -> Void)? = nil, onDelete: (() -> Void)? = nil) {
@@ -55,12 +45,11 @@ struct SuggestionTypeEditorView: View {
         self.onDelete = onDelete
 
         // Initialize state with existing values or defaults
-        _typeKey = State(initialValue: suggestionType?.model.typeKey ?? "")
+        _typeKey = State(initialValue: suggestionType?.model.typeKey ?? UUID().uuidString)
         _name = State(initialValue: suggestionType?.model.name ?? "")
         _description = State(initialValue: suggestionType?.model.description ?? "")
         _category = State(initialValue: suggestionType?.model.category ?? "Custom")
         _promptTemplate = State(initialValue: suggestionType?.model.promptTemplate ?? "")
-        _icon = State(initialValue: suggestionType?.model.icon ?? "✨")
         _isEnabled = State(initialValue: suggestionType?.model.isEnabled ?? true)
         _sortOrder = State(initialValue: suggestionType?.model.sortOrder ?? 99)
     }
@@ -138,33 +127,6 @@ struct SuggestionTypeEditorView: View {
                 .fontWeight(.semibold)
                 .foregroundColor(.secondary)
 
-            // Icon picker
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Icon")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: minCell), spacing: spacing)],
-                    spacing: spacing
-                ) {
-                    ForEach(commonIcons.enumerated().compactMap { $0.offset }, id: \.self) { index in
-                        let commonIcon = commonIcons[index]
-                        Button {
-                            icon = commonIcon
-                        } label: {
-                            Text(commonIcon)
-                                .font(.title2)
-                                .padding(4)
-                                .background(icon == commonIcon ? Color.accentColor.opacity(0.2) : Color.clear)
-                                .cornerRadius(6)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding()
-            }
-
             // Name
             VStack(alignment: .leading, spacing: 4) {
                 Text("Name")
@@ -175,23 +137,6 @@ struct SuggestionTypeEditorView: View {
                     .textFieldStyle(.roundedBorder)
             }
 
-            // Type Key (only for new types)
-            if !isEditing {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Type Key")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    TextField("Enter unique key (e.g., MY_CUSTOM_TYPE)", text: $typeKey)
-                        .textFieldStyle(.roundedBorder)
-                        .textCase(.uppercase)
-
-                    Text("This is a unique identifier and cannot be changed after creation")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-            }
-
             // Description
             VStack(alignment: .leading, spacing: 4) {
                 Text("Description")
@@ -200,16 +145,6 @@ struct SuggestionTypeEditorView: View {
 
                 TextField("Optional description", text: $description)
                     .textFieldStyle(.roundedBorder)
-            }
-
-            // Category
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Category")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                TextField("Category name", text: $category)
-                    .textFieldStyle(.roundedBorder)
-                .pickerStyle(.menu)
             }
         }
         .padding()
@@ -405,7 +340,6 @@ struct SuggestionTypeEditorView: View {
                 category: category,
                 promptTemplate: promptTemplate,
                 suggestionTypeGroupId: profile.model.defaultSuggestionTypeGroupId,
-                icon: icon,
                 isDefault: existingSuggestionType?.model.isDefault ?? false,
                 isEnabled: isEnabled,
                 sortOrder: sortOrder,

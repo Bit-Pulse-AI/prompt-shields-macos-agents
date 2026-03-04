@@ -20,7 +20,6 @@ struct SuggestionType: Domain {
         let category: String
         var promptTemplate: String
         let suggestionTypeGroupId: String
-        var icon: String
         let isDefault: Bool
         var isEnabled: Bool
         var sortOrder: Int
@@ -45,7 +44,11 @@ struct SuggestionType: Domain {
 
     /// Display name with icon
     var displayName: String {
-        "\(model.icon) \(model.name)"
+        "\(model.name)"
+    }
+
+    var displayDescription: String {
+        "\(model.description)"
     }
 
     /// Whether this type can be edited by the user
@@ -64,7 +67,6 @@ struct SuggestionType: Domain {
         persistent.descriptionText = model.description.encrypt
         persistent.category = model.category.encrypt
         persistent.promptTemplate = model.promptTemplate.encrypt
-        persistent.icon = model.icon.encrypt
         persistent.isDefault = model.isDefault
         persistent.isEnabled = model.isEnabled
         persistent.sortOrder = model.sortOrder
@@ -82,7 +84,6 @@ struct SuggestionType: Domain {
             category: persistent.category.decrypt,
             promptTemplate: persistent.promptTemplate.decrypt,
             suggestionTypeGroupId: persistent.suggestionTypeGroupId.decrypt,
-            icon: persistent.icon.decrypt,
             isDefault: persistent.isDefault,
             isEnabled: persistent.isEnabled,
             sortOrder: persistent.sortOrder,
@@ -138,7 +139,6 @@ struct SuggestionTypeAPIResponse: APIResponse {
             category: category,
             promptTemplate: promptTemplate,
             suggestionTypeGroupId: suggestionTypeGroupId,
-            icon: icon,
             isDefault: isDefault,
             isEnabled: isEnabled,
             sortOrder: sortOrder,

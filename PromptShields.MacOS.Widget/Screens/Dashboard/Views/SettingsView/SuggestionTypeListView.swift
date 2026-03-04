@@ -52,18 +52,19 @@ struct SuggestionTypeListView: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerView
+        ScrollView {
+            VStack(spacing: 0) {
+                headerView
 
-            if isLoading {
-                loadingView
-            } else if suggestionTypes.isEmpty {
-                emptyStateView
-            } else {
-                listView
+                if isLoading {
+                    loadingView
+                } else if suggestionTypes.isEmpty {
+                    emptyStateView
+                } else {
+                    listView
+                }
+                footerView
             }
-
-            footerView
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
@@ -174,14 +175,12 @@ struct SuggestionTypeListView: View {
     // MARK: - List View
 
     private var listView: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16) {
-                ForEach(sortedCategories, id: \.self) { category in
-                    categorySection(category: category, types: groupedSuggestionTypes[category] ?? [])
-                }
+        LazyVStack(alignment: .leading, spacing: 16) {
+            ForEach(sortedCategories, id: \.self) { category in
+                categorySection(category: category, types: groupedSuggestionTypes[category] ?? [])
             }
-            .padding()
         }
+        .padding()
     }
 
     private func categorySection(category: String, types: [SuggestionType]) -> some View {
@@ -204,11 +203,6 @@ struct SuggestionTypeListView: View {
 
     private func suggestionTypeRow(_ suggestionType: SuggestionType) -> some View {
         HStack(spacing: 12) {
-            // Icon
-            Text(suggestionType.model.icon)
-                .font(.title2)
-                .frame(width: 32)
-
             // Name and description
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
@@ -303,8 +297,7 @@ struct SuggestionTypeListView: View {
                 .buttonStyle(.link)
                 .disabled(isResetting)
             }
-            .padding(.horizontal)
-            .padding(.bottom, 12)
+            .padding()
         }
     }
 
