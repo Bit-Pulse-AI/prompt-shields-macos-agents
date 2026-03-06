@@ -4,7 +4,7 @@ import os
 @MainActor
 struct SuggestionsView: View {
     @StateObject private var suggestionsQueryable = ObservableQueryable(
-        sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)],
+        sortDescriptors: [],
         mapping: DefaultMapping<Suggestion>.self
     )
     @StateObject private var suggestionsTypeQueryable = ObservableQueryable(

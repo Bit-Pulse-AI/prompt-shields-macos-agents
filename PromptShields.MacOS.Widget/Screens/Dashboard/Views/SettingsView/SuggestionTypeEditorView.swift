@@ -315,8 +315,7 @@ struct SuggestionTypeEditorView: View {
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty &&
         !promptTemplate.trimmingCharacters(in: .whitespaces).isEmpty &&
-        promptTemplate.count <= 5000 &&
-        (isEditing || !typeKey.trimmingCharacters(in: .whitespaces).isEmpty)
+        promptTemplate.count <= 5000
     }
 
     // MARK: - Actions
@@ -334,7 +333,7 @@ struct SuggestionTypeEditorView: View {
         do {
             let model = SuggestionType.SuggestionTypeModel(
                 uuid: existingSuggestionType?.model.uuid ?? UUID().uuidString,
-                typeKey: isEditing ? existingSuggestionType!.model.typeKey : typeKey.uppercased().replacingOccurrences(of: " ", with: "_"),
+                typeKey: existingSuggestionType?.model.typeKey ?? _typeKey.wrappedValue,
                 name: name.trimmingCharacters(in: .whitespaces),
                 description: description.trimmingCharacters(in: .whitespaces),
                 category: category,
