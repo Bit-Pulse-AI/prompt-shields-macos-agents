@@ -46,7 +46,7 @@ struct DashboardSidebarView: View {
                 Button {
                     dashboardState.contentState = .suggestions
                 } label: {
-                    Text("Suggestion history")
+                    Text("Activity Log")
                 }
                 .buttonStyle(buttonStyle)
                 Button {

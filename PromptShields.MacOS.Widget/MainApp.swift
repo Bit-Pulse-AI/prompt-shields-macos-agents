@@ -62,6 +62,13 @@ struct MainApp: App {
         .environmentObject(overlayStateModel)
         .environmentObject(dashboardStateModel)
         .windowStyle(.hiddenTitleBar)
+        .commands {
+            CommandGroup(after: .help) {
+                Button("Show Onboarding…") {
+                    NotificationCenter.default.post(name: .showOnboarding, object: nil)
+                }
+            }
+        }
 
         Window("Overlay Render", id: MainApp.overlayRender) {
             OverlayWindowContent()
@@ -222,6 +229,7 @@ struct MainApp: App {
 private struct MainWindowContent: View {
     @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
+    @State private var showOnboarding: Bool = false
 
     var body: some View {
         Group {
@@ -243,7 +251,24 @@ private struct MainWindowContent: View {
             guard overlayStateModel.isMainConfigured else { return }
             overlayStateModel.elementInfo = newValue
         }
+        .onChange(of: overlayStateModel.isMainConfigured) { _, configured in
+            // Auto-present onboarding on first launch (PS-04).
+            if configured && !OnboardingPersistence.hasCompleted {
+                showOnboarding = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showOnboarding)) { _ in
+            showOnboarding = true
+        }
+        .sheet(isPresented: $showOnboarding) {
+            OnboardingView()
+                .environmentObject(accessibilityManager)
+        }
     }
+}
+
+extension Notification.Name {
+    static let showOnboarding = Notification.Name("ai.bit-pulse.promptshields.showOnboarding")
 }
 
 /// Overlay window content
