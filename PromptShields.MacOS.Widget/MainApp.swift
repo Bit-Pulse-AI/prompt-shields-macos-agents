@@ -117,8 +117,13 @@ struct MainApp: App {
         window.backgroundColor = .white
         window.level = .normal
         window.hasShadow = true
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // PS-15: Main window must live on a single Space, like a standard macOS app.
+        // Overlay/Action windows still join all Spaces so they can track focused text fields.
+        window.collectionBehavior = [.fullScreenAuxiliary]
         window.isMovableByWindowBackground = false
+
+        // PS-09: enforce minimum window size (800x560) for breathing room.
+        window.minSize = NSSize(width: 800, height: 560)
 
         // Set proper size for main window
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
