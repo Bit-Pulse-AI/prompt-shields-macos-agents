@@ -32,7 +32,7 @@ struct AuthView: View {
                         mainState.isBusy = false
                     }
                 } label: {
-                    Text("Log me in")
+                    Text("Log in")
                 }.buttonStyle(loginButtonStyle)
             }
         }.frame(maxWidth: .infinity,

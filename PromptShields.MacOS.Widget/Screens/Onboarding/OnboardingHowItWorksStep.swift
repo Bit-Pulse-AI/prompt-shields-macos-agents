@@ -3,7 +3,7 @@ import SwiftUI
 struct OnboardingHowItWorksStep: View {
     private let steps: [(number: Int, title: String, body: String)] = [
         (1, "You type a prompt",
-         "As you write in any AI tool, Prompt Shields analyses what you're about to send — completely locally on your Mac."),
+         "As you write in any AI tool, Promptly analyses what you're about to send — completely locally on your Mac."),
         (2, "We detect & clean risks",
          "Names, emails, financial data, or policy violations are flagged. You see a suggestion — but nothing is changed without your approval."),
         (3, "Better prompt, safer send",

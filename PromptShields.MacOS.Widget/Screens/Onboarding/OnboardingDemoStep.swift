@@ -13,7 +13,7 @@ struct OnboardingDemoStep: View {
             (Text("Try it yourself: go to ")
                 .foregroundStyle(Color.psText2)
              + Text("chat.openai.com").foregroundStyle(Color.psText).fontWeight(.semibold)
-             + Text(" and type this prompt. Watch Prompt Shields catch the risk in real time.")
+             + Text(" and type this prompt. Watch Promptly catch the risk in real time.")
                 .foregroundStyle(Color.psText2))
                 .font(.system(size: 15))
                 .lineSpacing(6)
@@ -27,7 +27,7 @@ struct OnboardingDemoStep: View {
     private var demoBox: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("🔴 What Prompt Shields catches")
+                Text("🔴 What Promptly catches")
                     .font(.system(size: 11, weight: .semibold))
                     .tracking(0.6)
                     .foregroundStyle(Color.psText3)
@@ -54,7 +54,7 @@ struct OnboardingDemoStep: View {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.down")
                         .font(.system(size: 12, weight: .semibold))
-                    Text("Prompt Shields removes sensitive data before sending")
+                    Text("Promptly removes sensitive data before sending")
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .foregroundStyle(Color.psGreen)

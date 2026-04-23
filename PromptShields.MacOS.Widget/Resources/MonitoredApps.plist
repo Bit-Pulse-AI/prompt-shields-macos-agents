@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+Monitored-apps config for PS-13. Shipping this as a bundled plist lets us
+add new AI tools without a code release — the Swift loader reads it at
+launch. Per-user disable state is persisted in UserDefaults (opt-out).
+
+Schema:
+  - id:            stable key used for UserDefaults toggle state
+  - name:          display name shown in Settings
+  - category:      "native" (macOS app, matched by bundleId) or
+                    "web" (browser tab, matched by host pattern)
+  - bundleIds:     native-app bundle identifiers that belong to this app
+  - webHosts:      host patterns (lowercase, no scheme) — any AX URL that
+                    contains one of these matches. Used only for "web"
+                    category entries inside browsers listed in `browsers`.
+  - browsers:      bundle identifiers treated as web browsers whose
+                    content should be introspected. Listed separately
+                    so non-AI browser usage is NOT monitored; only the
+                    web host pattern matches trigger detection.
+-->
+<dict>
+    <key>browsers</key>
+    <array>
+        <string>com.apple.Safari</string>
+        <string>com.google.Chrome</string>
+        <string>com.google.Chrome.canary</string>
+        <string>org.chromium.Chromium</string>
+        <string>com.microsoft.edgemac</string>
+        <string>com.brave.Browser</string>
+        <string>com.operasoftware.Opera</string>
+        <string>org.mozilla.firefox</string>
+        <string>com.vivaldi.Vivaldi</string>
+        <string>company.thebrowser.Browser</string>
+    </array>
+    <key>apps</key>
+    <array>
+        <dict>
+            <key>id</key><string>chatgpt</string>
+            <key>name</key><string>ChatGPT</string>
+            <key>category</key><string>mixed</string>
+            <key>bundleIds</key>
+            <array>
+                <string>com.openai.chat</string>
+            </array>
+            <key>webHosts</key>
+            <array>
+                <string>chat.openai.com</string>
+                <string>chatgpt.com</string>
+            </array>
+        </dict>
+        <dict>
+            <key>id</key><string>claude</string>
+            <key>name</key><string>Claude</string>
+            <key>category</key><string>mixed</string>
+            <key>bundleIds</key>
+            <array>
+                <string>com.anthropic.claudefordesktop</string>
+            </array>
+            <key>webHosts</key>
+            <array>
+                <string>claude.ai</string>
+            </array>
+        </dict>
+        <dict>
+            <key>id</key><string>notion</string>
+            <key>name</key><string>Notion AI</string>
+            <key>category</key><string>mixed</string>
+            <key>bundleIds</key>
+            <array>
+                <string>notion.id</string>
+            </array>
+            <key>webHosts</key>
+            <array>
+                <string>notion.so</string>
+                <string>notion.site</string>
+            </array>
+        </dict>
+        <dict>
+            <key>id</key><string>copilot</string>
+            <key>name</key><string>Microsoft Copilot</string>
+            <key>category</key><string>web</string>
+            <key>bundleIds</key>
+            <array/>
+            <key>webHosts</key>
+            <array>
+                <string>copilot.microsoft.com</string>
+                <string>m365.cloud.microsoft</string>
+                <string>office.com</string>
+            </array>
+        </dict>
+        <dict>
+            <key>id</key><string>gemini</string>
+            <key>name</key><string>Google Gemini</string>
+            <key>category</key><string>web</string>
+            <key>bundleIds</key>
+            <array/>
+            <key>webHosts</key>
+            <array>
+                <string>gemini.google.com</string>
+            </array>
+        </dict>
+        <dict>
+            <key>id</key><string>perplexity</string>
+            <key>name</key><string>Perplexity</string>
+            <key>category</key><string>mixed</string>
+            <key>bundleIds</key>
+            <array>
+                <string>ai.perplexity.mac</string>
+            </array>
+            <key>webHosts</key>
+            <array>
+                <string>perplexity.ai</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

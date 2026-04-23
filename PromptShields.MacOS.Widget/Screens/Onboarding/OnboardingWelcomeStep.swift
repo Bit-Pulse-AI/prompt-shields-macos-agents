@@ -12,7 +12,7 @@ struct OnboardingWelcomeStep: View {
             OnboardingEyebrow(text: "Welcome")
             OnboardingTitle(firstLine: "Your AI prompts,", secondLine: "protected.", italicAccent: true)
 
-            OnboardingBodyText(text: "Prompt Shields quietly monitors what you send to AI tools — catching risks, removing sensitive data, and improving your prompts before they leave your computer. Setup takes 2 minutes.")
+            OnboardingBodyText(text: "Promptly quietly monitors what you send to AI tools — catching risks, removing sensitive data, and improving your prompts before they leave your computer. Setup takes 2 minutes.")
 
             featurePills
                 .padding(.top, PSSpacing.xs)

@@ -393,20 +393,33 @@ final class AccessibilityManagerImpl: ObservableObject {
     private func processAccessibility() async {
         do {
             guard let focusedElement = try getFocusedElementWithRetry() else {
+                DetectionTrace.log("no_focused_element",
+                                   bundleId: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
                 clearElementInfo()
                 return
             }
 
             guard AXUIElementSafeWrapper.isValidElement(focusedElement) else {
                 logger.debug("Focused element is no longer valid")
+                DetectionTrace.log("invalid_element")
                 clearElementInfo()
                 return
             }
 
+            let role = AXUIElementSafeWrapper.getRole(from: focusedElement) ?? "?"
+            let editable = AXUIElementSafeWrapper.isEditable(focusedElement)
+
             let info = try textFieldDetector.getAXElementOrSelectionInfo(focusedElement)
+            DetectionTrace.log("text_field_info",
+                               bundleId: info.applicationBundleId,
+                               role: role,
+                               editable: editable,
+                               textLen: info.text.count)
             updateElementInfo(info)
         } catch {
             logger.debug("Error analyzing text field: \(error.localizedDescription)")
+            DetectionTrace.log("detection_error",
+                               note: String(describing: error).prefix(80).description)
             clearElementInfo()
             }
         }
@@ -577,7 +590,18 @@ final class AccessibilityManagerImpl: ObservableObject {
         // Update application info
         applicationInfo = ApplicationInfo(name: info.applicationName, bundleId: info.applicationBundleId)
 
-        guard info.frame.isValid, !isSelf else {
+        // PS-13: honor the per-app disable toggle from Settings. We only
+        // short-circuit when the user has explicitly disabled a MonitoredApp
+        // whose bundleId matches — unknown apps/browsers keep their default
+        // behavior. URL-level gating (disable "ChatGPT" while on chat.openai.com
+        // in a browser) would require ElementInfo to carry the focused URL;
+        // see docs/investigations/ps-13-monitored-apps.md.
+        let isDisabledByUser = MonitoredAppsRegistry.shared.isDisabled(bundleId: info.applicationBundleId)
+
+        guard info.frame.isValid, !isSelf, !isDisabledByUser else {
+            DetectionTrace.log("gated",
+                               bundleId: info.applicationBundleId,
+                               note: isSelf ? "isSelf" : (isDisabledByUser ? "userDisabled" : "invalidFrame"))
             return
         }
 

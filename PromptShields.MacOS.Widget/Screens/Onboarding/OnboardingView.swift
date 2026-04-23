@@ -77,7 +77,7 @@ struct OnboardingView: View {
         case .ahaMoment:
             OnboardingCard(
                 step: step,
-                primaryLabel: "Activate Shield 🛡️",
+                primaryLabel: "Turn on Promptly",
                 onPrimary: handleActivate,
                 onBack: goBack
             ) {

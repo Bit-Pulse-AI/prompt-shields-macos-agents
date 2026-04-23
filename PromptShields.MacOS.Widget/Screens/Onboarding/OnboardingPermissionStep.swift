@@ -84,7 +84,7 @@ struct OnboardingPermissionStep: View {
                 .font(.system(size: 13))
                 .foregroundStyle(Color.psAmber)
                 .padding(.top, 2)
-            Text("On the next screen, macOS will ask to confirm this permission. After clicking \"Open System Settings\", find Prompt Shields in the list and toggle it on.")
+            Text("On the next screen, macOS will ask to confirm this permission. After clicking \"Open System Settings\", find Promptly in the list and toggle it on.")
                 .font(.system(size: 13))
                 .foregroundStyle(Color.psAmber)
                 .lineSpacing(4)

@@ -14,7 +14,7 @@ struct DashboardContentHeaderView: View {
 
     var body: some View {
         HStack(spacing: PSSpacing.md) {
-            Text("Prompt Shields")
+            Text("Promptly")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.psText)
 
@@ -24,7 +24,7 @@ struct DashboardContentHeaderView: View {
                 Circle()
                     .fill(isActive ? Color.psGreen : Color.psBorder2)
                     .frame(width: 6, height: 6)
-                Text(isActive ? "Shield active" : "Shield inactive")
+                Text(isActive ? "Promptly active" : "Promptly off")
                     .font(.system(size: 12))
                     .foregroundStyle(isActive ? Color.psGreen : Color.psText3)
             }

@@ -265,19 +265,10 @@ final class AXUIElementSafeWrapper {
         "AXGroup"
     ]
 
-    /// Browser bundle identifiers
-    private static let browserBundleIds: Set<String> = [
-        "com.apple.Safari",
-        "com.google.Chrome",
-        "com.google.Chrome.canary",
-        "org.chromium.Chromium",
-        "com.microsoft.edgemac",
-        "com.brave.Browser",
-        "com.operasoftware.Opera",
-        "org.mozilla.firefox",
-        "com.vivaldi.Vivaldi",
-        "company.thebrowser.Browser" // Arc
-    ]
+    // Browser bundle identifiers. Runtime values come from
+    // `MonitoredAppsRegistry` (PS-13, loaded from MonitoredApps.plist).
+    // This literal is kept only as a build-time fallback if the plist
+    // is missing — see `MonitoredAppsRegistry.fallbackBrowsers`.
 
     /// Gets the role of an AXUIElement
     /// - Parameter element: The element to get the role from
@@ -366,11 +357,11 @@ final class AXUIElementSafeWrapper {
         return false
     }
 
-    /// Checks if an application is a web browser
-    /// - Parameter bundleId: The bundle identifier of the application
-    /// - Returns: True if the application is a known browser
+    /// Checks if an application is a web browser.
+    /// Delegates to `MonitoredAppsRegistry` which reads from the bundled
+    /// plist at runtime (PS-13).
     static func isBrowser(bundleId: String) -> Bool {
-        return browserBundleIds.contains(bundleId)
+        return MonitoredAppsRegistry.shared.isBrowser(bundleId: bundleId)
     }
 
     /// Checks if an element is web content (AXWebArea)

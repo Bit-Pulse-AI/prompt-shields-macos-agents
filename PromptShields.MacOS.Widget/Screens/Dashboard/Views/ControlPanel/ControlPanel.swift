@@ -2,7 +2,7 @@ import SwiftUI
 
 // Control Panel (redesigned per PRD PS-07/08/09 + Feb 2025 HTML mockup).
 //
-// Structure: (1) status card with Activate Shield button,
+// Structure: (1) status card with "Turn on Promptly" button,
 //            (2) quick stats row, (3) suggestion-types overview.
 // The monitoring toggle + permission ask live on the button itself — a
 // separate "Text Field Monitoring" toggle lives in Settings (PS-09).
@@ -118,7 +118,7 @@ private struct ShieldStatusCard: View {
             HStack(alignment: .center, spacing: PSSpacing.xl) {
                 iconWrap
                 VStack(alignment: .leading, spacing: PSSpacing.xs) {
-                    Text(isActive ? "Shield Active" : "Shield Assistant")
+                    Text(isActive ? "Promptly is on" : "Promptly")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(Color.psText)
                     Text(description)
@@ -222,7 +222,7 @@ private struct ShieldStatusCard: View {
 
     private var label: String {
         if awaitingPermission { return "Grant permission →" }
-        return isActive ? "Deactivate" : "Activate Shield"
+        return isActive ? "Turn off" : "Turn on Promptly"
     }
 
     private var textColor: Color {
@@ -262,7 +262,7 @@ private struct PermissionBanner: View {
                 Text("Accessibility permission needed")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.psAmber)
-                Text("Prompt Shields needs this to detect text fields in AI tools. We only read text you're about to send — nothing else is accessed.")
+                Text("Promptly needs this to detect text fields in AI tools. We only read text you're about to send — nothing else is accessed.")
                     .font(.system(size: 13))
                     .foregroundStyle(Color.psAmber.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
