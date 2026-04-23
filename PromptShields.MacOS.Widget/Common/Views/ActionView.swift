@@ -36,12 +36,44 @@ struct ActionView: View {
         }
     }
 
+    /// When true, the focused text contains something the local detector
+    /// thinks is PII. Used to (a) float the Redaction suggestion to the top
+    /// and (b) show the "PII detected" banner above the suggestion list.
+    private var piiDetected: Bool {
+        let text = overlayStateModel.elementInfo?.text ?? ""
+        guard !text.isEmpty else { return false }
+        return PIIDetector.containsPII(text)
+    }
+
     private var suggestionTypes: [SuggestionType] {
         let allTypes = suggestionTypesQueryable.wrappedValue
         let enabledTypes = allTypes.filter { $0.model.isEnabled }
-        return enabledTypes.sorted {
-            $0.model.sortOrder < $1.model.sortOrder
+        let piiDetected = self.piiDetected
+        return enabledTypes.sorted { lhs, rhs in
+            // When PII is detected, Redaction-type suggestions jump to the
+            // top regardless of sortOrder. Backend may ship the type with a
+            // different typeKey casing (e.g. "REDACTION") so we normalise.
+            if piiDetected {
+                let lhsRedacts = Self.isRedactionType(lhs)
+                let rhsRedacts = Self.isRedactionType(rhs)
+                if lhsRedacts != rhsRedacts { return lhsRedacts }
+            }
+            return lhs.model.sortOrder < rhs.model.sortOrder
         }
+    }
+
+    /// Matches the Redaction seed's typeKey or display name. Tolerant to
+    /// server-side naming drift ("Redaction" vs "Redact" vs "REDACT_PII").
+    static func isRedactionType(_ type: SuggestionType) -> Bool {
+        let normalise: (String) -> String = {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+                .replacingOccurrences(of: "-", with: "_")
+                .replacingOccurrences(of: " ", with: "_")
+        }
+        let typeKey = normalise(type.model.typeKey)
+        let name = normalise(type.model.name)
+        return typeKey.hasPrefix("redact") || name.hasPrefix("redact")
     }
 
     var body: some View {
@@ -159,8 +191,40 @@ struct ActionView: View {
         .cornerRadius(8)
     }
 
+    /// Amber notice shown above the options list when PIIDetector flags
+    /// something in the focused text. Pairs with the reorder logic that
+    /// floats Redaction to the top.
+    private var piiDetectedBanner: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "exclamationmark.shield.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.psAmber)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Sensitive data detected")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.psAmber)
+                Text("Redact first before sending.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.psAmber.opacity(0.85))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.psAmberLight)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(Color.psAmberBorder, lineWidth: 1)
+        )
+    }
+
     private var optionsView: some View {
         VStack(alignment: .leading, spacing: 4) {
+            if piiDetected {
+                piiDetectedBanner
+            }
             ScrollView {
                 LazyVStack {
                     if suggestionTypes.count > 0 {

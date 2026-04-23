@@ -10,13 +10,70 @@ struct SuggestionTypeMetadata: Sendable {
     let summary: String
     let before: String
     let after: String
+    /// When true, this type is treated as a default-seeded one — Promptly
+    /// will auto-create it on first launch if the backend doesn't already
+    /// return a type with a matching key. Used by Redaction so PII
+    /// protection is available out-of-the-box (per Jun's product call).
+    let isDefaultSeeded: Bool
+    /// The prompt template to seed with, if `isDefaultSeeded` is true.
+    /// Uses `{{TEXT}}` as the placeholder per SuggestionType.textPlaceholder.
+    let seedPromptTemplate: String?
+
+    init(
+        emoji: String,
+        summary: String,
+        before: String,
+        after: String,
+        isDefaultSeeded: Bool = false,
+        seedPromptTemplate: String? = nil
+    ) {
+        self.emoji = emoji
+        self.summary = summary
+        self.before = before
+        self.after = after
+        self.isDefaultSeeded = isDefaultSeeded
+        self.seedPromptTemplate = seedPromptTemplate
+    }
 }
 
 enum SuggestionTypeCatalog {
 
+    /// typeKey used for the Redaction seed. Kept as a constant because
+    /// both the seeder and the ActionView reorder consult it.
+    static let redactionTypeKey = "redaction"
+
+    static let redactionSeedPromptTemplate = """
+    Detect and redact all personal, confidential, or sensitive data.
+    Replace with placeholders (e.g., [NAME], [EMAIL], [ACCOUNT_ID]) and preserve readability.
+
+    Input:
+    {{TEXT}}
+    """
+
+    /// Types we guarantee exist on first launch via auto-seed.
+    static var defaultSeededMetadata: [(displayName: String, category: String, meta: SuggestionTypeMetadata)] {
+        [
+            (displayName: "Redaction", category: "Security & Compliance", meta: entries[normalize(redactionTypeKey)]!)
+        ]
+    }
+
     // Key: normalized typeKey or name
     private static let entries: [String: SuggestionTypeMetadata] = {
         let defs: [(keys: [String], meta: SuggestionTypeMetadata)] = [
+            (["redaction", "redact"], .init(
+                emoji: "🔒",
+                summary: "Automatically redact or mask PII and sensitive data (this runs on every action by default).",
+                before: "Send the Q3 summary to anna.berg@clientcorp.com — note she's at +47 912 34 567.",
+                after: "Send the Q3 summary to [EMAIL] — note she's at [PHONE].",
+                isDefaultSeeded: true,
+                seedPromptTemplate: """
+                Detect and redact all personal, confidential, or sensitive data.
+                Replace with placeholders (e.g., [NAME], [EMAIL], [ACCOUNT_ID]) and preserve readability.
+
+                Input:
+                {{TEXT}}
+                """
+            )),
             (["detect_risk", "detectrisk", "detect risk"], .init(
                 emoji: "🛡️",
                 summary: "Scans for sensitive or confidential data before it leaves your Mac — PII, financial figures, internal names, API keys.",

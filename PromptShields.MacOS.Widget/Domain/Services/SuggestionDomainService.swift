@@ -136,12 +136,86 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
             try await persistenceManager.deleteAllAndInsert(domains: suggestionTypes)
 
             logger.debug("Fetched \(suggestionTypes.count) suggestion types from new endpoint")
+
+            // Seed the catalog-defaults (Redaction today) if the server
+            // doesn't already have them. Runs once per suggestion-type-group
+            // per user; guarded by UserDefaults so a temporary backend hiccup
+            // doesn't spam create-calls on every launch.
+            await seedCatalogDefaultsIfNeeded(fetched: suggestionTypes,
+                                              suggestionTypeGroupId: suggestionTypeGroupId)
         } catch {
             logger.debug("Endpoint failed: \(error)")
         }
 
         // Update user preferences to populate all types as enabled if nil
         await updateUserPreferencesWithEnabledTypes()
+    }
+
+    /// Auto-creates the catalog's `isDefaultSeeded` types if the server
+    /// doesn't already return them. Idempotent: checks by normalised typeKey
+    /// and by name, and persists a "seeded" flag per type to avoid duplicate
+    /// server-side records.
+    private func seedCatalogDefaultsIfNeeded(
+        fetched: [SuggestionType],
+        suggestionTypeGroupId: String
+    ) async {
+        let existingKeys = Set(
+            fetched.map { normaliseCatalogKey($0.model.typeKey) }
+                + fetched.map { normaliseCatalogKey($0.model.name) }
+        )
+
+        for entry in SuggestionTypeCatalog.defaultSeededMetadata {
+            // Use the displayName to derive the typeKey so Settings and Catalog
+            // agree. For Redaction -> typeKey "REDACTION", name "Redaction".
+            let candidateTypeKey = SuggestionTypeCatalog.redactionTypeKey
+            let normalised = normaliseCatalogKey(candidateTypeKey)
+
+            guard !existingKeys.contains(normalised) else {
+                logger.debug("Catalog seed '\(entry.displayName)' already present — skipping")
+                continue
+            }
+
+            let seededFlagKey = "ai.bit-pulse.promptshields.seeded.\(normalised)"
+            guard !UserDefaults.standard.bool(forKey: seededFlagKey) else {
+                // Seed was created previously but then deleted by the user.
+                // Respect that — don't re-create every launch.
+                logger.debug("Catalog seed '\(entry.displayName)' previously seeded and removed — honoring user intent")
+                continue
+            }
+
+            guard let template = entry.meta.seedPromptTemplate else { continue }
+
+            let seed = SuggestionType(model: .init(
+                uuid: UUID().uuidString,
+                typeKey: candidateTypeKey,
+                name: entry.displayName,
+                description: entry.meta.summary,
+                category: entry.category,
+                promptTemplate: template,
+                suggestionTypeGroupId: suggestionTypeGroupId,
+                isDefault: true,
+                isEnabled: true,
+                sortOrder: -100, // float to the top of lists by default
+                createdAt: Date(),
+                updatedAt: Date()
+            ))
+
+            do {
+                _ = try await createSuggestionType(seed)
+                UserDefaults.standard.set(true, forKey: seededFlagKey)
+                logger.debug("Seeded catalog default: \(entry.displayName)")
+            } catch {
+                logger.error("Failed to seed '\(entry.displayName)': \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func normaliseCatalogKey(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "-", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
     }
 
     func listSuggestionTypes(enabledOnly: Bool) async throws -> [SuggestionType] {
