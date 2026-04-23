@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp \"/Users/junseki/Downloads/prompt-shields-app-redesign.html\" /tmp/improvement_context/app-redesign.html)",
+      "Bash(cp \"/Users/junseki/Downloads/prompt-shields-onboarding.html\" /tmp/improvement_context/onboarding.html)",
+      "Bash(xcodebuild -scheme PromptShields.MacOS.Widget -destination 'platform=macOS' -quiet build)",
+      "Bash(mdfind \"kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'\")",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme PromptShields.MacOS.Widget -destination 'platform=macOS' -quiet build)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -list)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme 'PromptShields.MacOS.Widget-Dev' -destination 'platform=macOS' -configuration Debug build)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme 'PromptShields.MacOS.Widget-Dev' -destination 'platform=macOS' -configuration Debug CODE_SIGN_IDENTITY=\"\" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme 'PromptShields.MacOS.Widget-Dev' -destination 'platform=macOS' -configuration Debug CODE_SIGN_IDENTITY=\"\" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO INFOPLIST_FILE=\"\" GENERATE_INFOPLIST_FILE=YES build)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(pdftotext \"/Users/junseki/Desktop/WalkMe AI Capabilities | Contextual AI assistance features.pdf\" /tmp/walkme_ai.txt)",
+      "Read(//tmp/**)",
+      "Bash(brew install *)",
+      "Bash(gh auth *)"
+    ]
+  }
+}
