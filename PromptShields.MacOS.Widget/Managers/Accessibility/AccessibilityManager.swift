@@ -48,13 +48,28 @@ final class AccessibilityManagerImpl: ObservableObject {
 
     // MARK: - Private Properties
 
-    private let pollInterval: TimeInterval = 0.5
-    private var timerTask: Task<Void, Never>?
+    // Slow safety-net heartbeat. Notifications from the AXObserver are the
+    // primary signal; the heartbeat only covers the edge case where a
+    // notification is missed (e.g. observer was installed moments before
+    // an app spawned a new process).
+    private let safetyHeartbeatInterval: TimeInterval = 5.0
+    private var heartbeatTask: Task<Void, Never>?
     private var permissionCheckTask: Task<Void, Never>?
     private let textFieldDetector = TextFieldDetector()
+    private lazy var focusTracker: FocusTracker = {
+        let tracker = FocusTracker(textFieldDetector: textFieldDetector)
+        tracker.onElementInfo = { [weak self] info in
+            guard let self = self else { return }
+            if let info {
+                self.updateElementInfo(info)
+            } else {
+                self.clearElementInfo()
+            }
+        }
+        return tracker
+    }()
     private var previousText: String?
     private var previousRect: CGRect?
-    private var isProcessing = false
     private var savedMonitoringState: MonitoringState?
     private var hasPromptedForPermissions = false
     private var permissionCheckCount = 0
@@ -117,7 +132,7 @@ final class AccessibilityManagerImpl: ObservableObject {
     }
 
     deinit {
-        timerTask?.cancel()
+        heartbeatTask?.cancel()
         permissionCheckTask?.cancel()
     }
 
@@ -233,12 +248,11 @@ final class AccessibilityManagerImpl: ObservableObject {
     }
 
     private func startPermissionPolling() {
-        timerTask?.cancel()
-        timerTask = Task { [weak self] in
+        permissionCheckTask?.cancel()
+        permissionCheckTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self = self else { break }
 
-                // Check if permissions were granted
                 let granted = AXIsProcessTrusted()
                 self.hasAccessibilityPermission = granted
 
@@ -256,8 +270,8 @@ final class AccessibilityManagerImpl: ObservableObject {
                 if self.permissionCheckCount > 30 { // ~15 seconds
                     self.logger.debug("Permission polling timeout, waiting for user action")
                     Analytics.trackAsync(.accessibilityPermissionDenied)
-                return
-            }
+                    return
+                }
 
                 try? await Task.sleep(for: .milliseconds(500))
             }
@@ -266,6 +280,11 @@ final class AccessibilityManagerImpl: ObservableObject {
 
     // MARK: - Monitoring Control
 
+    /// Starts event-driven monitoring (Grammarly-style):
+    /// - Installs an AXObserver on the frontmost app via `FocusTracker`.
+    /// - Subscribes to focus / value / selection notifications.
+    /// - Runs a slow (5s) safety-net heartbeat to recover from dropped
+    ///   notifications.
     private func startMonitoring() {
         guard hasAccessibilityPermission else {
             logger.debug("Cannot start monitoring without permissions")
@@ -273,27 +292,53 @@ final class AccessibilityManagerImpl: ObservableObject {
         }
 
         monitoringState = .enabled
-        logger.debug("Starting accessibility monitoring")
+        logger.debug("Starting event-driven accessibility monitoring")
 
-        timerTask?.cancel()
-        timerTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self = self else { break }
-
-                if self.monitoringState == .enabled {
-                    await self.timerTick()
-                }
-
-                try? await Task.sleep(for: .seconds(self.pollInterval))
-        }
-        }
+        focusTracker.start()
+        startSafetyHeartbeat()
     }
 
     private func stopMonitoring() {
-        timerTask?.cancel()
-        timerTask = nil
+        focusTracker.stop()
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
         clearElementInfo()
         logger.debug("Stopped accessibility monitoring")
+    }
+
+    /// Slow heartbeat that runs every `safetyHeartbeatInterval` seconds. Its
+    /// only job is to recover from missed notifications: it checks permission
+    /// status and asks the focus tracker to re-resolve the current focus.
+    /// Real-time updates come from the AXObserver — this is belt-and-suspenders.
+    private func startSafetyHeartbeat() {
+        heartbeatTask?.cancel()
+        heartbeatTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self = self else { break }
+
+                try? await Task.sleep(for: .seconds(self.safetyHeartbeatInterval))
+                guard !Task.isCancelled else { return }
+
+                guard self.monitoringState == .enabled, !self.isInteractionActive else { continue }
+
+                // Verify permissions are still valid.
+                guard AXIsProcessTrusted() else {
+                    self.logger.debug("Lost accessibility permissions")
+                    self.hasAccessibilityPermission = false
+                    self.monitoringState = .awaitingPermissions
+                    self.clearElementInfo()
+                    return
+                }
+
+                // Ping the tracker — it'll re-attach to the current frontmost
+                // app (noop if already attached) and re-resolve the focused
+                // element. Cheap and covers the edge case where we missed a
+                // focus-change notification.
+                self.focusTracker.start()
+
+                DetectionTrace.log("heartbeat", note: "safety-net")
+            }
+        }
     }
 
     // MARK: - System Observers
@@ -358,228 +403,6 @@ final class AccessibilityManagerImpl: ObservableObject {
                 }
             }
         }
-    }
-
-    // MARK: - Timer Tick
-
-    private func timerTick() async {
-        // Double-check we should be monitoring
-        guard monitoringState == .enabled else { return }
-
-        // Skip updates while user is interacting with action menu
-        guard !isInteractionActive else { return }
-
-        // Verify permissions are still valid
-        guard AXIsProcessTrusted() else {
-            logger.debug("Lost accessibility permissions")
-            hasAccessibilityPermission = false
-            monitoringState = .awaitingPermissions
-            clearElementInfo()
-            return
-        }
-
-        // Prevent concurrent processing
-        guard !isProcessing else {
-            return
-        }
-
-        isProcessing = true
-        await processAccessibility()
-        isProcessing = false
-    }
-
-    // MARK: - Accessibility Processing
-
-    private func processAccessibility() async {
-        do {
-            guard let focusedElement = try getFocusedElementWithRetry() else {
-                DetectionTrace.log("no_focused_element",
-                                   bundleId: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
-                clearElementInfo()
-                return
-            }
-
-            guard AXUIElementSafeWrapper.isValidElement(focusedElement) else {
-                logger.debug("Focused element is no longer valid")
-                DetectionTrace.log("invalid_element")
-                clearElementInfo()
-                return
-            }
-
-            let role = AXUIElementSafeWrapper.getRole(from: focusedElement) ?? "?"
-            let editable = AXUIElementSafeWrapper.isEditable(focusedElement)
-
-            let info = try textFieldDetector.getAXElementOrSelectionInfo(focusedElement)
-            DetectionTrace.log("text_field_info",
-                               bundleId: info.applicationBundleId,
-                               role: role,
-                               editable: editable,
-                               textLen: info.text.count)
-            updateElementInfo(info)
-        } catch {
-            logger.debug("Error analyzing text field: \(error.localizedDescription)")
-            DetectionTrace.log("detection_error",
-                               note: String(describing: error).prefix(80).description)
-            clearElementInfo()
-            }
-        }
-
-    /// Gets the focused element with retry logic
-    private func getFocusedElementWithRetry() throws -> AXUIElement? {
-        let maxRetries = 3
-        let startTime = Date()
-
-        for attempt in 1...maxRetries {
-            if Date().timeIntervalSince(startTime) > 2.0 {
-                throw AccessibilityError.timeout
-            }
-
-            if let element = getRobustFocusedElement() {
-                return element
-            }
-
-            if attempt < maxRetries {
-                Thread.sleep(forTimeInterval: 0.1)
-            }
-        }
-
-        return nil
-    }
-
-    /// Gets the focused element using robust detection
-    private func getRobustFocusedElement() -> AXUIElement? {
-        AXUIElementSafeWrapper.withMemoryCleanup {
-            guard let frontApp = NSWorkspace.shared.frontmostApplication else {
-                return nil
-            }
-
-            let bundleId = frontApp.bundleIdentifier ?? ""
-            let isBrowser = AXUIElementSafeWrapper.isBrowser(bundleId: bundleId)
-
-            guard let appElement = AXUIElementSafeWrapper.createApplicationElement(
-                processIdentifier: frontApp.processIdentifier
-            ) else {
-                return nil
-            }
-
-            // Try to get focused UI element directly
-            if let focusedRef = AXUIElementSafeWrapper.getAttributeValue(
-                from: appElement,
-                attribute: kAXFocusedUIElementAttribute
-            ) {
-                let focusedElement = focusedRef as! AXUIElement
-                if AXUIElementSafeWrapper.isValidElement(focusedElement) {
-                    // For browsers, check if we're in web content and need to find editable element
-                    if isBrowser {
-                        // Check if the focused element is web content
-                        if AXUIElementSafeWrapper.isWebContent(focusedElement) {
-                            // Try to find the actual editable element within web content
-                            if let editableElement = AXUIElementSafeWrapper.findEditableElementInWebContent(focusedElement) {
-                                return editableElement
-                            }
-                        }
-
-                        // Check if focused element is editable or a text input
-                        if AXUIElementSafeWrapper.isEditable(focusedElement) ||
-                           AXUIElementSafeWrapper.isTextInputElement(focusedElement) {
-                            return focusedElement
-                        }
-
-                        // Search within the focused element for editable content
-                        if let editableElement = AXUIElementSafeWrapper.findEditableElementInWebContent(focusedElement) {
-                            return editableElement
-                        }
-                    }
-
-                    return focusedElement
-                }
-            }
-
-            // Fall back to searching in focused window
-            if let windowRef = AXUIElementSafeWrapper.getAttributeValue(
-                from: appElement,
-                attribute: kAXFocusedWindowAttribute
-            ) {
-                let windowElement = windowRef as! AXUIElement
-                if AXUIElementSafeWrapper.isValidElement(windowElement) {
-                    // For browsers, try to find web content first
-                    if isBrowser {
-                        if let webArea = self.findWebArea(in: windowElement) {
-                            if let editableElement = AXUIElementSafeWrapper.getFocusedElementInWebContent(webArea) {
-                                return editableElement
-                            }
-                        }
-                    }
-
-                    return self.findFocusedInTree(windowElement, depth: 0, maxDepth: 20, visited: [])
-                }
-            }
-
-            return nil
-        }
-    }
-
-    /// Finds the web area element in a window
-    private func findWebArea(in window: AXUIElement) -> AXUIElement? {
-        return findElementByRole(in: window, role: "AXWebArea", maxDepth: 15)
-    }
-
-    /// Finds an element by role in the accessibility tree
-    private func findElementByRole(in element: AXUIElement, role: String, maxDepth: Int, depth: Int = 0) -> AXUIElement? {
-        guard depth < maxDepth, AXUIElementSafeWrapper.isValidElement(element) else { return nil }
-
-        if let elementRole = AXUIElementSafeWrapper.getRole(from: element), elementRole == role {
-            return element
-        }
-
-        let children = AXUIElementSafeWrapper.getChildren(from: element)
-        for child in children {
-            if let found = findElementByRole(in: child, role: role, maxDepth: maxDepth, depth: depth + 1) {
-                return found
-            }
-        }
-
-        return nil
-    }
-
-    /// Recursively finds a focused text element in the UI tree
-    private func findFocusedInTree(
-        _ element: AXUIElement,
-        depth: Int,
-        maxDepth: Int,
-        visited: Set<AXElementID>
-    ) -> AXUIElement? {
-        guard depth < maxDepth else { return nil }
-
-        let elementID = AXElementID(element)
-        guard !visited.contains(elementID) else { return nil }
-
-        // Check if this element has text attributes
-        if AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXValueAttribute) != nil ||
-            AXUIElementSafeWrapper.getAttributeValue(from: element, attribute: kAXSelectedTextRangeAttribute) != nil {
-            // Verify it's the focused element
-            if let frontApp = NSWorkspace.shared.frontmostApplication,
-               let appElement = AXUIElementSafeWrapper.createApplicationElement(processIdentifier: frontApp.processIdentifier),
-               let focusedRef = AXUIElementSafeWrapper.getAttributeValue(from: appElement, attribute: kAXFocusedUIElementAttribute) {
-                let focusedElement = focusedRef as! AXUIElement
-                if Unmanaged.passUnretained(element).toOpaque() == Unmanaged.passUnretained(focusedElement).toOpaque() {
-                    return element
-                }
-            }
-        }
-
-        // Search children
-        let children = AXUIElementSafeWrapper.getChildren(from: element)
-        var newVisited = visited
-        newVisited.insert(elementID)
-
-        for child in children {
-            if let found = findFocusedInTree(child, depth: depth + 1, maxDepth: maxDepth, visited: newVisited) {
-                return found
-            }
-        }
-
-        return nil
     }
 
     // MARK: - Element Info Updates

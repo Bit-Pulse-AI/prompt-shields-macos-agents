@@ -200,23 +200,33 @@ final class AXUIElementSafeWrapper {
         return selectedText
     }
 
-    /// Safely extract text from an AXUIElement
+    /// Safely extract text from an AXUIElement.
+    ///
+    /// Order of attempts (first non-empty wins):
+    /// 1. Selected text (if the user has an active selection).
+    /// 2. AXValue / AXTitle / AXLabelValue / AXDescription / AXPlaceholderValue
+    ///    — the standard native-text attributes.
+    /// 3. **Contenteditable fallback** — if the element reports as editable
+    ///    but those attributes are empty, walk descendants collecting
+    ///    AXStaticText values. This is how modern web editors (ChatGPT's
+    ///    Lexical, Claude's slate, Notion's ProseMirror) surface their
+    ///    content to assistive tech. Without this fallback, PS-11 reproduces
+    ///    every time.
+    ///
     /// - Parameter element: The AXUIElement to extract text from
-    /// - Returns: The extracted text or empty string (prioritizes selected text if available)
+    /// - Returns: The extracted text or empty string
     @MainActor
     static func extractText(from element: AXUIElement) -> String {
         guard isValidElement(element) else {
             return ""
         }
 
-        // First check for selected text
+        // 1. Selected text wins.
         if let selectedText = getSelectedText(from: element) {
             return selectedText
         }
 
-        var collectedText: [String] = []
-
-        // Check common text attributes
+        // 2. Standard attributes.
         let textAttributes = [
             kAXValueAttribute,
             kAXTitleAttribute,
@@ -225,6 +235,7 @@ final class AXUIElementSafeWrapper {
             kAXPlaceholderValueAttribute
         ]
 
+        var collectedText: [String] = []
         for attribute in textAttributes {
             if let value = getAttributeValue(from: element, attribute: attribute) {
                 if let string = value as? String, !string.isEmpty {
@@ -235,7 +246,55 @@ final class AXUIElementSafeWrapper {
             }
         }
 
-        return collectedText.joined(separator: " ")
+        if !collectedText.isEmpty {
+            return collectedText.joined(separator: " ")
+        }
+
+        // 3. Contenteditable fallback — only invoked if AXValue was empty AND
+        // the element reports as editable. Walks descendants collecting
+        // AXStaticText values. Bounded depth to avoid runaway in deep trees.
+        if isEditable(element) {
+            let contents = collectStaticText(from: element, maxDepth: 20)
+            if !contents.isEmpty {
+                return contents
+            }
+        }
+
+        return ""
+    }
+
+    /// Walks the subtree breadth-first, concatenating AXStaticText values.
+    /// Used by `extractText` to read contenteditable content that isn't
+    /// exposed via `AXValue`.
+    @MainActor
+    static func collectStaticText(from element: AXUIElement, maxDepth: Int) -> String {
+        guard maxDepth > 0, isValidElement(element) else { return "" }
+
+        var pieces: [String] = []
+        var queue: [(AXUIElement, Int)] = [(element, 0)]
+        var visited = 0
+        let maxVisited = 400 // safety cap for pathological trees
+
+        while let (current, depth) = queue.first {
+            queue.removeFirst()
+            visited += 1
+            if visited > maxVisited { break }
+            if depth >= maxDepth { continue }
+
+            if let role = getRole(from: current), role == "AXStaticText" {
+                if let value = getAttributeValue(from: current, attribute: kAXValueAttribute) as? String,
+                   !value.isEmpty {
+                    pieces.append(value)
+                    continue
+                }
+            }
+
+            for child in getChildren(from: current) {
+                queue.append((child, depth + 1))
+            }
+        }
+
+        return pieces.joined(separator: "")
     }
 
     // MARK: - Memory Management Utilities
