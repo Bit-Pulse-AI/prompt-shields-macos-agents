@@ -99,6 +99,17 @@ struct SuggestionTypeListView: View {
             Spacer()
 
             Button {
+                Task { await refresh() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.psText3)
+            }
+            .buttonStyle(.plain)
+            .help("Refresh from server")
+            .disabled(isLoading)
+
+            Button {
                 showingAddSheet = true
             } label: {
                 HStack(spacing: 4) {
@@ -235,6 +246,25 @@ struct SuggestionTypeListView: View {
         } catch {
             logger.error("Failed to load suggestion types: \(error)")
             errorMessage = "Failed to load suggestion types"
+        }
+
+        isLoading = false
+    }
+
+    /// User-initiated refresh — bypasses the 5-minute cache TTL by calling
+    /// `forceRefreshSuggestionTypes()`. Triggered from the toolbar
+    /// arrow.clockwise button.
+    @MainActor
+    private func refresh() async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            try await suggestionDomainService.forceRefreshSuggestionTypes()
+            await suggestionTypesQueryable.refresh()
+        } catch {
+            logger.error("Failed to refresh suggestion types: \(error)")
+            errorMessage = "Failed to refresh"
         }
 
         isLoading = false

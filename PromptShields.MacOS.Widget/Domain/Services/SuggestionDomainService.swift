@@ -31,6 +31,9 @@ protocol SuggestionDomainService: Sendable {
 
     // Suggestion Type operations
     func fetchSuggestionTypes() async throws
+    /// Bypasses the cache TTL — used by Settings' refresh button and after
+    /// any mutation that needs the local store immediately resynced.
+    func forceRefreshSuggestionTypes() async throws
     func listSuggestionTypes(enabledOnly: Bool) async throws -> [SuggestionType]
     func createSuggestionType(_ suggestionType: SuggestionType) async throws -> SuggestionType
     func updateSuggestionType(_ suggestionType: SuggestionType) async throws -> SuggestionType
@@ -122,11 +125,31 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
     // MARK: - Suggestion Type CRUD Operations
 
+    /// TTL for the suggestion-types cache. Settings + dashboard re-render
+    /// fire `fetchSuggestionTypes` on every appear, but server-side types
+    /// rarely change. Honour a 5-minute window to avoid hammering the API
+    /// every time the user switches tabs. Mutating operations
+    /// (create/update/delete/reset) invalidate the cache so the next read
+    /// pulls fresh data.
+    private static let suggestionTypesCacheTTL: TimeInterval = 300
+    private static let suggestionTypesCacheKey = "ai.bit-pulse.promptshields.suggestionTypesFetchedAt"
+
     func fetchSuggestionTypes() async throws {
-        logger.debug("Fetching suggestion types from server")
+        if Self.isSuggestionTypesCacheFresh() {
+            logger.debug("Suggestion types cache fresh; skipping server fetch")
+            await updateUserPreferencesWithEnabledTypes()
+            return
+        }
+        try await forceRefreshSuggestionTypes()
+    }
+
+    /// Always hits the server. Used by reset / create / update / delete to
+    /// resync after a write. Settings can also offer a pull-to-refresh that
+    /// calls this directly.
+    func forceRefreshSuggestionTypes() async throws {
+        logger.debug("Force-fetching suggestion types from server")
 
         do {
-            // Try the new endpoint first
             let currentProfile = try await profileDomainService.currentProfile.model
             let suggestionTypeGroupId = currentProfile.defaultSuggestionTypeGroupId
             let suggestionResult = try await suggestionNetworkService.listSuggestionTypes(suggestionTypeGroupId: suggestionTypeGroupId, offset: 0, limit: 100, enabledOnly: false)
@@ -134,6 +157,10 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
             // Atomic delete and insert - prevents duplicates from race conditions
             try await persistenceManager.deleteAllAndInsert(domains: suggestionTypes)
+
+            // Cache marker so subsequent fetchSuggestionTypes() calls within
+            // TTL skip the server round-trip.
+            UserDefaults.standard.set(Date(), forKey: Self.suggestionTypesCacheKey)
 
             logger.debug("Fetched \(suggestionTypes.count) suggestion types from new endpoint")
 
@@ -244,6 +271,21 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         return updatedTypes
     }
 
+    /// True if we last fetched within the TTL window. Pure read against
+    /// UserDefaults — safe to call from any actor context.
+    static func isSuggestionTypesCacheFresh() -> Bool {
+        guard let last = UserDefaults.standard.object(forKey: suggestionTypesCacheKey) as? Date else {
+            return false
+        }
+        return Date().timeIntervalSince(last) < suggestionTypesCacheTTL
+    }
+
+    /// Drops the cache marker so the next `fetchSuggestionTypes()` hits
+    /// the server. Called after every mutating CRUD op.
+    private func invalidateSuggestionTypesCache() {
+        UserDefaults.standard.removeObject(forKey: Self.suggestionTypesCacheKey)
+    }
+
     func createSuggestionType(_ suggestionType: SuggestionType) async throws -> SuggestionType {
         logger.debug("Creating suggestion type: \(suggestionType.model.name)")
 
@@ -263,6 +305,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
         // Sync with local storage
         let syncedType = try await persistenceManager.syncLocalWithRemote(domain: createdType)
+        invalidateSuggestionTypesCache()
 
         logger.debug("Created suggestion type: \(syncedType.model.uuid)")
         return syncedType
@@ -287,6 +330,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
         // Sync with local storage
         let syncedType = try await persistenceManager.syncLocalWithRemote(domain: updatedType)
+        invalidateSuggestionTypesCache()
 
         logger.debug("Updated suggestion type: \(syncedType.model.uuid)")
         return syncedType
@@ -300,6 +344,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
         // Delete from local storage
         try await persistenceManager.delete(domain: suggestionType)
+        invalidateSuggestionTypesCache()
 
         logger.debug("Deleted suggestion type: \(suggestionType.model.uuid)")
     }
@@ -314,6 +359,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
         // Sync with local storage
         let syncedType = try await persistenceManager.syncLocalWithRemote(domain: updatedType)
+        invalidateSuggestionTypesCache()
 
         logger.debug("Toggled suggestion type: \(syncedType.model.uuid)")
         return syncedType
@@ -325,8 +371,11 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         let suggestionTypeGroupId = currentProfile.defaultSuggestionTypeGroupId
         let response = try await suggestionNetworkService.resetSuggestionTypes(suggestionTypeGroupId: suggestionTypeGroupId)
 
-        // Refresh local storage
-        try await fetchSuggestionTypes()
+        // Reset is a server-side mutation; force a fresh fetch so our local
+        // store reflects the new defaults immediately rather than waiting
+        // for the cache TTL to expire.
+        invalidateSuggestionTypesCache()
+        try await forceRefreshSuggestionTypes()
 
         logger.debug("Reset suggestion types: \(response.count) defaults created")
         return response.count
