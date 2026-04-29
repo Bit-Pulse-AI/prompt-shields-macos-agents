@@ -21,6 +21,15 @@ final class OverlayStateModel: ObservableObject {
     @Published var isMainConfigured: Bool = false
     @Published var isOverlayConfigured: Bool = false
     @Published var isActionConfigured: Bool = false
+
+    /// AI-SPM policy enforcer. `nil` for tenants without a configured
+    /// dashboard URL — Promptly falls back to local-only heuristics.
+    /// Wired up at app boot via `MainApp.configurePolicyClient`.
+    /// Both properties are MainActor-only at the call sites; this class
+    /// stays non-isolated to keep Swift 6 concurrency happy with existing
+    /// SwiftUI usage.
+    @MainActor var policyClient: PolicyClient?
+    @MainActor var policyEnforcer: PolicyEnforcer?
 }
 
 @main
@@ -105,11 +114,40 @@ struct MainApp: App {
         configureMainWindow()
         configureOverlayWindow()
         configureActionWindow()
+        configurePolicyClient()
 
         // Mark windows as configured
         overlayStateModel.isMainConfigured = true
         overlayStateModel.isOverlayConfigured = true
         overlayStateModel.isActionConfigured = true
+    }
+
+    /// Wire up the AI-SPM policy client. Tenants without a dashboard URL
+    /// configured get a `NullPolicyTransport` — PolicyEnforcer always
+    /// returns `.allow`, no network calls happen, and Promptly behaves
+    /// exactly like before.
+    @MainActor
+    private func configurePolicyClient() {
+        // Dashboard URL is read from UserDefaults so QA can override
+        // without rebuilding. Production builds set it via the gitignored
+        // `Resources/<env>/Const.swift` (see policy-integration.md). For
+        // now we accept either source; absent both, fall back to NullTransport.
+        let urlString = UserDefaults.standard.string(
+            forKey: "ai.bit-pulse.promptshields.aiSPMDashboardURL"
+        ) ?? ""
+
+        let transport: PolicyTransport
+        if !urlString.isEmpty, let url = URL(string: urlString) {
+            transport = HTTPPolicyTransport(baseURL: url)
+        } else {
+            transport = NullPolicyTransport()
+        }
+
+        let client = PolicyClient(transport: transport)
+        let enforcer = PolicyEnforcer(client: client)
+        overlayStateModel.policyClient = client
+        overlayStateModel.policyEnforcer = enforcer
+        client.start()
     }
 
     @MainActor

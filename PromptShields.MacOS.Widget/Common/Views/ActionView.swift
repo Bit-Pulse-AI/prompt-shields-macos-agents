@@ -45,6 +45,19 @@ struct ActionView: View {
         return PIIDetector.containsPII(text)
     }
 
+    /// Lazily-resolved decision from the AI-SPM-driven `PolicyEnforcer`.
+    /// `nil` means no enforcer is configured (NullPolicyTransport tenant —
+    /// fall back to local-only behaviour). Recomputed each render off the
+    /// current `elementInfo.text`; cheap because the enforcer short-circuits.
+    private var policyDecision: PolicyDecision? {
+        guard let enforcer = overlayStateModel.policyEnforcer else { return nil }
+        let text = overlayStateModel.elementInfo?.text ?? ""
+        let appId = MonitoredAppsRegistry.shared
+            .enabledNativeApp(bundleId: overlayStateModel.elementInfo?.applicationBundleId ?? "")?
+            .id ?? "unknown"
+        return enforcer.evaluate(text: text, appId: appId)
+    }
+
     private var suggestionTypes: [SuggestionType] {
         let allTypes = suggestionTypesQueryable.wrappedValue
         let enabledTypes = allTypes.filter { $0.model.isEnabled }
@@ -191,6 +204,68 @@ struct ActionView: View {
         .cornerRadius(8)
     }
 
+    /// Blocked-by-policy card shown when an AI-SPM PolicyInstance with
+    /// `enforcementMode = block` matches the focused text. We don't show
+    /// suggestions in this state — the user has to revise the prompt
+    /// before any action can proceed.
+    private func policyBlockedCard(reason: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "octagon.fill")
+                    .foregroundStyle(Color.psRed)
+                Text("Blocked by policy")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.psRed)
+            }
+            Text(reason)
+                .font(.system(size: 11))
+                .foregroundStyle(Color.psText2)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Revise the prompt to remove the flagged content. Contact your IT admin if you believe this is a mistake.")
+                .font(.system(size: 11))
+                .foregroundStyle(Color.psText3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.psRedLight)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.psRed.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    /// Lighter banner for flagged (non-blocking) policy hits. Tells the
+    /// user "we logged this" without preventing the action.
+    private func policyFlaggedBanner(decision: PolicyDecision) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "flag.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.psAmber)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Policy flagged")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.psAmber)
+                if let first = decision.triggered.first {
+                    Text(first.instance.name)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.psAmber.opacity(0.85))
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.psAmberLight)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(Color.psAmberBorder, lineWidth: 1)
+        )
+    }
+
     /// Amber notice shown above the options list when PIIDetector flags
     /// something in the focused text. Pairs with the reorder logic that
     /// floats Redaction to the top.
@@ -220,11 +295,39 @@ struct ActionView: View {
         )
     }
 
+    /// True when an active AI-SPM policy hard-blocks this prompt. Hides
+    /// the suggestion list — the user must revise before any LLM call.
+    private var isBlockedByPolicy: Bool {
+        if case .block = policyDecision?.action { return true }
+        return false
+    }
+
     private var optionsView: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if piiDetected {
+            if let decision = policyDecision {
+                if case .block(let reason) = decision.action {
+                    policyBlockedCard(reason: reason)
+                } else if case .flag = decision.action {
+                    policyFlaggedBanner(decision: decision)
+                } else if case .redact = decision.action {
+                    piiDetectedBanner
+                } else if piiDetected {
+                    piiDetectedBanner
+                }
+            } else if piiDetected {
                 piiDetectedBanner
             }
+            if isBlockedByPolicy {
+                Button {
+                    overlayStateModel.actionToolState = .idle
+                } label: {
+                    Text("Close")
+                        .font(.caption)
+                }
+                .buttonStyle(ButtonStyleRed())
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
+            } else {
             ScrollView {
                 LazyVStack {
                     if suggestionTypes.count > 0 {
@@ -275,6 +378,7 @@ struct ActionView: View {
             .buttonStyle(ButtonStyleRed())
             .frame(maxWidth: .infinity)
             .padding(.top, 12)
+            }
         }
         .padding(8)
         .frame(minWidth: 150)
