@@ -1,10 +1,11 @@
 import SwiftUI
 import os
 
-/// Settings view: Monitoring + Suggestion Types.
+/// Settings view: Monitoring + Custom Instructions + Monitored Apps + Suggestion Types.
 /// Text Field Monitoring toggle lives here per PS-09.
 struct SettingsView: View {
     @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
+    @EnvironmentObject private var chat: ChatStateModel
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
@@ -15,6 +16,7 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: PSSpacing.xl) {
                 MonitoringSection(accessibilityManager: accessibilityManager)
+                CustomInstructionsSection(chat: chat)
                 MonitoredAppsSection()
                 SuggestionTypeListView()
                     .frame(minHeight: 400)
@@ -22,6 +24,127 @@ struct SettingsView: View {
             .padding(PSSpacing.panel)
         }
         .background(Color.psBg)
+    }
+}
+
+// MARK: - Custom Instructions Section
+
+/// Manage the reusable system-style prompts that the floating Chat
+/// composer can apply per-message. Same data (`ChatStateModel.customInstructions`)
+/// powers the chip bar inside the chat panel.
+private struct CustomInstructionsSection: View {
+    @ObservedObject var chat: ChatStateModel
+    @State private var draftLabel: String = ""
+    @State private var draftText: String = ""
+    @State private var editingId: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PSSpacing.md) {
+            HStack {
+                Text("CUSTOM INSTRUCTIONS")
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(1.0)
+                    .foregroundStyle(Color.psText3)
+                Spacer()
+                Text("\(chat.customInstructions.count) saved · \(chat.activeInstructionIds.count) active in chat")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.psText3)
+            }
+            .padding(.horizontal, PSSpacing.xs)
+
+            VStack(spacing: 0) {
+                ForEach(Array(chat.customInstructions.enumerated()), id: \.element.id) { index, ci in
+                    instructionRow(ci, isLast: index == chat.customInstructions.count - 1)
+                }
+                addRow
+            }
+            .background(Color.psSurface)
+            .clipShape(RoundedRectangle(cornerRadius: PSRadius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: PSRadius.lg, style: .continuous)
+                    .stroke(Color.psBorder, lineWidth: 1)
+            )
+
+            Text("Active instructions are prepended to every message you send through the floating chat (⌘⇧P).")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.psText3)
+                .padding(.horizontal, PSSpacing.xs)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func instructionRow(_ ci: CustomInstruction, isLast: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: PSSpacing.md) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(ci.label)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.psText)
+                    Text(ci.instruction)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.psText3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: PSSpacing.md)
+                Toggle("", isOn: Binding(
+                    get: { chat.isActive(ci.id) },
+                    set: { _ in chat.toggleActive(ci.id) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                Button(role: .destructive) {
+                    chat.deleteInstruction(ci.id)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.psText3)
+                }
+                .buttonStyle(.plain)
+                .help("Delete instruction")
+            }
+            .padding(.horizontal, PSSpacing.lg)
+            .padding(.vertical, 12)
+
+            if !isLast {
+                Divider().background(Color.psBg3)
+            }
+        }
+    }
+
+    private var addRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider().background(Color.psBg3)
+            HStack(spacing: 8) {
+                TextField("Label", text: $draftLabel)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 110)
+                TextField("Instruction (e.g. \"Reply in Spanish\")", text: $draftText)
+                    .textFieldStyle(.roundedBorder)
+                Button {
+                    let label = draftLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let text = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !label.isEmpty, !text.isEmpty else { return }
+                    chat.addInstruction(.init(label: label, instruction: text))
+                    draftLabel = ""
+                    draftText = ""
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(canAdd ? Color.psBlue : Color.psBorder2)
+                }
+                .buttonStyle(.plain)
+                .disabled(!canAdd)
+                .help("Add custom instruction")
+            }
+            .padding(.horizontal, PSSpacing.lg)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private var canAdd: Bool {
+        !draftLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 

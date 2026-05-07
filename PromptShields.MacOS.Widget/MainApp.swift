@@ -38,12 +38,14 @@ struct MainApp: App {
     @StateObject private var accessibilityManager = AccessibilityManagerImpl()
     @StateObject private var overlayStateModel = OverlayStateModel()
     @StateObject private var dashboardStateModel = DashboardStateModel()
+    @StateObject private var chatStateModel = ChatStateModel()
     @Environment(\.openWindow) private var openWindow
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     static let overlayRender = "overlay-render"
     static let actionRender = "action-render"
     static let mainWindow = "main-window"
+    static let chatWindow = "chat-window"
 
     // Proper size for main dashboard window
     private static let mainWindowSize = CGSize(width: 900, height: 600)
@@ -62,6 +64,7 @@ struct MainApp: App {
                 .environmentObject(accessibilityManager)
                 .environmentObject(overlayStateModel)
                 .environmentObject(dashboardStateModel)
+                .environmentObject(chatStateModel)
                 .task {
                     await initializeWindows()
                 }
@@ -70,12 +73,28 @@ struct MainApp: App {
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .environmentObject(dashboardStateModel)
+        .environmentObject(chatStateModel)
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(after: .help) {
                 Button("Show Onboarding…") {
                     NotificationCenter.default.post(name: .showOnboarding, object: nil)
                 }
+                Button("Toggle Promptly Chat") {
+                    chatStateModel.isExpanded.toggle()
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                #if DEBUG
+                // Dev-only: bypass Auth0 entirely so QA can click through
+                // the dashboard without real credentials. Downstream user-
+                // dependent screens (Account, Suggestions) will be empty
+                // because no real user is loaded — that's expected.
+                Divider()
+                Button("Skip Login (Dev)") {
+                    NotificationCenter.default.post(name: .devSkipLogin, object: nil)
+                }
+                .keyboardShortcut("k", modifiers: [.command, .shift])
+                #endif
             }
         }
 
@@ -98,6 +117,20 @@ struct MainApp: App {
         .environmentObject(accessibilityManager)
         .environmentObject(overlayStateModel)
         .windowStyle(.hiddenTitleBar)
+
+        // Floating Chat — Grammarly-style persistent button anchored to
+        // the bottom-right of the active screen. Click expands to the
+        // ChatPanelView. Window is `.statusBar`-level so it floats above
+        // everything except the menu bar / system overlays.
+        Window("Promptly Chat", id: MainApp.chatWindow) {
+            FloatingChatButton()
+                .environmentObject(chatStateModel)
+                .environmentObject(overlayStateModel)
+        }
+        .defaultSize(width: 420, height: 580)
+        .environmentObject(chatStateModel)
+        .environmentObject(overlayStateModel)
+        .windowStyle(.hiddenTitleBar)
     }
 
     @MainActor
@@ -114,6 +147,7 @@ struct MainApp: App {
         configureMainWindow()
         configureOverlayWindow()
         configureActionWindow()
+        configureChatWindow()
         configurePolicyClient()
 
         // Mark windows as configured
@@ -233,12 +267,61 @@ struct MainApp: App {
         window.alphaValue = 0.0
     }
 
+    /// Floating Chat window — sits at bottom-right of the active screen,
+    /// always visible (.statusBar level). The button sizes itself; the
+    /// expanded panel needs more room — we resize on demand from the view
+    /// via .onChange(of: chat.isExpanded), so here we just position.
+    @MainActor
+    private func configureChatWindow() {
+        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(MainApp.chatWindow) ?? false }) else {
+            logger.debug("Chat window not found")
+            return
+        }
+
+        window.isRestorable = false
+        window.setFrameAutosaveName("")
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = false
+        window.titlebarAppearsTransparent = true
+
+        if window.styleMask.contains(.titled) {
+            window.styleMask.remove(.titled)
+        }
+        window.styleMask.insert(.borderless)
+
+        // Sit above normal app windows (panels, modals) but below the
+        // menu bar / dock. statusBar is the right level for an always-on
+        // floating widget.
+        window.level = .statusBar
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        window.isMovableByWindowBackground = false
+        window.ignoresMouseEvents = false
+
+        // Anchor to bottom-right of the main screen with a comfortable margin.
+        // The view inside is sized to its content so the window auto-fits.
+        if let screen = NSScreen.main {
+            let visible = screen.visibleFrame
+            let panelMargin: CGFloat = 24
+            let panelSize = CGSize(width: 420, height: 580)
+            let origin = CGPoint(
+                x: visible.maxX - panelSize.width - panelMargin,
+                y: visible.minY + panelMargin
+            )
+            window.setFrame(CGRect(origin: origin, size: panelSize), display: true)
+        }
+    }
+
     private func configureAppAppearance() {
         // Open windows sequentially with delays to avoid constraint conflicts on Sequoia
         openWindow(id: MainApp.mainWindow)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [openWindow] in
             openWindow(id: MainApp.overlayRender)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [openWindow] in
+            openWindow(id: MainApp.chatWindow)
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [openWindow] in
@@ -267,7 +350,6 @@ struct MainApp: App {
 private struct MainWindowContent: View {
     @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
     @EnvironmentObject private var overlayStateModel: OverlayStateModel
-    @State private var showOnboarding: Bool = false
 
     var body: some View {
         Group {
@@ -289,24 +371,19 @@ private struct MainWindowContent: View {
             guard overlayStateModel.isMainConfigured else { return }
             overlayStateModel.elementInfo = newValue
         }
-        .onChange(of: overlayStateModel.isMainConfigured) { _, configured in
-            // Auto-present onboarding on first launch (PS-04).
-            if configured && !OnboardingPersistence.hasCompleted {
-                showOnboarding = true
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .showOnboarding)) { _ in
-            showOnboarding = true
-        }
-        .sheet(isPresented: $showOnboarding) {
-            OnboardingView()
-                .environmentObject(accessibilityManager)
-        }
+        // Onboarding sheet presentation lives inside MainView so it has
+        // direct access to the global MainStateModel — the merged step 4
+        // performs the Auth0 login and needs to mutate authState on success.
     }
 }
 
 extension Notification.Name {
     static let showOnboarding = Notification.Name("ai.bit-pulse.promptshields.showOnboarding")
+
+    /// Posted by Help menu → "Skip Login (Dev)" in DEBUG builds.
+    /// MainView listens and synthesises a logged-in state for click-through QA
+    /// without needing real Auth0 credentials.
+    static let devSkipLogin = Notification.Name("ai.bit-pulse.promptshields.devSkipLogin")
 }
 
 /// Overlay window content

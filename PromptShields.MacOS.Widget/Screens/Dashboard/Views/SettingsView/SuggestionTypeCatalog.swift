@@ -42,6 +42,11 @@ enum SuggestionTypeCatalog {
     /// both the seeder and the ActionView reorder consult it.
     static let redactionTypeKey = "redaction"
 
+    /// typeKey used by the floating Chat window. Auto-seeded with a
+    /// pass-through prompt template so the user's chat message + their
+    /// active custom instructions reach the LLM verbatim.
+    static let chatTypeKey = "chat"
+
     static let redactionSeedPromptTemplate = """
     Detect and redact all personal, confidential, or sensitive data.
     Replace with placeholders (e.g., [NAME], [EMAIL], [ACCOUNT_ID]) and preserve readability.
@@ -53,13 +58,24 @@ enum SuggestionTypeCatalog {
     /// Types we guarantee exist on first launch via auto-seed.
     static var defaultSeededMetadata: [(displayName: String, category: String, meta: SuggestionTypeMetadata)] {
         [
-            (displayName: "Redaction", category: "Security & Compliance", meta: entries[normalize(redactionTypeKey)]!)
+            (displayName: "Redaction", category: "Security & Compliance", meta: entries[normalize(redactionTypeKey)]!),
+            (displayName: "Chat", category: "Custom", meta: entries[normalize(chatTypeKey)]!)
         ]
     }
 
     // Key: normalized typeKey or name
     private static let entries: [String: SuggestionTypeMetadata] = {
         let defs: [(keys: [String], meta: SuggestionTypeMetadata)] = [
+            (["chat"], .init(
+                emoji: "💬",
+                summary: "Free-form chat with Promptly. Ask questions, request rewrites, or apply your saved custom instructions to any prompt.",
+                before: "How do I make this email shorter?",
+                after: "Promptly responds with the rewritten email.",
+                isDefaultSeeded: true,
+                seedPromptTemplate: """
+                {{TEXT}}
+                """
+            )),
             (["redaction", "redact"], .init(
                 emoji: "🔒",
                 summary: "Automatically redact or mask PII and sensitive data (this runs on every action by default).",
