@@ -48,10 +48,16 @@ struct OnboardingCard<Content: View>: View {
             }
             .frame(height: 3)
 
-            content()
-                .padding(.horizontal, 40)
-                .padding(.top, 40)
-                .padding(.bottom, 24)
+            // Body scrolls if content is taller than the sheet — keeps the
+            // sticky footer (dots + buttons) visible regardless. Hides the
+            // scroll indicator since steps usually fit; the scroller only
+            // kicks in for the permission-trust card on smaller windows.
+            ScrollView(.vertical, showsIndicators: false) {
+                content()
+                    .padding(.horizontal, 40)
+                    .padding(.top, 40)
+                    .padding(.bottom, 24)
+            }
 
             Divider().background(Color.psBg3)
 

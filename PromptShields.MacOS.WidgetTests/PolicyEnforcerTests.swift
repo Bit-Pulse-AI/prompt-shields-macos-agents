@@ -30,7 +30,7 @@ final class PolicyEnforcerTests: XCTestCase {
         enforcement: EnforcementMode,
         severity: PolicySeverity = .high,
         appIds: [String] = [],
-        params: [String: AnyCodableValue] = [:]
+        params: [String: PolicyAnyCodableValue] = [:]
     ) -> PolicyInstance {
         PolicyInstance(
             id: id, name: id, templateId: templateId, templateVersion: "1.0",

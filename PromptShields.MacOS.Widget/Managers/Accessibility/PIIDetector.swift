@@ -73,15 +73,18 @@ enum PIIDetector {
     /// avoid regex catastrophe on a pasted dump.
     private static let maxScanLength = 50_000
 
-    private struct Rule {
+    private struct Rule: @unchecked Sendable {
         let category: PIICategory
         let regex: NSRegularExpression
         /// Optional second-pass validator (e.g. Luhn check for cards).
-        let validator: ((String) -> Bool)?
+        /// `@Sendable` because the rules table is global and accessed
+        /// from any actor; closures here are pure (Luhn / phone digit
+        /// checks) so the unchecked Sendable conformance is safe.
+        let validator: (@Sendable (String) -> Bool)?
     }
 
     // swiftlint:disable:next force_try
-    private static let rules: [Rule] = {
+    nonisolated(unsafe) private static let rules: [Rule] = {
         func compile(_ pattern: String, options: NSRegularExpression.Options = []) -> NSRegularExpression {
             // swiftlint:disable:next force_try
             try! NSRegularExpression(pattern: pattern, options: options)

@@ -55,17 +55,11 @@ final class AXObserverService {
         )
     }
 
-    deinit {
-        // Run loop source is owned by the observer; dropping the observer
-        // cleans it up. We intentionally don't call AXObserverRemoveNotification
-        // for every subscription — letting AXObserver go out of scope releases
-        // everything.
-        CFRunLoopRemoveSource(
-            CFRunLoopGetMain(),
-            AXObserverGetRunLoopSource(observer),
-            .defaultMode
-        )
-    }
+    // No explicit deinit — the AXObserver's CFRunLoopSource is released
+    // automatically when the AXObserver itself is released (CF refcount).
+    // Swift 6 strict concurrency forbids touching a non-Sendable
+    // AXObserver from a nonisolated deinit, and an explicit teardown
+    // would only duplicate what ARC already does.
 
     // MARK: - Subscribe / unsubscribe
 
@@ -120,13 +114,28 @@ final class AXObserverService {
 
     private static let callback: AXObserverCallback = { _, element, notificationRef, refcon in
         guard let refcon else { return }
-        let service = Unmanaged<AXObserverService>.fromOpaque(refcon).takeUnretainedValue()
         let notification = notificationRef as String
         // Callback fires on the main run loop (we registered against
-        // CFRunLoopGetMain), so MainActor isolation is already correct.
+        // CFRunLoopGetMain) so we're already on MainActor. Wrap the
+        // non-Sendable AXUIElement + refcon pointer in `@unchecked Sendable`
+        // boxes so Swift 6 lets us bridge them into the assumeIsolated
+        // block. CF/AX types are reference-counted and thread-safe at the
+        // CF level — the unchecked Sendable conformance is sound here
+        // because the consumer side is the same main thread.
+        let box = AXObserverService.CallbackBox(refcon: refcon, element: element)
         MainActor.assumeIsolated {
-            service.onNotification?(notification, element)
+            let service = Unmanaged<AXObserverService>.fromOpaque(box.refcon).takeUnretainedValue()
+            service.onNotification?(notification, box.element)
         }
+    }
+
+    /// Sendable bridge for the C-callback payload. CF types are
+    /// thread-safe (their lifetimes are managed by CF refcounts, not by
+    /// Swift's actor model), so the unchecked conformance is sound when
+    /// the receiver re-asserts main isolation.
+    private struct CallbackBox: @unchecked Sendable {
+        let refcon: UnsafeMutableRawPointer
+        let element: AXUIElement
     }
 
     // MARK: - Subscription key

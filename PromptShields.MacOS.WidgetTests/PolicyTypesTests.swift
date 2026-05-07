@@ -69,7 +69,7 @@ final class PolicyTypesTests: XCTestCase {
     }
 
     func testParameterValuesRoundTrip() throws {
-        // AnyCodable must round-trip the dashboard's mixed-type
+        // PolicyAnyCodable must round-trip the dashboard's mixed-type
         // `parameterValues` dict (number, list, bool).
         let payload: [String: Any] = [
             "pii_confidence": 0.85,
@@ -78,14 +78,14 @@ final class PolicyTypesTests: XCTestCase {
             "max_requests_per_minute": 60
         ]
         let data = try JSONSerialization.data(withJSONObject: payload)
-        let decoded = try JSONDecoder().decode([String: AnyCodable].self, from: data)
+        let decoded = try JSONDecoder().decode([String: PolicyAnyCodable].self, from: data)
 
         XCTAssertEqual(decoded["pii_confidence"]?.value.asDouble, 0.85)
         XCTAssertEqual(decoded["redact_categories"]?.value.asStringArray, ["EMAIL", "PHONE"])
         XCTAssertEqual(decoded["max_requests_per_minute"]?.value.asInt, 60)
 
         let reencoded = try JSONEncoder().encode(decoded)
-        let again = try JSONDecoder().decode([String: AnyCodable].self, from: reencoded)
+        let again = try JSONDecoder().decode([String: PolicyAnyCodable].self, from: reencoded)
         XCTAssertEqual(again["pii_confidence"]?.value.asDouble, 0.85)
     }
 

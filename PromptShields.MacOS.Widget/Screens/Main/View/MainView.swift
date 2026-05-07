@@ -12,7 +12,9 @@ struct MainView: View {
     @StateObject private var globalMainStateModel = MainStateModel()
     @State private var shouldShowProgressView: Bool = false
     @State private var isAlertPresented: Bool = false
+    @State private var showOnboarding: Bool = false
 
+    @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
     @Environment(\.profileDomainService) private var profileDomainService
     @Environment(\.userDomainService) private var userDomainService
 
@@ -31,6 +33,31 @@ struct MainView: View {
                     logout()
                 }
             }
+        }
+        // First-launch onboarding sheet (PS-04). Lives at the MainView
+        // level so step 4 can mutate globalMainStateModel.authState
+        // when the merged login button succeeds.
+        .onAppear {
+            if !OnboardingPersistence.hasCompleted {
+                showOnboarding = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showOnboarding)) { _ in
+            showOnboarding = true
+        }
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: .devSkipLogin)) { _ in
+            // Dev shortcut: pretend Auth0 succeeded so QA can reach the
+            // dashboard. Real user fetch will fail — Account / Suggestions
+            // will be empty — but the UI surface is exercisable.
+            globalMainStateModel.authState = .loggedIn
+            showOnboarding = false
+        }
+        #endif
+        .sheet(isPresented: $showOnboarding) {
+            OnboardingView()
+                .environmentObject(accessibilityManager)
+                .environmentObject(globalMainStateModel)
         }
     }
 

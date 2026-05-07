@@ -173,7 +173,7 @@ final class PolicyEnforcer {
         }
     }
 
-    private func runRegex(text: String, config: AnyCodable?) -> DetectorMatch? {
+    private func runRegex(text: String, config: PolicyAnyCodable?) -> DetectorMatch? {
         guard let patterns = config?.value.asStringArray else { return nil }
         for pattern in patterns where !pattern.isEmpty {
             guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { continue }
@@ -190,7 +190,7 @@ final class PolicyEnforcer {
         return nil
     }
 
-    private func runKeywords(text: String, config: AnyCodable?) -> DetectorMatch? {
+    private func runKeywords(text: String, config: PolicyAnyCodable?) -> DetectorMatch? {
         guard let keywords = config?.value.asStringArray else { return nil }
         let lower = text.lowercased()
         for kw in keywords where !kw.isEmpty {

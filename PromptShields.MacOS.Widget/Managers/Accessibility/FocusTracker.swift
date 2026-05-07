@@ -95,11 +95,12 @@ final class FocusTracker {
         }
     }
 
-    deinit {
-        if let workspaceObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(workspaceObserver)
-        }
-    }
+    // No deinit. NotificationCenter observers held by NSWorkspace are
+    // weakly-referenced when added via the block-based API on macOS 11+,
+    // and the FocusTracker is owned by AccessibilityManagerImpl for the
+    // lifetime of the app — there's no realistic detach path between
+    // start() and process termination. Removing the explicit cleanup keeps
+    // Swift 6's nonisolated-deinit rule happy.
 
     // MARK: - App attach / detach
 

@@ -132,7 +132,7 @@ struct PolicyInstance: Codable, Sendable, Hashable {
     let name: String
     let templateId: String
     let templateVersion: String
-    let parameterValues: [String: AnyCodable]
+    let parameterValues: [String: PolicyAnyCodable]
     let enforcementMode: EnforcementMode
     let severity: PolicySeverity
     let appliesTo: PolicyInstanceAppliesTo
@@ -189,16 +189,16 @@ struct PolicyViolationEvidence: Codable, Sendable, Hashable {
     let confidence: Double?
 }
 
-// MARK: - AnyCodable
+// MARK: - PolicyAnyCodable
 
 /// Lightweight Codable wrapper for the dashboard's
 /// `parameterValues: Record<string, unknown>`. Decodes the JSON primitives
 /// we actually consume — string, number, bool, list, dict — and round-trips
 /// them. The dashboard side is JS so it'll never send anything more exotic.
-struct AnyCodable: Codable, Sendable, Hashable {
-    let value: AnyCodableValue
+struct PolicyAnyCodable: Codable, Sendable, Hashable {
+    let value: PolicyAnyCodableValue
 
-    init(_ value: AnyCodableValue) { self.value = value }
+    init(_ value: PolicyAnyCodableValue) { self.value = value }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -212,14 +212,14 @@ struct AnyCodable: Codable, Sendable, Hashable {
             self.value = .double(double)
         } else if let string = try? container.decode(String.self) {
             self.value = .string(string)
-        } else if let array = try? container.decode([AnyCodable].self) {
+        } else if let array = try? container.decode([PolicyAnyCodable].self) {
             self.value = .array(array.map(\.value))
-        } else if let dict = try? container.decode([String: AnyCodable].self) {
+        } else if let dict = try? container.decode([String: PolicyAnyCodable].self) {
             self.value = .object(dict.mapValues(\.value))
         } else {
             throw DecodingError.dataCorruptedError(
                 in: container,
-                debugDescription: "AnyCodable: unsupported JSON value"
+                debugDescription: "PolicyAnyCodable: unsupported JSON value"
             )
         }
     }
@@ -232,20 +232,20 @@ struct AnyCodable: Codable, Sendable, Hashable {
         case .int(let i): try container.encode(i)
         case .double(let d): try container.encode(d)
         case .string(let s): try container.encode(s)
-        case .array(let arr): try container.encode(arr.map(AnyCodable.init))
-        case .object(let dict): try container.encode(dict.mapValues(AnyCodable.init))
+        case .array(let arr): try container.encode(arr.map(PolicyAnyCodable.init))
+        case .object(let dict): try container.encode(dict.mapValues(PolicyAnyCodable.init))
         }
     }
 }
 
-indirect enum AnyCodableValue: Sendable, Hashable {
+indirect enum PolicyAnyCodableValue: Sendable, Hashable {
     case null
     case bool(Bool)
     case int(Int)
     case double(Double)
     case string(String)
-    case array([AnyCodableValue])
-    case object([String: AnyCodableValue])
+    case array([PolicyAnyCodableValue])
+    case object([String: PolicyAnyCodableValue])
 
     var asString: String? {
         if case .string(let s) = self { return s }
