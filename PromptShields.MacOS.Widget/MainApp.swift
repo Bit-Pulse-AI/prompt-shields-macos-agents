@@ -182,6 +182,18 @@ struct MainApp: App {
         overlayStateModel.policyClient = client
         overlayStateModel.policyEnforcer = enforcer
         client.start()
+
+        // Telemetry stream (people / auto-discovery / usage rollup) shares
+        // the same dashboard URL — keep both wired in lockstep so a tenant
+        // either gets all SPM telemetry or none.
+        let telemetryTransport: TelemetryTransport
+        if !urlString.isEmpty, let url = URL(string: urlString) {
+            telemetryTransport = HTTPTelemetryTransport(baseURL: url)
+        } else {
+            telemetryTransport = NullTelemetryTransport()
+        }
+        TelemetryClient.shared.setTransport(telemetryTransport)
+        UsageEventAggregator.shared.start()
     }
 
     @MainActor

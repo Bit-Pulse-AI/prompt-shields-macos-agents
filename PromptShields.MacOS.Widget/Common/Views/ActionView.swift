@@ -419,6 +419,42 @@ struct ActionView: View {
         overlayStateModel.actionToolState = .idle
     }
 
+    // MARK: - Telemetry helpers
+
+    /// Maps a suggestion + active policy decision to the usage-rollup
+    /// counter that should bump for this action.
+    private func usageKind(for typeKey: String, decision: PolicyDecision?) -> UsageEventAggregator.Kind {
+        if let action = decision?.action {
+            switch action {
+            case .block: return .blocked
+            case .redact: return .redacted
+            case .flag: return .flagged
+            case .allow, .log: break
+            }
+        }
+        // Redaction-typed suggestions count as redacted regardless of policy.
+        if typeKey.lowercased().hasPrefix("redact") { return .redacted }
+        return .prompt
+    }
+
+    /// When a policy enforcer is configured AND the current decision was
+    /// `.allow`, emit a single `evaluated` tick to the dashboard so it
+    /// gets a denominator for FP rates. Native-app actions only — browser
+    /// URL host plumbing is a follow-up.
+    @MainActor
+    private func emitEvaluatedTickIfClean(promptlyAppId: String) async {
+        guard let decision = policyDecision, case .allow = decision.action else { return }
+        guard let enforcer = overlayStateModel.policyEnforcer,
+              let client = overlayStateModel.policyClient else { return }
+        let violation = enforcer.makeEvaluatedTick(
+            applicationId: promptlyAppId,
+            promptHash: decision.promptHash,
+            user: nil,
+            urlHost: nil
+        )
+        await client.reportViolation(violation)
+    }
+
     // MARK: - Suggestion Processing
 
     @MainActor
@@ -432,6 +468,20 @@ struct ActionView: View {
         // Track suggestion type selected and processing started
         Analytics.trackAsync(.suggestionTypeSelected(type: suggestionTypeKey, category: suggestionCategory))
         Analytics.trackAsync(.suggestionProcessingStarted(type: suggestionTypeKey))
+
+        // Resolve the Promptly app id (chatgpt / claude / etc.) and route
+        // a usage-rollup tick + a policy-evaluated tick through the AI-SPM
+        // telemetry stream. Both fail open — telemetry failures never
+        // block the suggestion call.
+        let bundleId = overlayStateModel.elementInfo?.applicationBundleId ?? ""
+        let promptlyAppId = MonitoredAppsRegistry.shared
+            .enabledNativeApp(bundleId: bundleId)?.id ?? "shadow-\(bundleId)"
+        UsageEventAggregator.shared.record(
+            kind: usageKind(for: suggestionTypeKey, decision: policyDecision),
+            promptlyAppId: promptlyAppId,
+            auth0Sub: nil
+        )
+        Task { await emitEvaluatedTickIfClean(promptlyAppId: promptlyAppId) }
 
         do {
             let result = try await suggestionDomainService

@@ -70,6 +70,10 @@ enum ActionType: String, Codable, Sendable {
     case rewrite
     case notify
     case requireReview = "require_review"
+    /// Promptly-emitted only — fires for `.allow` decisions so the
+    /// dashboard has a denominator for false-positive rates. Not part of
+    /// the original AI-SPM template/instance vocabulary.
+    case evaluated
 }
 
 enum InstanceStatus: String, Codable, Sendable {
@@ -187,6 +191,10 @@ struct PolicyViolationEvidence: Codable, Sendable, Hashable {
     let detectorOutput: String
     let matchedPattern: String?
     let confidence: Double?
+    /// Optional URL host when the prompt was observed inside a browser
+    /// tab. Lets the dashboard scope per-domain rules and shows up in the
+    /// Ardoq export's "where" column. Nil for native-app sources.
+    var urlHost: String?
 }
 
 // MARK: - PolicyAnyCodable

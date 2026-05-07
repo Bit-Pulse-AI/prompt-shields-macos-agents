@@ -118,7 +118,8 @@ final class PolicyEnforcer {
         applicationId: String,
         promptHash: String,
         actionTaken: ActionType,
-        user: String? = nil
+        user: String? = nil,
+        urlHost: String? = nil
     ) -> PolicyViolation {
         PolicyViolation(
             id: UUID().uuidString,
@@ -133,9 +134,41 @@ final class PolicyEnforcer {
             evidence: PolicyViolationEvidence(
                 detectorOutput: triggered.evidence,
                 matchedPattern: triggered.matchedSubstring,
-                confidence: triggered.confidence
+                confidence: triggered.confidence,
+                urlHost: urlHost
             ),
             reviewed: false
+        )
+    }
+
+    /// Synthetic envelope emitted for *every* `.allow` decision so the
+    /// dashboard knows how often the policy ran without firing. Not tied
+    /// to a specific instance — uses a sentinel id "evaluation-only" the
+    /// dashboard groups on. Promptly's UX never sees this; it exists
+    /// purely to give SPM a denominator for FP rates.
+    func makeEvaluatedTick(
+        applicationId: String,
+        promptHash: String,
+        user: String? = nil,
+        urlHost: String? = nil
+    ) -> PolicyViolation {
+        PolicyViolation(
+            id: UUID().uuidString,
+            policyInstanceId: "evaluation-only",
+            applicationId: applicationId,
+            timestamp: ISO8601DateFormatter().string(from: Date()),
+            actionTaken: .evaluated,
+            severity: .low,
+            detectorId: "promptly-pep",
+            promptHash: promptHash,
+            user: user,
+            evidence: PolicyViolationEvidence(
+                detectorOutput: "Evaluated, no policy match",
+                matchedPattern: nil,
+                confidence: 1.0,
+                urlHost: urlHost
+            ),
+            reviewed: true
         )
     }
 

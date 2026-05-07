@@ -143,9 +143,50 @@ final class FocusTracker {
         // don't wait for the first focus-change event.
         resolveAndObserveFocusedElement()
 
+        // Auto-discovery: if this app isn't in our MonitoredApps catalog
+        // AND it isn't a known browser, surface it to AI-SPM so the
+        // dashboard can flag the shadow AI tool. The TelemetryClient
+        // throttles to once/hour/(app,user) — calling here on every
+        // focus event is safe.
+        Task { @MainActor in
+            await maybeReportAutoDiscovery(app: app)
+        }
+
         DetectionTrace.log("focus_attach",
                            bundleId: app.bundleIdentifier,
                            note: "pid=\(pid)")
+    }
+
+    /// Reports an unrecognised AI surface to AI-SPM. Conservative: skips
+    /// our own app, system processes, the macOS shell, and known-good
+    /// non-AI tools. The dashboard side is idempotent so a false positive
+    /// here just adds noise to the auto-discovery queue, never breaks
+    /// anything.
+    private func maybeReportAutoDiscovery(app: NSRunningApplication) async {
+        let bundleId = app.bundleIdentifier ?? ""
+        guard !bundleId.isEmpty else { return }
+
+        // Skip Promptly itself, Finder/Dock/Spotlight, browsers (we'll
+        // catch web-based AI via URL — separate ticket), and any app
+        // already in MonitoredApps.
+        let skipPrefixes = [
+            "ai.bit-pulse.PromptShields",
+            "com.apple.dock", "com.apple.finder", "com.apple.Spotlight",
+            "com.apple.controlcenter", "com.apple.systemuiserver"
+        ]
+        if skipPrefixes.contains(where: { bundleId.hasPrefix($0) }) { return }
+        if AXUIElementSafeWrapper.isBrowser(bundleId: bundleId) { return }
+        if MonitoredAppsRegistry.shared.enabledNativeApp(bundleId: bundleId) != nil { return }
+
+        let appName = app.localizedName ?? bundleId
+        let request = AutoDiscoveryRequest(
+            promptlyAppId: "shadow-\(bundleId)",
+            componentName: appName,
+            observedSource: bundleId,
+            observedByAuth0Sub: nil,    // populated server-side from the auth header eventually
+            observedAt: ISO8601DateFormatter().string(from: Date())
+        )
+        await TelemetryClient.shared.reportAutoDiscovery(request)
     }
 
     private func detach() {
