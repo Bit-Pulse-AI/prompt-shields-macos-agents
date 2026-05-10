@@ -307,9 +307,27 @@ final class FocusTracker {
         }
 
         do {
-            let info = try textFieldDetector.getAXElementOrSelectionInfo(focused)
+            var info = try textFieldDetector.getAXElementOrSelectionInfo(focused)
             let role = AXUIElementSafeWrapper.getRole(from: focused) ?? "?"
             let editable = AXUIElementSafeWrapper.isEditable(focused)
+
+            // Augment with the page URL when the focus is inside a
+            // browser. Used by AI-SPM to populate evidence.urlHost on
+            // PolicyViolation envelopes — gives the dashboard a
+            // per-domain view of where prompts were typed.
+            let url = Self.findFocusedURL(startingFrom: focused)
+            if let url, info.focusedURL != url {
+                info = ElementInfo(
+                    text: info.text,
+                    applicationName: info.applicationName,
+                    applicationBundleId: info.applicationBundleId,
+                    frame: info.frame,
+                    elementIdentifier: info.elementIdentifier,
+                    isSelectedText: info.isSelectedText,
+                    focusedURL: url
+                )
+            }
+
             DetectionTrace.log("text_field_info",
                                bundleId: info.applicationBundleId,
                                role: role,
@@ -324,6 +342,41 @@ final class FocusTracker {
             DetectionTrace.log("extract_error",
                                note: String(describing: error).prefix(80).description)
         }
+    }
+
+    /// Walks up the AX parent chain until we hit an `AXWebArea`, then
+    /// reads its `AXURL` attribute. Returns the URL string when found,
+    /// nil for native fields. Bounded depth so a malformed tree can't
+    /// hang the poller.
+    @MainActor
+    private static func findFocusedURL(startingFrom element: AXUIElement) -> String? {
+        var current: AXUIElement? = element
+        var depth = 0
+        let maxDepth = 25
+
+        while let node = current, depth < maxDepth {
+            if let role = AXUIElementSafeWrapper.getRole(from: node), role == "AXWebArea" {
+                if let raw = AXUIElementSafeWrapper.getAttributeValue(from: node, attribute: "AXURL") {
+                    if let url = raw as? URL { return url.absoluteString }
+                    if let s = raw as? String { return s }
+                    if let nsurl = raw as? NSURL { return nsurl.absoluteString }
+                }
+                // Some Chromium frames expose the URL via AXDocumentURL instead.
+                if let raw = AXUIElementSafeWrapper.getAttributeValue(from: node, attribute: "AXDocumentURL") {
+                    if let s = raw as? String { return s }
+                    if let url = raw as? URL { return url.absoluteString }
+                }
+                return nil
+            }
+
+            guard let parentRef = AXUIElementSafeWrapper.getAttributeValue(from: node, attribute: kAXParentAttribute),
+                  let parent = AXUIElementSafeWrapper.asAXUIElement(parentRef) else {
+                return nil
+            }
+            current = parent
+            depth += 1
+        }
+        return nil
     }
 
     // MARK: - Focused element resolution

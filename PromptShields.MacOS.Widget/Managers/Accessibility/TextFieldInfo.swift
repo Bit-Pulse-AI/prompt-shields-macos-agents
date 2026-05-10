@@ -28,6 +28,12 @@ struct ElementInfo: Equatable, Hashable, Sendable {
     /// Whether the text came from a user selection
     let isSelectedText: Bool
 
+    /// URL of the document hosting the focused element, when available.
+    /// Populated by FocusTracker for browser apps from AXURL on the
+    /// nearest AXWebArea ancestor. Nil for native-app text fields.
+    /// Used by AI-SPM to populate `PolicyViolation.evidence.urlHost`.
+    let focusedURL: String?
+
     // MARK: - Initialization
 
     init(
@@ -36,7 +42,8 @@ struct ElementInfo: Equatable, Hashable, Sendable {
         applicationBundleId: String,
         frame: CGRect,
         elementIdentifier: AXElementID?,
-        isSelectedText: Bool = false
+        isSelectedText: Bool = false,
+        focusedURL: String? = nil
     ) {
         self.text = text
         self.applicationName = applicationName
@@ -44,6 +51,7 @@ struct ElementInfo: Equatable, Hashable, Sendable {
         self.frame = frame
         self.elementIdentifier = elementIdentifier
         self.isSelectedText = isSelectedText
+        self.focusedURL = focusedURL
     }
 
     // MARK: - Hashable
@@ -58,6 +66,7 @@ struct ElementInfo: Equatable, Hashable, Sendable {
         hasher.combine(frame.size.height)
         hasher.combine(isSelectedText)
         hasher.combine(elementIdentifier)
+        hasher.combine(focusedURL)
     }
 
     // MARK: - Equatable
@@ -68,7 +77,21 @@ struct ElementInfo: Equatable, Hashable, Sendable {
             lhs.text == rhs.text &&
             lhs.frame == rhs.frame &&
         lhs.elementIdentifier == rhs.elementIdentifier &&
-            lhs.isSelectedText == rhs.isSelectedText
+            lhs.isSelectedText == rhs.isSelectedText &&
+            lhs.focusedURL == rhs.focusedURL
+    }
+
+    // MARK: - URL helpers
+
+    /// Host portion of `focusedURL` (e.g. `chat.openai.com`).
+    /// Used for both Promptly's MonitoredApps.webHosts matching and the
+    /// AI-SPM violation envelope's `evidence.urlHost`.
+    var focusedURLHost: String? {
+        guard let raw = focusedURL, !raw.isEmpty else { return nil }
+        if let url = URL(string: raw), let host = url.host, !host.isEmpty {
+            return host.lowercased()
+        }
+        return nil
     }
 
     // MARK: - Validation

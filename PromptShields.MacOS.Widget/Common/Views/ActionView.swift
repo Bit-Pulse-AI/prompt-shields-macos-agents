@@ -134,21 +134,60 @@ struct ActionView: View {
     // MARK: - State Views
 
     private var idleView: some View {
-        Button {
-            isProcessing = true
-            Task { @MainActor in
-                overlayStateModel.actionToolState = .options
-                isProcessing = false
+        ZStack(alignment: .topTrailing) {
+            Button {
+                isProcessing = true
+                Task { @MainActor in
+                    overlayStateModel.actionToolState = .options
+                    isProcessing = false
+                }
+            } label: {
+                Image(ImageResource(name: "logo_mid", bundle: .main))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 40, height: 40)
             }
-        } label: {
-            Image(ImageResource(name: "logo_mid", bundle: .main))
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 40, height: 40)
+            .buttonStyle(ButtonStyleWhite())
+            .frame(width: 50, height: 50)
+            .cornerRadius(8)
+
+            // Grammarly-style passive indicator: small red badge with the
+            // detected-issue count. Visible whenever PIIDetector finds
+            // something in the focused field, even before the user clicks
+            // to expand. Encourages awareness without being intrusive.
+            if piiIssueCount > 0 {
+                idleCountBadge
+                    .offset(x: 6, y: -6)
+            }
         }
-        .buttonStyle(ButtonStyleWhite())
-        .frame(width: 50, height: 50)
-        .cornerRadius(8)
+        .frame(width: 56, height: 56)
+    }
+
+    private var idleCountBadge: some View {
+        ZStack {
+            Circle()
+                .fill(Color.psRed)
+                .frame(width: 18, height: 18)
+                .shadow(color: Color.psRed.opacity(0.4), radius: 2, x: 0, y: 1)
+            Text(piiIssueCount > 99 ? "99+" : "\(piiIssueCount)")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white)
+        }
+    }
+
+    /// Total PII detections in the currently-focused text field. Drives
+    /// the count badge on the idle indicator and the issues list
+    /// inside the expanded options view.
+    private var piiIssueCount: Int {
+        let text = overlayStateModel.elementInfo?.text ?? ""
+        guard !text.isEmpty else { return 0 }
+        return PIIDetector.findMatches(in: text).count
+    }
+
+    private var piiMatches: [PIIMatch] {
+        let text = overlayStateModel.elementInfo?.text ?? ""
+        guard !text.isEmpty else { return [] }
+        return PIIDetector.findMatches(in: text)
     }
 
     private var loadingView: some View {
@@ -266,25 +305,45 @@ struct ActionView: View {
         )
     }
 
-    /// Amber notice shown above the options list when PIIDetector flags
-    /// something in the focused text. Pairs with the reorder logic that
-    /// floats Redaction to the top.
+    /// Grammarly-style issues panel. Lists each PIIDetector match as
+    /// a small chip (category + matched substring) so the user can see
+    /// exactly what Promptly is going to redact. Header reads N issues
+    /// with the same amber tone as the existing banner. Pairs with the
+    /// Redaction-first reorder below.
     private var piiDetectedBanner: some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "exclamationmark.shield.fill")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.psAmber)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Sensitive data detected")
+        let matches = piiMatches
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 6) {
+                Image(systemName: "exclamationmark.shield.fill")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.psAmber)
-                Text("Redact first before sending.")
+                Text(headerText(for: matches.count))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.psAmber)
+                Spacer(minLength: 0)
+                Text("Redact first")
                     .font(.system(size: 10))
-                    .foregroundStyle(Color.psAmber.opacity(0.85))
+                    .foregroundStyle(Color.psAmber.opacity(0.8))
             }
-            Spacer(minLength: 0)
+
+            if !matches.isEmpty {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(Array(matches.prefix(8).enumerated()), id: \.offset) { _, match in
+                            issueRow(match: match)
+                        }
+                        if matches.count > 8 {
+                            Text("+ \(matches.count - 8) more")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color.psAmber.opacity(0.7))
+                                .padding(.top, 1)
+                        }
+                    }
+                }
+                .frame(maxHeight: 96)
+            }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.psAmberLight)
@@ -293,6 +352,75 @@ struct ActionView: View {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .stroke(Color.psAmberBorder, lineWidth: 1)
         )
+    }
+
+    /// One row per detected PII match — category emoji + truncated
+    /// matched substring. Mimics Grammarly's per-issue card; the
+    /// "fix" affordance is implicit (Redaction is the first suggestion).
+    private func issueRow(match: PIIMatch) -> some View {
+        HStack(spacing: 4) {
+            Text(emoji(for: match.category))
+                .font(.system(size: 10))
+            Text(label(for: match.category))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Color.psAmber)
+            Text(snippet(for: match))
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(Color.psText2)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(Color.psSurface.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    private func headerText(for count: Int) -> String {
+        switch count {
+        case 0: return "Sensitive data detected"
+        case 1: return "1 sensitive item"
+        default: return "\(count) sensitive items"
+        }
+    }
+
+    private func snippet(for match: PIIMatch) -> String {
+        let text = overlayStateModel.elementInfo?.text ?? ""
+        let raw = String(text[match.range])
+        return raw.count > 28 ? String(raw.prefix(28)) + "…" : raw
+    }
+
+    private func emoji(for category: PIICategory) -> String {
+        switch category {
+        case .email: return "✉️"
+        case .phone: return "📞"
+        case .creditCard: return "💳"
+        case .ssn: return "🪪"
+        case .ipAddress: return "🌐"
+        case .apiKey: return "🔑"
+        case .jwt: return "🎫"
+        case .iban: return "🏦"
+        case .bitcoinAddress: return "₿"
+        case .currency: return "💰"
+        case .personName: return "👤"
+        }
+    }
+
+    private func label(for category: PIICategory) -> String {
+        switch category {
+        case .email: return "Email"
+        case .phone: return "Phone"
+        case .creditCard: return "Card"
+        case .ssn: return "ID"
+        case .ipAddress: return "IP"
+        case .apiKey: return "API key"
+        case .jwt: return "Token"
+        case .iban: return "IBAN"
+        case .bitcoinAddress: return "Crypto"
+        case .currency: return "Currency"
+        case .personName: return "Name"
+        }
     }
 
     /// True when an active AI-SPM policy hard-blocks this prompt. Hides
@@ -446,11 +574,12 @@ struct ActionView: View {
         guard let decision = policyDecision, case .allow = decision.action else { return }
         guard let enforcer = overlayStateModel.policyEnforcer,
               let client = overlayStateModel.policyClient else { return }
+        let urlHost = overlayStateModel.elementInfo?.focusedURLHost
         let violation = enforcer.makeEvaluatedTick(
             applicationId: promptlyAppId,
             promptHash: decision.promptHash,
             user: nil,
-            urlHost: nil
+            urlHost: urlHost
         )
         await client.reportViolation(violation)
     }
@@ -473,9 +602,20 @@ struct ActionView: View {
         // a usage-rollup tick + a policy-evaluated tick through the AI-SPM
         // telemetry stream. Both fail open — telemetry failures never
         // block the suggestion call.
+        //
+        // Resolution order: native bundle id (Electron apps like ChatGPT
+        // desktop) → web URL host (chat.openai.com etc.) → shadow stub
+        // for whichever we know.
         let bundleId = overlayStateModel.elementInfo?.applicationBundleId ?? ""
-        let promptlyAppId = MonitoredAppsRegistry.shared
-            .enabledNativeApp(bundleId: bundleId)?.id ?? "shadow-\(bundleId)"
+        let urlString = overlayStateModel.elementInfo?.focusedURL ?? ""
+        let promptlyAppId: String
+        if let native = MonitoredAppsRegistry.shared.enabledNativeApp(bundleId: bundleId) {
+            promptlyAppId = native.id
+        } else if let web = MonitoredAppsRegistry.shared.enabledWebApp(urlString: urlString) {
+            promptlyAppId = web.id
+        } else {
+            promptlyAppId = "shadow-\(bundleId)"
+        }
         UsageEventAggregator.shared.record(
             kind: usageKind(for: suggestionTypeKey, decision: policyDecision),
             promptlyAppId: promptlyAppId,
