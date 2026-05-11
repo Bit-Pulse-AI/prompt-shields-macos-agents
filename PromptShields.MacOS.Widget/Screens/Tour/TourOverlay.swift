@@ -41,6 +41,7 @@ extension View {
 
 private struct TourOverlayContent: View {
     @ObservedObject var coordinator: TourCoordinator
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let anchors: [String: Anchor<CGRect>]
     let proxy: GeometryProxy
 
@@ -53,8 +54,10 @@ private struct TourOverlayContent: View {
                 TourBackdrop(spotlightRect: rect, allowedInteraction: step.resolvedInteractionAllowed) {
                     // Tap outside spotlight skips the tour (matches
                     // Grammarly). Q3 default; in v2 we may make this
-                    // configurable per-step.
-                    coordinator.skip()
+                    // configurable per-step. Reason fed into analytics
+                    // so the dashboard can tell click-outside dismissals
+                    // from Skip-button presses.
+                    coordinator.skip(reason: "click_outside")
                 }
 
                 TourSpotlightRing(rect: rect)
@@ -64,14 +67,21 @@ private struct TourOverlayContent: View {
                     tour: coordinator.activeTour!,
                     stepIndex: coordinator.activeStepIndex,
                     onNext: { coordinator.next() },
-                    onSkip: { coordinator.skip() }
+                    onSkip: { reason in coordinator.skip(reason: reason) }
                 )
                 .position(coachmarkPosition(for: rect, in: proxy.size, placement: step.placement))
-                .transition(.opacity.combined(with: .offset(y: 4)))
+                .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 4)))
                 .id(step.id) // forces re-mount so animation fires per step
             }
-            .animation(.interpolatingSpring(stiffness: 240, damping: 26), value: rect)
-            .animation(.easeOut(duration: 0.2), value: step.id)
+            // Sprint D: respect the system's reduce-motion preference.
+            // Spotlight still tweens — it's positional and the user
+            // needs to see where it landed — but we skip the spring
+            // overshoot for a calmer crossfade, and disable the
+            // coachmark slide.
+            .animation(reduceMotion ? .easeInOut(duration: 0.15)
+                                    : .interpolatingSpring(stiffness: 240, damping: 26),
+                       value: rect)
+            .animation(reduceMotion ? .none : .easeOut(duration: 0.2), value: step.id)
         }
     }
 

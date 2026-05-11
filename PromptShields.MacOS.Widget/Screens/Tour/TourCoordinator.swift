@@ -27,6 +27,14 @@ final class TourCoordinator: ObservableObject {
     /// if the trigger window is still "first time" — see allowTrigger.
     private var queuedTriggers: [TourTrigger] = []
 
+    /// Timestamp of the active tour's start, for the tourCompleted
+    /// duration field. Set in present(), cleared in endActive().
+    private var activeStartedAt: Date?
+    /// Reason recorded when the user skips — distinguishes between
+    /// "esc / click outside / button" without needing a separate
+    /// public skip(reason:) API. Reset on every step transition.
+    private var pendingDismissReason: String = "skip_button"
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "ai.promptshields.widget",
         category: "TourCoordinator"
@@ -88,10 +96,15 @@ final class TourCoordinator: ObservableObject {
         }
     }
 
-    func skip() {
+    func skip(reason: String = "skip_button") {
         guard let tour = activeTour else { return }
         UserDefaults.standard.set(ISO8601DateFormatter().string(from: .now),
                                   forKey: Self.keyPrefix + tour.id + Self.dismissedSuffix)
+        Analytics.trackAsync(.tourStepDismissed(
+            id: tour.id,
+            stepIndex: activeStepIndex,
+            reason: reason
+        ))
         endActive()
     }
 
@@ -129,19 +142,28 @@ final class TourCoordinator: ObservableObject {
         logger.debug("Presenting tour \(tour.id, privacy: .public) (source=\(source, privacy: .public))")
         activeTour = tour
         activeStepIndex = 0
+        activeStartedAt = .now
+        pendingDismissReason = "skip_button"
+        Analytics.trackAsync(.tourStarted(id: tour.id, trigger: source))
         broadcastStep()
     }
 
     private func complete() {
         guard let tour = activeTour else { return }
+        let duration: Double = {
+            guard let start = activeStartedAt else { return 0 }
+            return Date().timeIntervalSince(start)
+        }()
         UserDefaults.standard.set(ISO8601DateFormatter().string(from: .now),
                                   forKey: Self.keyPrefix + tour.id + Self.completedSuffix)
+        Analytics.trackAsync(.tourCompleted(id: tour.id, durationSec: duration))
         endActive()
     }
 
     private func endActive() {
         activeTour = nil
         activeStepIndex = 0
+        activeStartedAt = nil
         NotificationCenter.default.post(name: .tourActiveStep, object: nil, userInfo: [
             "tourId": "",
             "stepId": ""
@@ -156,6 +178,7 @@ final class TourCoordinator: ObservableObject {
 
     private func broadcastStep() {
         guard let tour = activeTour, let step = activeStep else { return }
+        Analytics.trackAsync(.tourStepShown(id: tour.id, stepIndex: activeStepIndex))
         NotificationCenter.default.post(name: .tourActiveStep, object: nil, userInfo: [
             "tourId": tour.id,
             "stepId": step.id,

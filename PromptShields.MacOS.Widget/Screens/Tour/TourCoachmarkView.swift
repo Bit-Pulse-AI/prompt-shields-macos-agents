@@ -4,13 +4,24 @@ import SwiftUI
 // docs/guided-tour-design.md §6 — 280pt wide, surface-coloured, 1pt
 // border, 16pt shadow. Step counter top-left, Skip + Next at the
 // bottom.
+//
+// Sprint D additions:
+//   - Esc dismisses the tour (keyboardShortcut on the Skip button).
+//   - VoiceOver reads title + body when the coachmark appears.
+//   - Reduced-motion honoured via @Environment(\.accessibilityReduceMotion);
+//     under that flag we skip the cross-fade between steps so screen
+//     content doesn't shimmer.
 
 struct TourCoachmarkView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let step: TourStep
     let tour: Tour
     let stepIndex: Int
     let onNext: () -> Void
-    let onSkip: () -> Void
+    /// Default `onSkip` reason is "skip_button"; the Esc hidden button
+    /// forwards "esc" so we can distinguish in telemetry.
+    let onSkip: (String) -> Void
 
     private var primaryLabel: String { step.primaryLabel ?? "Next →" }
     private var secondaryLabel: String? { step.secondaryLabel ?? "Skip tour" }
@@ -21,9 +32,11 @@ struct TourCoachmarkView: View {
                 Text(stepCounter)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(Color.psText3)
+                    .accessibilityHidden(true)
                 Spacer(minLength: 0)
                 if tour.steps.count > 1 {
                     progressDots
+                        .accessibilityHidden(true)
                 }
             }
 
@@ -40,12 +53,13 @@ struct TourCoachmarkView: View {
 
             HStack(spacing: 8) {
                 if let secondaryLabel {
-                    Button(action: onSkip) {
+                    Button { onSkip("skip_button") } label: {
                         Text(secondaryLabel)
                             .font(.system(size: 11))
                             .foregroundStyle(Color.psText3)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityHint("Skip the tour")
                 }
                 Spacer(minLength: 0)
                 Button(action: onNext) {
@@ -58,8 +72,18 @@ struct TourCoachmarkView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .keyboardShortcut(.return, modifiers: [])
+                .keyboardShortcut(.defaultAction)
+                .accessibilityHint("Press Return to continue")
             }
+
+            // Sprint D: Esc dismisses the active tour. Hidden button so
+            // we can attribute the dismissal in analytics as "esc"
+            // separately from a Skip-button click.
+            Button("esc-dismiss") { onSkip("esc") }
+                .keyboardShortcut(.cancelAction)
+                .frame(width: 0, height: 0)
+                .opacity(0)
+                .accessibilityHidden(true)
         }
         .padding(14)
         .frame(width: 280, alignment: .leading)
@@ -69,7 +93,14 @@ struct TourCoachmarkView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color.psBorder, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.15), radius: 16, x: 0, y: 8)
+        .shadow(color: Color.black.opacity(0.15),
+                radius: reduceMotion ? 0 : 16, x: 0, y: 8)
+        // VoiceOver: combine the popover into a single element so the
+        // step copy is announced atomically when the coachmark appears.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Tour step \(stepIndex + 1) of \(tour.steps.count): \(step.title)")
+        .accessibilityValue(step.body)
+        .accessibilityAddTraits(.isModal)
     }
 
     private var stepCounter: String {
@@ -82,7 +113,8 @@ struct TourCoachmarkView: View {
                 Capsule()
                     .fill(i == stepIndex ? Color.psBlue : Color.psBorder2)
                     .frame(width: i == stepIndex ? 14 : 5, height: 5)
-                    .animation(.easeInOut(duration: 0.2), value: stepIndex)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2),
+                               value: stepIndex)
             }
         }
     }
