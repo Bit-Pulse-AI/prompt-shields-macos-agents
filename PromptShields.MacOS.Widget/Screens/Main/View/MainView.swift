@@ -24,6 +24,22 @@ struct MainView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .environmentObject(globalMainStateModel)
+        // Q5: cross-window chat-button step. We anchor an invisible 1×1
+        // marker to the bottom-right corner of the dashboard window; the
+        // coachmark points at it so the user knows to look there for the
+        // floating chat icon (which lives in a separate window). Avoids
+        // the spotlight-across-windows complexity.
+        .overlay(alignment: .bottomTrailing) {
+            Color.clear
+                .frame(width: 1, height: 1)
+                .padding(.bottom, 8)
+                .padding(.trailing, 8)
+                .tourAnchor("off-window-chat-hint")
+        }
+        // Tour overlay for the dashboard window. Renders backdrop +
+        // spotlight + coachmark whenever the active step's anchor is
+        // inside this view hierarchy.
+        .tourOverlay()
         .onReceive(NotificationCenter.default.publisher(for: .tokenRefreshFailed)) { _ in
             handleTokenRefreshFailure()
         }

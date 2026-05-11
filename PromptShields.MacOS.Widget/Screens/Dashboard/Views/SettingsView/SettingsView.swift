@@ -16,10 +16,14 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: PSSpacing.xl) {
                 MonitoringSection(accessibilityManager: accessibilityManager)
+                    .tourAnchor("settings-monitoring-section")
                 CustomInstructionsSection(chat: chat)
+                    .tourAnchor("settings-custom-instructions")
                 MonitoredAppsSection()
+                    .tourAnchor("settings-monitored-apps")
                 SuggestionTypeListView()
                     .frame(minHeight: 400)
+                    .tourAnchor("settings-suggestion-types")
             }
             .padding(PSSpacing.panel)
         }

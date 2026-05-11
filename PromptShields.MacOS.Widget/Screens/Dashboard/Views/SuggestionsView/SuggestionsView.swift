@@ -87,6 +87,7 @@ struct SuggestionsView: View {
                 }
                 Spacer()
             }
+            .tourAnchor("activity-log-filters")
         }
     }
 
@@ -119,6 +120,7 @@ struct SuggestionsView: View {
                     badge: ActivityBadge.for(suggestion: suggestion),
                     showsDivider: index < entries.count - 1
                 )
+                .modifier(FirstRowAnchorModifier(isFirst: index == 0))
                 .onAppear {
                     if suggestion.model.uuid == entries.last?.model.uuid,
                        suggestionsQueryable.wrappedValue.count < totalSuggestions {
@@ -302,6 +304,18 @@ enum ActivityBadge: Equatable {
             return .sanitised
         }
         return .optimised
+    }
+}
+
+// MARK: - First-row anchor
+
+/// Tags only the first row in the list as `activity-log-first-row` so
+/// the activity-log-intro tour can spotlight a specific entry without
+/// 50 sibling anchors fighting for the same id.
+private struct FirstRowAnchorModifier: ViewModifier {
+    let isFirst: Bool
+    func body(content: Content) -> some View {
+        if isFirst { content.tourAnchor("activity-log-first-row") } else { content }
     }
 }
 

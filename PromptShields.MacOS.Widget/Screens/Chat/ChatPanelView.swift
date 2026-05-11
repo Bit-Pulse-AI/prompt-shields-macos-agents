@@ -25,12 +25,16 @@ struct ChatPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+                .tourAnchor("chat-header-title")
             Divider().background(Color.psBorder)
             instructionChips
+                .tourAnchor("chat-instruction-chips")
             Divider().background(Color.psBorder)
             conversation
+                .tourAnchor("chat-conversation")
             Divider().background(Color.psBorder)
             composer
+                .tourAnchor("chat-composer")
         }
         .frame(width: 380, height: 540)
         .background(Color.psSurface)
@@ -41,7 +45,13 @@ struct ChatPanelView: View {
         )
         .shadow(color: .black.opacity(0.18), radius: 24, x: 0, y: 12)
         .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
-        .onAppear { inputFocused = true }
+        // First-expand triggers the chat-intro tour. autoStart honours
+        // completion so subsequent expansions are a noop.
+        .tourOverlay()
+        .onAppear {
+            inputFocused = true
+            TourCoordinator.shared.autoStart(trigger: .firstChatExpand)
+        }
     }
 
     // MARK: - Header

@@ -28,6 +28,7 @@ struct DashboardContentHeaderView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(isActive ? Color.psGreen : Color.psText3)
             }
+            .tourAnchor("header-status-pill")
         }
         .padding(.horizontal, PSSpacing.xxl)
         .padding(.vertical, 10)

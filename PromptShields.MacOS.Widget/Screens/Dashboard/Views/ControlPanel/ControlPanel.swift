@@ -52,17 +52,24 @@ struct ControlPanelView: View {
                 )
 
                 QuickStatsRow(stats: computeStats())
+                    .tourAnchor("control-panel-quick-stats")
 
                 SuggestionOverviewSection(
                     types: typesQueryable.wrappedValue,
                     onOpenSettings: { dashboardState.contentState = .settings }
                 )
+                .tourAnchor("control-panel-suggestion-overview")
             }
             .padding(PSSpacing.panel)
         }
         .background(Color.psBg)
         .onAppear {
             shieldActivePulse = true
+            // Q2: 1.2s breather after the dashboard mounts before the
+            // intro tour kicks in.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                TourCoordinator.shared.autoStart(trigger: .firstDashboardMount)
+            }
         }
     }
 
@@ -193,7 +200,13 @@ private struct ShieldStatusCard: View {
 
     @ViewBuilder
     private var activateButton: some View {
-        Button(action: onPrimaryAction) {
+        Button {
+            onPrimaryAction()
+            // Q1: when the tour spotlights this button with
+            // interactionAllowed=true, clicking it auto-advances to the
+            // next step. Noop when no tour is active.
+            TourCoordinator.shared.userPerformedAnchorAction()
+        } label: {
             HStack(spacing: 8) {
                 Circle()
                     .fill(dotColor)
@@ -218,6 +231,7 @@ private struct ShieldStatusCard: View {
         .animation(.easeInOut(duration: 0.15), value: isActive)
         .animation(.easeInOut(duration: 0.15), value: awaitingPermission)
         .accessibilityLabel(label)
+        .tourAnchor("control-panel-activate-button")
     }
 
     private var label: String {

@@ -84,6 +84,26 @@ struct MainApp: App {
                     chatStateModel.isExpanded.toggle()
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
+
+                Divider()
+                Menu("Show tour") {
+                    Button("Dashboard intro") {
+                        TourCoordinator.shared.start("dashboard-intro")
+                    }
+                    Button("Promptly Chat") {
+                        TourCoordinator.shared.start("chat-intro")
+                    }
+                    Button("Activity Log") {
+                        TourCoordinator.shared.start("activity-log-intro")
+                    }
+                    Button("Settings") {
+                        TourCoordinator.shared.start("settings-intro")
+                    }
+                    Divider()
+                    Button("Replay all tours next time…") {
+                        TourCoordinator.shared.resetAllProgress()
+                    }
+                }
                 #if DEBUG
                 // Dev-only: bypass Auth0 entirely so QA can click through
                 // the dashboard without real credentials. Downstream user-

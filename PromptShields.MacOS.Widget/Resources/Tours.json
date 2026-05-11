@@ -1,0 +1,186 @@
+{
+  "tours": [
+    {
+      "id": "dashboard-intro",
+      "title": "Quick tour of Promptly",
+      "trigger": "firstDashboardMount",
+      "steps": [
+        {
+          "id": "header-pill",
+          "anchorId": "header-status-pill",
+          "placement": "below",
+          "title": "Promptly status",
+          "body": "This pill tells you whether Promptly is monitoring your prompts. Toggle it from the status card below.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip tour"
+        },
+        {
+          "id": "activate-button",
+          "anchorId": "control-panel-activate-button",
+          "placement": "above",
+          "title": "Turn Promptly on",
+          "body": "One click turns Promptly on. We only read text in the AI tools you've allowed — never anywhere else.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip tour",
+          "interactionAllowed": true
+        },
+        {
+          "id": "quick-stats",
+          "anchorId": "control-panel-quick-stats",
+          "placement": "above",
+          "title": "Daily counters",
+          "body": "Risks caught are PII or policy violations Promptly stopped from leaving your Mac. Resets every day.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip tour"
+        },
+        {
+          "id": "suggestion-overview",
+          "anchorId": "control-panel-suggestion-overview",
+          "placement": "above",
+          "title": "Your suggestions",
+          "body": "These are the rewrites Promptly can apply when you ask. Click \"Manage in Settings →\" to enable or customise them.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip tour"
+        },
+        {
+          "id": "sidebar-activity",
+          "anchorId": "sidebar-activity-log",
+          "placement": "trailing",
+          "title": "Activity Log",
+          "body": "Every prompt Promptly inspects shows up here so you can audit what was caught.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip tour"
+        },
+        {
+          "id": "chat-hint",
+          "anchorId": "off-window-chat-hint",
+          "placement": "above",
+          "title": "Chat from anywhere",
+          "body": "Have a question? Press ⌘⇧P to open the floating chat — even when the dashboard is closed.",
+          "primaryLabel": "Got it",
+          "secondaryLabel": null
+        }
+      ]
+    },
+    {
+      "id": "chat-intro",
+      "title": "Promptly Chat",
+      "trigger": "firstChatExpand",
+      "steps": [
+        {
+          "id": "instruction-chips",
+          "anchorId": "chat-instruction-chips",
+          "placement": "below",
+          "title": "Apply instructions",
+          "body": "Toggle these to apply tone, format, or language to every reply. Active chips get prepended to your message.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip"
+        },
+        {
+          "id": "composer",
+          "anchorId": "chat-composer",
+          "placement": "above",
+          "title": "Ask anything",
+          "body": "Type a question. ⌘↵ sends. Your active instructions are applied automatically.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip"
+        },
+        {
+          "id": "conversation",
+          "anchorId": "chat-conversation",
+          "placement": "auto",
+          "title": "Replies appear here",
+          "body": "Use the trash icon in the header to clear. The conversation is in-memory only — quitting Promptly wipes it.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip"
+        },
+        {
+          "id": "settings-handoff",
+          "anchorId": "chat-header-title",
+          "placement": "below",
+          "title": "Make it yours",
+          "body": "Build your own instructions in Settings → Custom Instructions. They show up here the next time you open chat.",
+          "primaryLabel": "Got it",
+          "secondaryLabel": null
+        }
+      ]
+    },
+    {
+      "id": "activity-log-intro",
+      "title": "Activity Log",
+      "trigger": "firstActivityLogVisit",
+      "steps": [
+        {
+          "id": "filters",
+          "anchorId": "activity-log-filters",
+          "placement": "below",
+          "title": "Filter by action",
+          "body": "Click a chip to narrow the list to risks caught, sanitised prompts, or optimised rewrites.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip"
+        },
+        {
+          "id": "badge-meaning",
+          "anchorId": "activity-log-first-row",
+          "placement": "auto",
+          "title": "Per-row badges",
+          "body": "Each entry shows which suggestion type ran, the app where the prompt was typed, and a short snippet.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip"
+        },
+        {
+          "id": "first-prompt",
+          "anchorId": "activity-log-first-row",
+          "placement": "auto",
+          "title": "First-prompt banner",
+          "body": "When you protect your first prompt, you'll see a green banner here. Everything after that is part of your audit trail.",
+          "primaryLabel": "Got it",
+          "secondaryLabel": null
+        }
+      ]
+    },
+    {
+      "id": "settings-intro",
+      "title": "Settings",
+      "trigger": "manual",
+      "steps": [
+        {
+          "id": "monitoring-toggle",
+          "anchorId": "settings-monitoring-section",
+          "placement": "auto",
+          "title": "Monitoring toggle",
+          "body": "Turn Promptly's text-field monitoring on or off. The Control Panel Activate button does the same thing.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip"
+        },
+        {
+          "id": "custom-instructions",
+          "anchorId": "settings-custom-instructions",
+          "placement": "auto",
+          "title": "Custom instructions",
+          "body": "Reusable prompts you can apply per chat message. Toggle a row to make it active everywhere.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip"
+        },
+        {
+          "id": "monitored-apps",
+          "anchorId": "settings-monitored-apps",
+          "placement": "auto",
+          "title": "Monitored apps",
+          "body": "Promptly only reads text in apps enabled here. Disabling an app makes Promptly invisible there.",
+          "primaryLabel": "Next →",
+          "secondaryLabel": "Skip"
+        },
+        {
+          "id": "suggestion-types",
+          "anchorId": "settings-suggestion-types",
+          "placement": "auto",
+          "title": "Suggestion types",
+          "body": "Click a row to expand it and see what Promptly does. Toggle to switch a type on or off.",
+          "primaryLabel": "Got it",
+          "secondaryLabel": null
+        }
+      ]
+    }
+  ]
+}
