@@ -69,3 +69,35 @@ struct UsageEventBatch: Codable, Sendable {
     let events: [UsageEvent]
     let appVersion: String
 }
+
+// MARK: - Tour engagement (Sprint D+)
+
+/// Daily rollup of guided-tour interactions per (day, person, tour).
+/// Sent to `POST /api/tour-engagement`. Lets the dashboard surface a
+/// WalkMe-style "engagement funnel" — how many users started each tour,
+/// how many completed, where they bailed.
+struct TourEngagementEvent: Codable, Sendable, Equatable, Hashable {
+    /// `YYYY-MM-DD` in the user's local timezone.
+    let day: String
+    let auth0Sub: String?
+    let tourId: String              // dashboard-intro | chat-intro | …
+    /// Total times this tour entered step 0 today.
+    let startCount: Int
+    /// Total times the user clicked "Got it" / "Next →" past the last step.
+    let completionCount: Int
+    /// Dismissals broken out by reason ("skip_button" | "esc" | "click_outside").
+    let dismissalCounts: [String: Int]
+    /// Sum of completion durations (seconds) today — divide by completionCount
+    /// for the average. 0 if no completions.
+    let totalDurationSec: Double
+    /// Per-step exit counts (key = step index as string, value = times the user
+    /// dismissed *while on that step*). Surfaces where tours get abandoned.
+    let stepDismissalCounts: [String: Int]
+    let firstSeen: String
+    let lastSeen: String
+}
+
+struct TourEngagementBatch: Codable, Sendable {
+    let events: [TourEngagementEvent]
+    let appVersion: String
+}

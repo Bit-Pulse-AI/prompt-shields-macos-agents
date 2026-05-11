@@ -105,6 +105,11 @@ final class TourCoordinator: ObservableObject {
             stepIndex: activeStepIndex,
             reason: reason
         ))
+        TourEngagementAggregator.shared.recordDismissal(
+            tourId: tour.id,
+            stepIndex: activeStepIndex,
+            reason: reason
+        )
         endActive()
     }
 
@@ -145,6 +150,7 @@ final class TourCoordinator: ObservableObject {
         activeStartedAt = .now
         pendingDismissReason = "skip_button"
         Analytics.trackAsync(.tourStarted(id: tour.id, trigger: source))
+        TourEngagementAggregator.shared.recordStart(tourId: tour.id)
         broadcastStep()
     }
 
@@ -157,6 +163,7 @@ final class TourCoordinator: ObservableObject {
         UserDefaults.standard.set(ISO8601DateFormatter().string(from: .now),
                                   forKey: Self.keyPrefix + tour.id + Self.completedSuffix)
         Analytics.trackAsync(.tourCompleted(id: tour.id, durationSec: duration))
+        TourEngagementAggregator.shared.recordCompletion(tourId: tour.id, durationSec: duration)
         endActive()
     }
 

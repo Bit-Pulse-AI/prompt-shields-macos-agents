@@ -214,6 +214,7 @@ struct MainApp: App {
         }
         TelemetryClient.shared.setTransport(telemetryTransport)
         UsageEventAggregator.shared.start()
+        TourEngagementAggregator.shared.start()
     }
 
     @MainActor

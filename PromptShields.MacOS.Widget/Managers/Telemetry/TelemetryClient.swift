@@ -19,6 +19,7 @@ protocol TelemetryTransport: Sendable {
     func syncPerson(_ request: PersonSyncRequest) async throws
     func reportAutoDiscovery(_ request: AutoDiscoveryRequest) async throws
     func reportUsageBatch(_ batch: UsageEventBatch) async throws
+    func reportTourEngagementBatch(_ batch: TourEngagementBatch) async throws
 }
 
 enum TelemetryTransportError: Error, Sendable {
@@ -93,6 +94,18 @@ final class TelemetryClient {
             logger.debug("usage batch failed: \(error.localizedDescription)")
         }
     }
+
+    // MARK: - Tour engagement (batched)
+
+    func flushTourEngagementBatch(_ batch: TourEngagementBatch) async {
+        guard !batch.events.isEmpty else { return }
+        do {
+            try await transport.reportTourEngagementBatch(batch)
+            logger.debug("flushed \(batch.events.count) tour engagement events")
+        } catch {
+            logger.debug("tour batch failed: \(error.localizedDescription)")
+        }
+    }
 }
 
 // MARK: - HTTP transport
@@ -121,6 +134,10 @@ struct HTTPTelemetryTransport: TelemetryTransport {
 
     func reportUsageBatch(_ batch: UsageEventBatch) async throws {
         try await post(path: "api/usage-events", body: batch)
+    }
+
+    func reportTourEngagementBatch(_ batch: TourEngagementBatch) async throws {
+        try await post(path: "api/tour-engagement", body: batch)
     }
 
     private func post<T: Encodable>(path: String, body: T) async throws {
@@ -153,4 +170,5 @@ struct NullTelemetryTransport: TelemetryTransport {
     func syncPerson(_ request: PersonSyncRequest) async throws {}
     func reportAutoDiscovery(_ request: AutoDiscoveryRequest) async throws {}
     func reportUsageBatch(_ batch: UsageEventBatch) async throws {}
+    func reportTourEngagementBatch(_ batch: TourEngagementBatch) async throws {}
 }
