@@ -10,6 +10,7 @@ import os
 enum KeychainManagerKey: String, Sendable {
     case userCredentials = "App credentials"
     case encryptionToken = "Internal Token"
+    case atlasTelemetryAPIKey = "Atlas Telemetry API Key"
 }
 
 // MARK: - Keychain Manager Errors
@@ -99,6 +100,15 @@ protocol KeychainManager: Sendable {
     /// - Returns: The symmetric encryption key
     /// - Throws: KeychainError if load operation fails
     func loadEncryptionKey() throws -> SymmetricKey
+
+    /// Saves the atlas.ai telemetry API key (aigrc_*) to the keychain.
+    func saveAtlasTelemetryAPIKey(_ key: String) throws
+
+    /// Loads the atlas.ai telemetry API key, or throws .itemNotFound.
+    func loadAtlasTelemetryAPIKey() throws -> String
+
+    /// Deletes the atlas.ai telemetry API key from the keychain.
+    func deleteAtlasTelemetryAPIKey() throws
 }
 
 // MARK: - Keychain Manager Implementation
@@ -202,6 +212,27 @@ struct KeychainManagerImpl: KeychainManager, @unchecked Sendable {
 
     func deleteEncryptionKey() throws {
         try deleteSecureData(key: .encryptionToken)
+    }
+
+    // MARK: - Atlas Telemetry API Key
+
+    func saveAtlasTelemetryAPIKey(_ key: String) throws {
+        guard let data = key.data(using: .utf8) else {
+            throw KeychainError.dataEncodingError
+        }
+        try saveSecureData(key: .atlasTelemetryAPIKey, secureData: data, override: true)
+    }
+
+    func loadAtlasTelemetryAPIKey() throws -> String {
+        let data = try loadSecureData(key: .atlasTelemetryAPIKey)
+        guard let key = String(data: data, encoding: .utf8) else {
+            throw KeychainError.dataDecodingError
+        }
+        return key
+    }
+
+    func deleteAtlasTelemetryAPIKey() throws {
+        try deleteSecureData(key: .atlasTelemetryAPIKey)
     }
 
     // MARK: - Private Methods

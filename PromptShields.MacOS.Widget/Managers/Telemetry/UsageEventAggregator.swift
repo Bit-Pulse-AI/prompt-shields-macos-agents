@@ -135,6 +135,12 @@ final class UsageEventAggregator {
         await TelemetryClient.shared.flushUsageBatch(
             UsageEventBatch(events: events, appVersion: appVersion)
         )
+
+        // Mirror the rollups onto the atlas prompt-event stream (noop
+        // unless MainApp wired an atlas transport).
+        await TelemetryClient.shared.flushAtlasPromptEvents(
+            events.flatMap(AtlasPromptEventEncoder.events(from:))
+        )
     }
 
     // MARK: - Helpers
