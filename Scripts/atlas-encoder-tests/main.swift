@@ -90,5 +90,60 @@ expect(chunks[0].events.count == 500 && chunks[1].events.count == 500 && chunks[
        "chunks are 500/500/101")
 expect(AtlasPromptEventEncoder.chunked([]).isEmpty, "empty input -> no chunks")
 
+// MARK: - PolicyViolation mapping
+
+func makeViolation(action: ActionType, hash: String = String(repeating: "0a", count: 32),
+                   matched: String? = nil, output: String = "Detected EMAIL") -> PolicyViolation {
+    PolicyViolation(
+        id: "v-1", policyInstanceId: "pi-1", applicationId: "notion",
+        timestamp: "2026-06-12T11:22:33Z", actionTaken: action, severity: .critical,
+        detectorId: "pii-detector", promptHash: hash, user: "auth0|xyz",
+        evidence: PolicyViolationEvidence(
+            detectorOutput: output, matchedPattern: matched, confidence: 0.9, urlHost: "notion.so"),
+        reviewed: false
+    )
+}
+
+let blockedViolation = AtlasPromptEventEncoder.event(from: makeViolation(action: .block))
+expect(blockedViolation?.eventKind == "violation", "violation -> event_kind violation")
+expect(blockedViolation?.action == "blocked", "ActionType.block -> blocked")
+expect(blockedViolation?.severity == "critical", "PolicySeverity 1:1")
+expect(blockedViolation?.appId == "notion", "app_id from applicationId")
+expect(blockedViolation?.promptHash == String(repeating: "0a", count: 32), "valid hash forwarded")
+expect(blockedViolation?.piiCategories == ["pii-detector": 1], "detectorId -> pii_categories count 1")
+expect(blockedViolation?.userExternalId == "auth0|xyz", "user -> user_external_id")
+expect(blockedViolation?.occurredAt == "2026-06-12T11:22:33Z", "occurred_at = timestamp")
+expect(blockedViolation?.occurrences == 1, "violations are single occurrences")
+
+expect(AtlasPromptEventEncoder.event(from: makeViolation(action: .flag))?.action == "flagged", "flag -> flagged")
+expect(AtlasPromptEventEncoder.event(from: makeViolation(action: .log))?.action == "logged", "log -> logged")
+expect(AtlasPromptEventEncoder.event(from: makeViolation(action: .redact))?.action == "redacted", "redact -> redacted")
+for other in [ActionType.rewrite, .notify, .requireReview] {
+    let mapped = AtlasPromptEventEncoder.event(from: makeViolation(action: other))
+    expect(mapped != nil && mapped?.action == nil, "\(other.rawValue) -> violation event with nil action")
+}
+expect(AtlasPromptEventEncoder.event(from: makeViolation(action: .evaluated)) == nil,
+       "evaluated ticks are dropped (clean prompts counted via rollups)")
+
+// Hash hygiene
+expect(AtlasPromptEventEncoder.event(from: makeViolation(action: .block,
+       hash: String(repeating: "0A", count: 32)))?.promptHash == String(repeating: "0a", count: 32),
+       "uppercase hash is lowercased")
+expect(AtlasPromptEventEncoder.event(from: makeViolation(action: .block, hash: "not-a-hash"))?.promptHash == nil,
+       "malformed hash dropped to nil, event kept")
+
+// MARK: - PRIVACY: no content fragment ever reaches the wire
+
+let sentinel = "SENTINEL-RAW-PROMPT-FRAGMENT-123-45-6789"
+let leaky = makeViolation(action: .block, matched: sentinel, output: "matched: \(sentinel)")
+if let event = AtlasPromptEventEncoder.event(from: leaky) {
+    let json = encodeToJSONString(AtlasPromptEventBatch(events: [event]))
+    expect(!json.contains(sentinel), "evidence.matchedPattern/detectorOutput never reach atlas JSON")
+    expect(!json.contains("matchedPattern") && !json.contains("detectorOutput") && !json.contains("evidence"),
+           "no evidence-shaped keys in atlas JSON")
+} else {
+    expect(false, "blocked violation must produce an event")
+}
+
 if failures > 0 { print("\(failures) FAILURES"); exit(1) }
 print("ALL TESTS PASSED")

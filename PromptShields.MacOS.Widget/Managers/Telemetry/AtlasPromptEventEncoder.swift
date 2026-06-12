@@ -59,6 +59,50 @@ enum AtlasPromptEventEncoder {
         }
     }
 
+    // MARK: - PolicyViolation
+
+    /// Maps one PolicyViolation post to a violation wire event.
+    /// Returns nil for `.evaluated` ticks (see header comment).
+    /// PRIVACY: reads only id-free metadata — never `violation.evidence`.
+    static func event(from violation: PolicyViolation) -> AtlasPromptEvent? {
+        guard let action = mapAction(violation.actionTaken) else { return nil }
+        return AtlasPromptEvent(
+            source: source,
+            eventKind: "violation",
+            appId: violation.applicationId,
+            promptHash: normalizedHash(violation.promptHash),
+            action: action.wireValue,
+            severity: violation.severity.rawValue,
+            piiCategories: [violation.detectorId: 1],
+            userExternalId: violation.user,
+            sessionId: nil,
+            occurrences: 1,
+            occurredAt: violation.timestamp
+        )
+    }
+
+    /// Wire action mapping. `.some(.none)` = emit the event with a null
+    /// action (real policy hits with non-wire actions); `nil` = drop.
+    private enum MappedAction {
+        case named(String)
+        case none
+        var wireValue: String? {
+            if case .named(let value) = self { return value }
+            return nil
+        }
+    }
+
+    private static func mapAction(_ action: ActionType) -> MappedAction? {
+        switch action {
+        case .block: return .named("blocked")
+        case .flag: return .named("flagged")
+        case .log: return .named("logged")
+        case .redact: return .named("redacted")
+        case .rewrite, .notify, .requireReview: return MappedAction.none
+        case .evaluated: return nil  // denominator tick, not a violation
+        }
+    }
+
     // MARK: - Batching
 
     /// Splits events into request envelopes of <= 500 (server cap).
