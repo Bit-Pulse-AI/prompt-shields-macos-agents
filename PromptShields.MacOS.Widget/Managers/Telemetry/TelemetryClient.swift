@@ -7,10 +7,15 @@ import os
 // is a NullTransport noop, so existing tenants without an AI-SPM
 // dashboard configured see zero behaviour change.
 //
-// Three endpoints currently supported:
+// Four endpoints currently supported:
 //   - POST /api/people/me            (PersonSyncRequest)
 //   - POST /api/applications/auto-discovery   (AutoDiscoveryRequest)
 //   - POST /api/usage-events         (UsageEventBatch)
+//   - POST {atlas}/api/v1/telemetry/prompt-events  (AtlasPromptEventBatch, X-API-Key)
+//
+// The atlas stream is gated independently by `atlasTelemetryURL` (UserDefaults)
+// + an API key in the Keychain, separate from `aiSPMDashboardURL`. When either
+// is absent the atlas stream is a NullAtlasPromptEventTransport noop.
 //
 // All requests fail open: a network error logs and drops the event.
 // Promptly's UX never blocks on telemetry succeeding.
@@ -106,6 +111,38 @@ final class TelemetryClient {
             logger.debug("tour batch failed: \(error.localizedDescription)")
         }
     }
+
+    // MARK: - Atlas prompt events (batched, fail-open)
+
+    private var atlasTransport: AtlasPromptEventTransport = NullAtlasPromptEventTransport()
+
+    /// Wired by MainApp.configurePolicyClient at boot. Stays the Null
+    /// transport unless an atlas URL is configured — zero behaviour
+    /// change for tenants without atlas telemetry.
+    func setAtlasTransport(_ transport: AtlasPromptEventTransport) {
+        self.atlasTransport = transport
+    }
+
+    /// Posts encoded prompt events in <=500-event chunks. Fail-open like
+    /// every other stream here: errors log and drop.
+    func flushAtlasPromptEvents(_ events: [AtlasPromptEvent]) async {
+        guard !events.isEmpty else { return }
+        for batch in AtlasPromptEventEncoder.chunked(events) {
+            do {
+                try await atlasTransport.reportPromptEvents(batch)
+                logger.debug("flushed \(batch.events.count) atlas prompt events")
+            } catch {
+                logger.debug("atlas prompt-event batch failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Encodes and posts a single PolicyViolation (evaluated ticks encode
+    /// to nil and are skipped — see AtlasPromptEventEncoder).
+    func reportAtlasViolation(_ violation: PolicyViolation) async {
+        guard let event = AtlasPromptEventEncoder.event(from: violation) else { return }
+        await flushAtlasPromptEvents([event])
+    }
 }
 
 // MARK: - HTTP transport
@@ -171,4 +208,54 @@ struct NullTelemetryTransport: TelemetryTransport {
     func reportAutoDiscovery(_ request: AutoDiscoveryRequest) async throws {}
     func reportUsageBatch(_ batch: UsageEventBatch) async throws {}
     func reportTourEngagementBatch(_ batch: TourEngagementBatch) async throws {}
+}
+
+// MARK: - Atlas prompt-event transport
+//
+// Separate from TelemetryTransport on purpose: the AI-SPM dashboard stream
+// authenticates with a bearer token against a Next.js app, while atlas.ai
+// wants an X-API-Key header against /api/v1/telemetry/prompt-events. The
+// two are configured and gated independently.
+
+protocol AtlasPromptEventTransport: Sendable {
+    func reportPromptEvents(_ batch: AtlasPromptEventBatch) async throws
+}
+
+struct HTTPAtlasPromptEventTransport: AtlasPromptEventTransport {
+    let baseURL: URL
+    /// Loaded per-request (Keychain read) so a key pasted in Settings
+    /// takes effect without restarting the stream.
+    let apiKeyProvider: @Sendable () async -> String?
+
+    private static let encoder = JSONEncoder()
+
+    func reportPromptEvents(_ batch: AtlasPromptEventBatch) async throws {
+        guard let apiKey = await apiKeyProvider(), !apiKey.isEmpty else {
+            throw TelemetryTransportError.unconfigured
+        }
+        let url = baseURL.appendingPathComponent("api/v1/telemetry/prompt-events")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        request.timeoutInterval = 10
+        request.httpBody = try Self.encoder.encode(batch)
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw TelemetryTransportError.network(error)
+        }
+        if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
+            throw TelemetryTransportError.http(
+                status: http.statusCode,
+                body: String(data: data, encoding: .utf8)
+            )
+        }
+    }
+}
+
+struct NullAtlasPromptEventTransport: AtlasPromptEventTransport {
+    func reportPromptEvents(_ batch: AtlasPromptEventBatch) async throws {}
 }

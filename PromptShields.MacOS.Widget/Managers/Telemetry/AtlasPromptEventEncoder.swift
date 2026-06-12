@@ -18,9 +18,10 @@ import Foundation
 //
 // PRIVACY: PolicyViolation.evidence (detectorOutput / matchedPattern)
 // can contain fragments of the user's prompt. This encoder NEVER reads
-// `evidence` — see `assertNoContentFields` in the test harness, which
-// pushes a sentinel through every field that could leak and asserts it
-// is absent from the encoded JSON.
+// `evidence` — see the privacy sentinel test in
+// Scripts/atlas-encoder-tests/main.swift, which pushes a sentinel
+// through every field that could leak and asserts it is absent from the
+// encoded JSON.
 
 enum AtlasPromptEventEncoder {
     static let source = "macos_widget"
