@@ -36,12 +36,57 @@ struct ActionView: View {
         }
     }
 
+    /// When true, the focused text contains something the local detector
+    /// thinks is PII. Used to (a) float the Redaction suggestion to the top
+    /// and (b) show the "PII detected" banner above the suggestion list.
+    private var piiDetected: Bool {
+        let text = overlayStateModel.elementInfo?.text ?? ""
+        guard !text.isEmpty else { return false }
+        return PIIDetector.containsPII(text)
+    }
+
+    /// Lazily-resolved decision from the AI-SPM-driven `PolicyEnforcer`.
+    /// `nil` means no enforcer is configured (NullPolicyTransport tenant —
+    /// fall back to local-only behaviour). Recomputed each render off the
+    /// current `elementInfo.text`; cheap because the enforcer short-circuits.
+    private var policyDecision: PolicyDecision? {
+        guard let enforcer = overlayStateModel.policyEnforcer else { return nil }
+        let text = overlayStateModel.elementInfo?.text ?? ""
+        let appId = MonitoredAppsRegistry.shared
+            .enabledNativeApp(bundleId: overlayStateModel.elementInfo?.applicationBundleId ?? "")?
+            .id ?? "unknown"
+        return enforcer.evaluate(text: text, appId: appId)
+    }
+
     private var suggestionTypes: [SuggestionType] {
         let allTypes = suggestionTypesQueryable.wrappedValue
         let enabledTypes = allTypes.filter { $0.model.isEnabled }
-        return enabledTypes.sorted {
-            $0.model.sortOrder < $1.model.sortOrder
+        let piiDetected = self.piiDetected
+        return enabledTypes.sorted { lhs, rhs in
+            // When PII is detected, Redaction-type suggestions jump to the
+            // top regardless of sortOrder. Backend may ship the type with a
+            // different typeKey casing (e.g. "REDACTION") so we normalise.
+            if piiDetected {
+                let lhsRedacts = Self.isRedactionType(lhs)
+                let rhsRedacts = Self.isRedactionType(rhs)
+                if lhsRedacts != rhsRedacts { return lhsRedacts }
+            }
+            return lhs.model.sortOrder < rhs.model.sortOrder
         }
+    }
+
+    /// Matches the Redaction seed's typeKey or display name. Tolerant to
+    /// server-side naming drift ("Redaction" vs "Redact" vs "REDACT_PII").
+    static func isRedactionType(_ type: SuggestionType) -> Bool {
+        let normalise: (String) -> String = {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+                .replacingOccurrences(of: "-", with: "_")
+                .replacingOccurrences(of: " ", with: "_")
+        }
+        let typeKey = normalise(type.model.typeKey)
+        let name = normalise(type.model.name)
+        return typeKey.hasPrefix("redact") || name.hasPrefix("redact")
     }
 
     var body: some View {
@@ -89,21 +134,60 @@ struct ActionView: View {
     // MARK: - State Views
 
     private var idleView: some View {
-        Button {
-            isProcessing = true
-            Task { @MainActor in
-                overlayStateModel.actionToolState = .options
-                isProcessing = false
+        ZStack(alignment: .topTrailing) {
+            Button {
+                isProcessing = true
+                Task { @MainActor in
+                    overlayStateModel.actionToolState = .options
+                    isProcessing = false
+                }
+            } label: {
+                Image(ImageResource(name: "logo_mid", bundle: .main))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 40, height: 40)
             }
-        } label: {
-            Image(ImageResource(name: "logo_mid", bundle: .main))
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 40, height: 40)
+            .buttonStyle(ButtonStyleWhite())
+            .frame(width: 50, height: 50)
+            .cornerRadius(8)
+
+            // Grammarly-style passive indicator: small red badge with the
+            // detected-issue count. Visible whenever PIIDetector finds
+            // something in the focused field, even before the user clicks
+            // to expand. Encourages awareness without being intrusive.
+            if piiIssueCount > 0 {
+                idleCountBadge
+                    .offset(x: 6, y: -6)
+            }
         }
-        .buttonStyle(ButtonStyleWhite())
-        .frame(width: 50, height: 50)
-        .cornerRadius(8)
+        .frame(width: 56, height: 56)
+    }
+
+    private var idleCountBadge: some View {
+        ZStack {
+            Circle()
+                .fill(Color.psRed)
+                .frame(width: 18, height: 18)
+                .shadow(color: Color.psRed.opacity(0.4), radius: 2, x: 0, y: 1)
+            Text(piiIssueCount > 99 ? "99+" : "\(piiIssueCount)")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white)
+        }
+    }
+
+    /// Total PII detections in the currently-focused text field. Drives
+    /// the count badge on the idle indicator and the issues list
+    /// inside the expanded options view.
+    private var piiIssueCount: Int {
+        let text = overlayStateModel.elementInfo?.text ?? ""
+        guard !text.isEmpty else { return 0 }
+        return PIIDetector.findMatches(in: text).count
+    }
+
+    private var piiMatches: [PIIMatch] {
+        let text = overlayStateModel.elementInfo?.text ?? ""
+        guard !text.isEmpty else { return [] }
+        return PIIDetector.findMatches(in: text)
     }
 
     private var loadingView: some View {
@@ -159,8 +243,219 @@ struct ActionView: View {
         .cornerRadius(8)
     }
 
+    /// Blocked-by-policy card shown when an AI-SPM PolicyInstance with
+    /// `enforcementMode = block` matches the focused text. We don't show
+    /// suggestions in this state — the user has to revise the prompt
+    /// before any action can proceed.
+    private func policyBlockedCard(reason: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "octagon.fill")
+                    .foregroundStyle(Color.psRed)
+                Text("Blocked by policy")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.psRed)
+            }
+            Text(reason)
+                .font(.system(size: 11))
+                .foregroundStyle(Color.psText2)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Revise the prompt to remove the flagged content. Contact your IT admin if you believe this is a mistake.")
+                .font(.system(size: 11))
+                .foregroundStyle(Color.psText3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.psRedLight)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.psRed.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    /// Lighter banner for flagged (non-blocking) policy hits. Tells the
+    /// user "we logged this" without preventing the action.
+    private func policyFlaggedBanner(decision: PolicyDecision) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "flag.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.psAmber)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Policy flagged")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.psAmber)
+                if let first = decision.triggered.first {
+                    Text(first.instance.name)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.psAmber.opacity(0.85))
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.psAmberLight)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(Color.psAmberBorder, lineWidth: 1)
+        )
+    }
+
+    /// Grammarly-style issues panel. Lists each PIIDetector match as
+    /// a small chip (category + matched substring) so the user can see
+    /// exactly what Promptly is going to redact. Header reads N issues
+    /// with the same amber tone as the existing banner. Pairs with the
+    /// Redaction-first reorder below.
+    private var piiDetectedBanner: some View {
+        let matches = piiMatches
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 6) {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.psAmber)
+                Text(headerText(for: matches.count))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.psAmber)
+                Spacer(minLength: 0)
+                Text("Redact first")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.psAmber.opacity(0.8))
+            }
+
+            if !matches.isEmpty {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(Array(matches.prefix(8).enumerated()), id: \.offset) { _, match in
+                            issueRow(match: match)
+                        }
+                        if matches.count > 8 {
+                            Text("+ \(matches.count - 8) more")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color.psAmber.opacity(0.7))
+                                .padding(.top, 1)
+                        }
+                    }
+                }
+                .frame(maxHeight: 96)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.psAmberLight)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(Color.psAmberBorder, lineWidth: 1)
+        )
+    }
+
+    /// One row per detected PII match — category emoji + truncated
+    /// matched substring. Mimics Grammarly's per-issue card; the
+    /// "fix" affordance is implicit (Redaction is the first suggestion).
+    private func issueRow(match: PIIMatch) -> some View {
+        HStack(spacing: 4) {
+            Text(emoji(for: match.category))
+                .font(.system(size: 10))
+            Text(label(for: match.category))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Color.psAmber)
+            Text(snippet(for: match))
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(Color.psText2)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(Color.psSurface.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    private func headerText(for count: Int) -> String {
+        switch count {
+        case 0: return "Sensitive data detected"
+        case 1: return "1 sensitive item"
+        default: return "\(count) sensitive items"
+        }
+    }
+
+    private func snippet(for match: PIIMatch) -> String {
+        let text = overlayStateModel.elementInfo?.text ?? ""
+        let raw = String(text[match.range])
+        return raw.count > 28 ? String(raw.prefix(28)) + "…" : raw
+    }
+
+    private func emoji(for category: PIICategory) -> String {
+        switch category {
+        case .email: return "✉️"
+        case .phone: return "📞"
+        case .creditCard: return "💳"
+        case .ssn: return "🪪"
+        case .ipAddress: return "🌐"
+        case .apiKey: return "🔑"
+        case .jwt: return "🎫"
+        case .iban: return "🏦"
+        case .bitcoinAddress: return "₿"
+        case .currency: return "💰"
+        case .personName: return "👤"
+        }
+    }
+
+    private func label(for category: PIICategory) -> String {
+        switch category {
+        case .email: return "Email"
+        case .phone: return "Phone"
+        case .creditCard: return "Card"
+        case .ssn: return "ID"
+        case .ipAddress: return "IP"
+        case .apiKey: return "API key"
+        case .jwt: return "Token"
+        case .iban: return "IBAN"
+        case .bitcoinAddress: return "Crypto"
+        case .currency: return "Currency"
+        case .personName: return "Name"
+        }
+    }
+
+    /// True when an active AI-SPM policy hard-blocks this prompt. Hides
+    /// the suggestion list — the user must revise before any LLM call.
+    private var isBlockedByPolicy: Bool {
+        if case .block = policyDecision?.action { return true }
+        return false
+    }
+
     private var optionsView: some View {
         VStack(alignment: .leading, spacing: 4) {
+            if let decision = policyDecision {
+                if case .block(let reason) = decision.action {
+                    policyBlockedCard(reason: reason)
+                } else if case .flag = decision.action {
+                    policyFlaggedBanner(decision: decision)
+                } else if case .redact = decision.action {
+                    piiDetectedBanner
+                } else if piiDetected {
+                    piiDetectedBanner
+                }
+            } else if piiDetected {
+                piiDetectedBanner
+            }
+            if isBlockedByPolicy {
+                Button {
+                    overlayStateModel.actionToolState = .idle
+                } label: {
+                    Text("Close")
+                        .font(.caption)
+                }
+                .buttonStyle(ButtonStyleRed())
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
+            } else {
             ScrollView {
                 LazyVStack {
                     if suggestionTypes.count > 0 {
@@ -211,6 +506,7 @@ struct ActionView: View {
             .buttonStyle(ButtonStyleRed())
             .frame(maxWidth: .infinity)
             .padding(.top, 12)
+            }
         }
         .padding(8)
         .frame(minWidth: 150)
@@ -251,6 +547,43 @@ struct ActionView: View {
         overlayStateModel.actionToolState = .idle
     }
 
+    // MARK: - Telemetry helpers
+
+    /// Maps a suggestion + active policy decision to the usage-rollup
+    /// counter that should bump for this action.
+    private func usageKind(for typeKey: String, decision: PolicyDecision?) -> UsageEventAggregator.Kind {
+        if let action = decision?.action {
+            switch action {
+            case .block: return .blocked
+            case .redact: return .redacted
+            case .flag: return .flagged
+            case .allow, .log: break
+            }
+        }
+        // Redaction-typed suggestions count as redacted regardless of policy.
+        if typeKey.lowercased().hasPrefix("redact") { return .redacted }
+        return .prompt
+    }
+
+    /// When a policy enforcer is configured AND the current decision was
+    /// `.allow`, emit a single `evaluated` tick to the dashboard so it
+    /// gets a denominator for FP rates. Native-app actions only — browser
+    /// URL host plumbing is a follow-up.
+    @MainActor
+    private func emitEvaluatedTickIfClean(promptlyAppId: String) async {
+        guard let decision = policyDecision, case .allow = decision.action else { return }
+        guard let enforcer = overlayStateModel.policyEnforcer,
+              let client = overlayStateModel.policyClient else { return }
+        let urlHost = overlayStateModel.elementInfo?.focusedURLHost
+        let violation = enforcer.makeEvaluatedTick(
+            applicationId: promptlyAppId,
+            promptHash: decision.promptHash,
+            user: nil,
+            urlHost: urlHost
+        )
+        await client.reportViolation(violation)
+    }
+
     // MARK: - Suggestion Processing
 
     @MainActor
@@ -264,6 +597,31 @@ struct ActionView: View {
         // Track suggestion type selected and processing started
         Analytics.trackAsync(.suggestionTypeSelected(type: suggestionTypeKey, category: suggestionCategory))
         Analytics.trackAsync(.suggestionProcessingStarted(type: suggestionTypeKey))
+
+        // Resolve the Promptly app id (chatgpt / claude / etc.) and route
+        // a usage-rollup tick + a policy-evaluated tick through the AI-SPM
+        // telemetry stream. Both fail open — telemetry failures never
+        // block the suggestion call.
+        //
+        // Resolution order: native bundle id (Electron apps like ChatGPT
+        // desktop) → web URL host (chat.openai.com etc.) → shadow stub
+        // for whichever we know.
+        let bundleId = overlayStateModel.elementInfo?.applicationBundleId ?? ""
+        let urlString = overlayStateModel.elementInfo?.focusedURL ?? ""
+        let promptlyAppId: String
+        if let native = MonitoredAppsRegistry.shared.enabledNativeApp(bundleId: bundleId) {
+            promptlyAppId = native.id
+        } else if let web = MonitoredAppsRegistry.shared.enabledWebApp(urlString: urlString) {
+            promptlyAppId = web.id
+        } else {
+            promptlyAppId = "shadow-\(bundleId)"
+        }
+        UsageEventAggregator.shared.record(
+            kind: usageKind(for: suggestionTypeKey, decision: policyDecision),
+            promptlyAppId: promptlyAppId,
+            auth0Sub: nil
+        )
+        Task { await emitEvaluatedTickIfClean(promptlyAppId: promptlyAppId) }
 
         do {
             let result = try await suggestionDomainService

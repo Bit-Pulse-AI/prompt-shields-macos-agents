@@ -1,75 +1,43 @@
 import SwiftUI
 
+// Persistent topbar across all dashboard screens. Informational only —
+// activation is controlled from the Control Panel status card (PS-07).
+
 @MainActor
 struct DashboardContentHeaderView: View {
-    @EnvironmentObject private var overlayState: OverlayStateModel
     @EnvironmentObject private var dashboardState: DashboardStateModel
     @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
 
-    @StateObject private var suggestionsQueryable = ObservableQueryable(
-        sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)],
-        mapping: DefaultMapping<Suggestion>.self
-    )
-
-    private var currentSuggestions: [Suggestion] {
-        return suggestionsQueryable.wrappedValue
+    private var isActive: Bool {
+        accessibilityManager.monitoringState == .enabled
     }
 
-    var hasCurrentApplication: Bool {
-        overlayState.elementInfo?.applicationBundleId != nil
-    }
-
-    var applicationStatusIndicator: String {
-        overlayState.elementInfo?.applicationName ?? "None"
-    }
-
-    var suggestionStatusIndicator: Int {
-        currentSuggestions.count
-    }
     var body: some View {
-        VStack(spacing: 12) {
-            // App Title and Status
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("PromptShields Assistant")
-                        .font(.title2)
-                        .fontWeight(.bold)
+        HStack(spacing: PSSpacing.md) {
+            Text("Promptly")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.psText)
 
-                    Text(dashboardState.isActive ? "Active" : "Inactive")
-                        .font(.caption)
-                        .foregroundColor(dashboardState.isActive ? .green : .secondary)
-                }
+            Spacer()
 
-                Spacer()
-
-                // Toggle Button
-                Button {
-                    if dashboardState.isActive {
-                        accessibilityManager.stopTimer()
-                    } else {
-                        overlayState.elementInfo = nil
-                        overlayState.actionToolState = .idle
-                        accessibilityManager.startTimer()
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: dashboardState.isActive ? "stop.circle.fill" : "play.circle.fill")
-                            .font(.title2)
-                        Text(dashboardState.isActive ? "Stop" : "Start")
-                            .fontWeight(.medium)
-                    }
-                    .foregroundColor(dashboardState.isActive ? .red : .green)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(isActive ? Color.psGreen : Color.psBorder2)
+                    .frame(width: 6, height: 6)
+                Text(isActive ? "Promptly active" : "Promptly off")
+                    .font(.system(size: 12))
+                    .foregroundStyle(isActive ? Color.psGreen : Color.psText3)
             }
+            .tourAnchor("header-status-pill")
         }
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
+        .padding(.horizontal, PSSpacing.xxl)
+        .padding(.vertical, 10)
+        .frame(height: 44)
+        .background(Color.psBg2)
         .overlay(
             Rectangle()
                 .frame(height: 1)
-                .foregroundColor(Color(NSColor.separatorColor)),
+                .foregroundStyle(Color.psBorder),
             alignment: .bottom
         )
     }

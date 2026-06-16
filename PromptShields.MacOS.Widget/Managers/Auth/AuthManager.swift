@@ -173,6 +173,25 @@ actor AuthenticationManagerImpl: AuthenticationManager {
         )
         try await persistenceManager.insert(domain: user)
         logger.debug("Local user created for \(credentials.email ?? "unknown")")
+
+        // Push the new Person into AI-SPM so the dashboard can hang
+        // organisational metadata off it (Department, Owner, etc.). Auth0
+        // `id` is the `sub` claim — the same key the dashboard uses for
+        // dedupe. Best-effort: failure logs and drops, no UX impact.
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+        let displayName = "\(credentials.firstName) \(credentials.lastName)"
+            .trimmingCharacters(in: .whitespaces)
+        let request = PersonSyncRequest(
+            auth0Sub: credentials.id,
+            email: credentials.email ?? "",
+            componentName: displayName.isEmpty ? (credentials.email ?? "Unknown") : displayName,
+            role: nil,
+            organizationalUnitId: nil,
+            appVersion: appVersion
+        )
+        Task { @MainActor in
+            await TelemetryClient.shared.syncPerson(request)
+        }
     }
 
     /// Removes all local auth artifacts: keychain credentials,

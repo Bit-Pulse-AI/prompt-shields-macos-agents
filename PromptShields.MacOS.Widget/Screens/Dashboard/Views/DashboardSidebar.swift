@@ -45,10 +45,12 @@ struct DashboardSidebarView: View {
                 .buttonStyle(buttonStyle)
                 Button {
                     dashboardState.contentState = .suggestions
+                    TourCoordinator.shared.autoStart(trigger: .firstActivityLogVisit)
                 } label: {
-                    Text("Suggestion history")
+                    Text("Activity Log")
                 }
                 .buttonStyle(buttonStyle)
+                .tourAnchor("sidebar-activity-log")
                 Button {
                     dashboardState.contentState = .settings
                 } label: {

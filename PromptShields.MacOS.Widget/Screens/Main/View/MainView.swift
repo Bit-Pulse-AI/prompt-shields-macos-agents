@@ -12,7 +12,9 @@ struct MainView: View {
     @StateObject private var globalMainStateModel = MainStateModel()
     @State private var shouldShowProgressView: Bool = false
     @State private var isAlertPresented: Bool = false
+    @State private var showOnboarding: Bool = false
 
+    @EnvironmentObject private var accessibilityManager: AccessibilityManagerImpl
     @Environment(\.profileDomainService) private var profileDomainService
     @Environment(\.userDomainService) private var userDomainService
 
@@ -22,6 +24,22 @@ struct MainView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .environmentObject(globalMainStateModel)
+        // Q5: cross-window chat-button step. We anchor an invisible 1×1
+        // marker to the bottom-right corner of the dashboard window; the
+        // coachmark points at it so the user knows to look there for the
+        // floating chat icon (which lives in a separate window). Avoids
+        // the spotlight-across-windows complexity.
+        .overlay(alignment: .bottomTrailing) {
+            Color.clear
+                .frame(width: 1, height: 1)
+                .padding(.bottom, 8)
+                .padding(.trailing, 8)
+                .tourAnchor("off-window-chat-hint")
+        }
+        // Tour overlay for the dashboard window. Renders backdrop +
+        // spotlight + coachmark whenever the active step's anchor is
+        // inside this view hierarchy.
+        .tourOverlay()
         .onReceive(NotificationCenter.default.publisher(for: .tokenRefreshFailed)) { _ in
             handleTokenRefreshFailure()
         }
@@ -31,6 +49,31 @@ struct MainView: View {
                     logout()
                 }
             }
+        }
+        // First-launch onboarding sheet (PS-04). Lives at the MainView
+        // level so step 4 can mutate globalMainStateModel.authState
+        // when the merged login button succeeds.
+        .onAppear {
+            if !OnboardingPersistence.hasCompleted {
+                showOnboarding = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showOnboarding)) { _ in
+            showOnboarding = true
+        }
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: .devSkipLogin)) { _ in
+            // Dev shortcut: pretend Auth0 succeeded so QA can reach the
+            // dashboard. Real user fetch will fail — Account / Suggestions
+            // will be empty — but the UI surface is exercisable.
+            globalMainStateModel.authState = .loggedIn
+            showOnboarding = false
+        }
+        #endif
+        .sheet(isPresented: $showOnboarding) {
+            OnboardingView()
+                .environmentObject(accessibilityManager)
+                .environmentObject(globalMainStateModel)
         }
     }
 

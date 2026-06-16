@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mockup",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8733", "--directory", "/tmp/improvement_context"],
+      "port": 8733
+    }
+  ]
+}

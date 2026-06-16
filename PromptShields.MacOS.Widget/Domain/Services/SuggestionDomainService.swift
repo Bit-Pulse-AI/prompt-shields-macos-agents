@@ -31,6 +31,9 @@ protocol SuggestionDomainService: Sendable {
 
     // Suggestion Type operations
     func fetchSuggestionTypes() async throws
+    /// Bypasses the cache TTL — used by Settings' refresh button and after
+    /// any mutation that needs the local store immediately resynced.
+    func forceRefreshSuggestionTypes() async throws
     func listSuggestionTypes(enabledOnly: Bool) async throws -> [SuggestionType]
     func createSuggestionType(_ suggestionType: SuggestionType) async throws -> SuggestionType
     func updateSuggestionType(_ suggestionType: SuggestionType) async throws -> SuggestionType
@@ -122,11 +125,31 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
     // MARK: - Suggestion Type CRUD Operations
 
+    /// TTL for the suggestion-types cache. Settings + dashboard re-render
+    /// fire `fetchSuggestionTypes` on every appear, but server-side types
+    /// rarely change. Honour a 5-minute window to avoid hammering the API
+    /// every time the user switches tabs. Mutating operations
+    /// (create/update/delete/reset) invalidate the cache so the next read
+    /// pulls fresh data.
+    private static let suggestionTypesCacheTTL: TimeInterval = 300
+    private static let suggestionTypesCacheKey = "ai.bit-pulse.promptshields.suggestionTypesFetchedAt"
+
     func fetchSuggestionTypes() async throws {
-        logger.debug("Fetching suggestion types from server")
+        if Self.isSuggestionTypesCacheFresh() {
+            logger.debug("Suggestion types cache fresh; skipping server fetch")
+            await updateUserPreferencesWithEnabledTypes()
+            return
+        }
+        try await forceRefreshSuggestionTypes()
+    }
+
+    /// Always hits the server. Used by reset / create / update / delete to
+    /// resync after a write. Settings can also offer a pull-to-refresh that
+    /// calls this directly.
+    func forceRefreshSuggestionTypes() async throws {
+        logger.debug("Force-fetching suggestion types from server")
 
         do {
-            // Try the new endpoint first
             let currentProfile = try await profileDomainService.currentProfile.model
             let suggestionTypeGroupId = currentProfile.defaultSuggestionTypeGroupId
             let suggestionResult = try await suggestionNetworkService.listSuggestionTypes(suggestionTypeGroupId: suggestionTypeGroupId, offset: 0, limit: 100, enabledOnly: false)
@@ -135,13 +158,91 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
             // Atomic delete and insert - prevents duplicates from race conditions
             try await persistenceManager.deleteAllAndInsert(domains: suggestionTypes)
 
+            // Cache marker so subsequent fetchSuggestionTypes() calls within
+            // TTL skip the server round-trip.
+            UserDefaults.standard.set(Date(), forKey: Self.suggestionTypesCacheKey)
+
             logger.debug("Fetched \(suggestionTypes.count) suggestion types from new endpoint")
+
+            // Seed the catalog-defaults (Redaction today) if the server
+            // doesn't already have them. Runs once per suggestion-type-group
+            // per user; guarded by UserDefaults so a temporary backend hiccup
+            // doesn't spam create-calls on every launch.
+            await seedCatalogDefaultsIfNeeded(fetched: suggestionTypes,
+                                              suggestionTypeGroupId: suggestionTypeGroupId)
         } catch {
             logger.debug("Endpoint failed: \(error)")
         }
 
         // Update user preferences to populate all types as enabled if nil
         await updateUserPreferencesWithEnabledTypes()
+    }
+
+    /// Auto-creates the catalog's `isDefaultSeeded` types if the server
+    /// doesn't already return them. Idempotent: checks by normalised typeKey
+    /// and by name, and persists a "seeded" flag per type to avoid duplicate
+    /// server-side records.
+    private func seedCatalogDefaultsIfNeeded(
+        fetched: [SuggestionType],
+        suggestionTypeGroupId: String
+    ) async {
+        let existingKeys = Set(
+            fetched.map { normaliseCatalogKey($0.model.typeKey) }
+                + fetched.map { normaliseCatalogKey($0.model.name) }
+        )
+
+        for entry in SuggestionTypeCatalog.defaultSeededMetadata {
+            // Use the displayName to derive the typeKey so Settings and Catalog
+            // agree. For Redaction -> typeKey "REDACTION", name "Redaction".
+            let candidateTypeKey = SuggestionTypeCatalog.redactionTypeKey
+            let normalised = normaliseCatalogKey(candidateTypeKey)
+
+            guard !existingKeys.contains(normalised) else {
+                logger.debug("Catalog seed '\(entry.displayName)' already present — skipping")
+                continue
+            }
+
+            let seededFlagKey = "ai.bit-pulse.promptshields.seeded.\(normalised)"
+            guard !UserDefaults.standard.bool(forKey: seededFlagKey) else {
+                // Seed was created previously but then deleted by the user.
+                // Respect that — don't re-create every launch.
+                logger.debug("Catalog seed '\(entry.displayName)' previously seeded and removed — honoring user intent")
+                continue
+            }
+
+            guard let template = entry.meta.seedPromptTemplate else { continue }
+
+            let seed = SuggestionType(model: .init(
+                uuid: UUID().uuidString,
+                typeKey: candidateTypeKey,
+                name: entry.displayName,
+                description: entry.meta.summary,
+                category: entry.category,
+                promptTemplate: template,
+                suggestionTypeGroupId: suggestionTypeGroupId,
+                isDefault: true,
+                isEnabled: true,
+                sortOrder: -100, // float to the top of lists by default
+                createdAt: Date(),
+                updatedAt: Date()
+            ))
+
+            do {
+                _ = try await createSuggestionType(seed)
+                UserDefaults.standard.set(true, forKey: seededFlagKey)
+                logger.debug("Seeded catalog default: \(entry.displayName)")
+            } catch {
+                logger.error("Failed to seed '\(entry.displayName)': \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func normaliseCatalogKey(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "-", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
     }
 
     func listSuggestionTypes(enabledOnly: Bool) async throws -> [SuggestionType] {
@@ -170,6 +271,21 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         return updatedTypes
     }
 
+    /// True if we last fetched within the TTL window. Pure read against
+    /// UserDefaults — safe to call from any actor context.
+    static func isSuggestionTypesCacheFresh() -> Bool {
+        guard let last = UserDefaults.standard.object(forKey: suggestionTypesCacheKey) as? Date else {
+            return false
+        }
+        return Date().timeIntervalSince(last) < suggestionTypesCacheTTL
+    }
+
+    /// Drops the cache marker so the next `fetchSuggestionTypes()` hits
+    /// the server. Called after every mutating CRUD op.
+    private func invalidateSuggestionTypesCache() {
+        UserDefaults.standard.removeObject(forKey: Self.suggestionTypesCacheKey)
+    }
+
     func createSuggestionType(_ suggestionType: SuggestionType) async throws -> SuggestionType {
         logger.debug("Creating suggestion type: \(suggestionType.model.name)")
 
@@ -189,6 +305,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
         // Sync with local storage
         let syncedType = try await persistenceManager.syncLocalWithRemote(domain: createdType)
+        invalidateSuggestionTypesCache()
 
         logger.debug("Created suggestion type: \(syncedType.model.uuid)")
         return syncedType
@@ -213,6 +330,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
         // Sync with local storage
         let syncedType = try await persistenceManager.syncLocalWithRemote(domain: updatedType)
+        invalidateSuggestionTypesCache()
 
         logger.debug("Updated suggestion type: \(syncedType.model.uuid)")
         return syncedType
@@ -226,6 +344,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
         // Delete from local storage
         try await persistenceManager.delete(domain: suggestionType)
+        invalidateSuggestionTypesCache()
 
         logger.debug("Deleted suggestion type: \(suggestionType.model.uuid)")
     }
@@ -240,6 +359,7 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
 
         // Sync with local storage
         let syncedType = try await persistenceManager.syncLocalWithRemote(domain: updatedType)
+        invalidateSuggestionTypesCache()
 
         logger.debug("Toggled suggestion type: \(syncedType.model.uuid)")
         return syncedType
@@ -251,8 +371,11 @@ struct SuggestionDomainServiceImpl: SuggestionDomainService {
         let suggestionTypeGroupId = currentProfile.defaultSuggestionTypeGroupId
         let response = try await suggestionNetworkService.resetSuggestionTypes(suggestionTypeGroupId: suggestionTypeGroupId)
 
-        // Refresh local storage
-        try await fetchSuggestionTypes()
+        // Reset is a server-side mutation; force a fresh fetch so our local
+        // store reflects the new defaults immediately rather than waiting
+        // for the cache TTL to expire.
+        invalidateSuggestionTypesCache()
+        try await forceRefreshSuggestionTypes()
 
         logger.debug("Reset suggestion types: \(response.count) defaults created")
         return response.count

@@ -59,6 +59,16 @@ enum AnalyticsEvent: Sendable {
     case settingsOpened
     case statusBarMenuOpened
 
+    // MARK: - Guided Tour Events (Sprint D)
+    /// Fired when a tour starts. `trigger` is "manual" | "firstDashboardMount" | etc.
+    case tourStarted(id: String, trigger: String)
+    /// Fired each time a step is displayed (incl. the first one).
+    case tourStepShown(id: String, stepIndex: Int)
+    /// Fired when the user skips / Escs / clicks outside the spotlight.
+    case tourStepDismissed(id: String, stepIndex: Int, reason: String)
+    /// Fired when the user reaches the last step's primary action.
+    case tourCompleted(id: String, durationSec: Double)
+
     // MARK: - Subscription Events
     case subscriptionViewed
     case subscriptionPurchaseStarted(plan: String)
@@ -135,6 +145,11 @@ extension AnalyticsEvent {
         case .settingsOpened: return "settings_opened"
         case .statusBarMenuOpened: return "status_bar_menu_opened"
 
+        case .tourStarted: return "tour_started"
+        case .tourStepShown: return "tour_step_shown"
+        case .tourStepDismissed: return "tour_step_dismissed"
+        case .tourCompleted: return "tour_completed"
+
         case .subscriptionViewed: return "subscription_viewed"
         case .subscriptionPurchaseStarted: return "subscription_purchase_started"
         case .subscriptionPurchaseCompleted: return "subscription_purchase_completed"
@@ -178,6 +193,8 @@ extension AnalyticsEvent {
              .actionMenuOpened, .actionMenuClosed, .aboutWindowOpened, .settingsOpened,
              .statusBarMenuOpened:
             return "ui_interaction"
+        case .tourStarted, .tourStepShown, .tourStepDismissed, .tourCompleted:
+            return "guided_tour"
         case .subscriptionViewed, .subscriptionPurchaseStarted, .subscriptionPurchaseCompleted,
              .subscriptionPurchaseFailed, .subscriptionCancelled:
             return "subscription"
@@ -267,6 +284,20 @@ extension AnalyticsEvent {
             params["metric_name"] = name
             params["metric_value"] = value
             params["metric_unit"] = unit
+
+        case .tourStarted(let id, let trigger):
+            params["tour_id"] = id
+            params["trigger"] = trigger
+        case .tourStepShown(let id, let stepIndex):
+            params["tour_id"] = id
+            params["step_index"] = stepIndex
+        case .tourStepDismissed(let id, let stepIndex, let reason):
+            params["tour_id"] = id
+            params["step_index"] = stepIndex
+            params["dismiss_reason"] = reason
+        case .tourCompleted(let id, let durationSec):
+            params["tour_id"] = id
+            params["duration_seconds"] = durationSec
 
         case .custom(_, let customParams):
             for (key, value) in customParams {
