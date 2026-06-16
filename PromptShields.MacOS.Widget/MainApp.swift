@@ -213,6 +213,22 @@ struct MainApp: App {
             telemetryTransport = NullTelemetryTransport()
         }
         TelemetryClient.shared.setTransport(telemetryTransport)
+
+        // Atlas prompt-telemetry stream (atlas.ai grc.prompt_events).
+        // Gated independently of the AI-SPM dashboard: active only when an
+        // atlas URL is set AND an API key exists in the Keychain. Absent
+        // either, the Null transport keeps behaviour identical to today.
+        // QA: defaults write <bundle-id> ai.bit-pulse.promptshields.atlasTelemetryURL <url>
+        let atlasURLString = UserDefaults.standard.string(
+            forKey: "ai.bit-pulse.promptshields.atlasTelemetryURL"
+        ) ?? ""
+        if !atlasURLString.isEmpty, let atlasURL = URL(string: atlasURLString) {
+            TelemetryClient.shared.setAtlasTransport(HTTPAtlasPromptEventTransport(
+                baseURL: atlasURL,
+                apiKeyProvider: { try? KeychainManagerImpl.shared.loadAtlasTelemetryAPIKey() }
+            ))
+        }
+
         UsageEventAggregator.shared.start()
         TourEngagementAggregator.shared.start()
     }

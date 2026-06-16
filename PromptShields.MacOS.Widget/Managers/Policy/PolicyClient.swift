@@ -111,6 +111,10 @@ final class PolicyClient: ObservableObject {
         } catch {
             logger.error("Violation report failed: \(error.localizedDescription)")
         }
+        // Also mirror onto the atlas prompt-event stream (hash + metadata
+        // only — the encoder never reads `evidence`). Independent of the
+        // dashboard post above: each fails open on its own.
+        await TelemetryClient.shared.reportAtlasViolation(violation)
     }
 }
 
